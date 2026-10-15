@@ -911,6 +911,7 @@ export const tr: Record<MessageKey, string> = {
   'diag.seqReturnOutput': '“{node}” Sıra Dönüşünün çıkış bağlantısı olmamalı.',
   'diag.seqReturnInputs': '“{node}” Sıra Dönüşünün birden fazla giriş bağlantısı var.',
   'diag.seqReturnOutside': '“{node}” Sıra Dönüşüne kendi aşamasının dışından bağlantı var.',
+  'diag.seqStageDetached': '“{node}” Sıra Dönüşüyle biten aşama henüz Sırasının bir Sonra çıkışına bağlı değil.',
   'diag.sim.seqStageOpen': '“{node}” Sırası devam edemiyor: {stage}. aşamanın çıkışı bağlı değil ya da aşama Dönüşüne ulaşmıyor. Aşama tamamlanmış sayılmaz.',
   'diag.sim.seqIllegal': 'Bir Sıra aşamasının içindeki {n} bağlantı, aşamanın gidemeyeceği bir yere çıkıyor ve seçilemez.',
   'default.flag': 'Yeni bayrak',

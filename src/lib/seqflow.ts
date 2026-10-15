@@ -70,6 +70,20 @@ export function sequenceIssues(p: Graph): SeqIssue[] {
   const err = (nodeId: string, d: Diagnostic) => out.push({ severity: 'error', nodeId, diagnostic: d })
   const warn = (nodeId: string, d: Diagnostic) => out.push({ severity: 'warning', nodeId, diagnostic: d })
   const members = new Map<string, StageInfo>()
+  /** True when walking back from a stage-type node reaches a node with no input at all (never a scene, IF or Sequence pin). */
+  const detachedChain = (id: string): boolean => {
+    const seen = new Set<string>()
+    for (let cur = id; !seen.has(cur); ) {
+      seen.add(cur)
+      const ins = incoming(cur)
+      if (ins.length === 0) return true
+      if (ins.length > 1) return false
+      const pred = nodes.get(ins[0].source)
+      if (!pred || !isStageNodeType(pred.type)) return false
+      cur = pred.id
+    }
+    return false
+  }
 
   for (const s of p.logicNodes) {
     if (s.type !== 'sequence') continue
@@ -123,12 +137,16 @@ export function sequenceIssues(p: Graph): SeqIssue[] {
     if (outgoing(r.id).length > 0) err(r.id, diag('diag.seqReturnOutput', { node: name }))
     const ins = incoming(r.id)
     if (ins.length > 1) err(r.id, diag('diag.seqReturnInputs', { node: name }))
-    for (const t of (r.sequenceId ? ins : [])) {
+    for (const t of r.sequenceId ? ins : []) {
       const src = nodes.get(t.source)
       const fromOwner = src?.type === 'sequence' && src.id === r.sequenceId && stageOfPort(t.sourcePort) === r.stage
       const m = members.get(t.source)
       const fromStage = !!m && m.seqId === r.sequenceId && m.stage === r.stage
-      if (!fromOwner && !fromStage) err(r.id, diag('diag.seqReturnOutside', { node: name }))
+      if (fromOwner || fromStage) continue
+      // A chain that is not attached to a Then output (e.g. the link was removed while editing) is incomplete authoring;
+      // anything else (another stage, a scene, IF, the Completed pin) is a structural error.
+      if (!m && src && isStageNodeType(src.type) && detachedChain(src.id)) warn(r.id, diag('diag.seqStageDetached', { node: name }))
+      else err(r.id, diag('diag.seqReturnOutside', { node: name }))
     }
   }
   return out

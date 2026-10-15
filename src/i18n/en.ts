@@ -921,6 +921,7 @@ export const en = {
   'diag.seqReturnOutput': 'Sequence Return “{node}” must not have an outgoing connection.',
   'diag.seqReturnInputs': 'Sequence Return “{node}” has more than one incoming connection.',
   'diag.seqReturnOutside': 'Sequence Return “{node}” is connected from outside its own stage.',
+  'diag.seqStageDetached': 'The stage ending in Sequence Return “{node}” is not connected to a Then output of its Sequence yet.',
   'diag.sim.seqStageOpen': 'The Sequence “{node}” cannot continue: its output for stage {stage} is not connected or the stage does not reach its Return. The stage is not treated as complete.',
   'diag.sim.seqIllegal': '{n} connection(s) inside a Sequence stage lead somewhere a stage may not go and cannot be chosen.',
   'default.flag': 'New flag',
