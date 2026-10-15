@@ -1,7 +1,8 @@
 import { create } from 'zustand'
-import { persist, createJSONStorage, type StateStorage } from 'zustand/middleware'
+import { persist, createJSONStorage } from 'zustand/middleware'
 import { emptyProject, newCharacter, newScene, newTransition, newTrigger } from '../lib/factory'
 import { uid } from '../lib/id'
+import { createSafeStorage, hydrate, preserveUnreadable, STORAGE_KEY } from '../lib/persist'
 import type {
   Character,
   CharacterState,
@@ -12,10 +13,11 @@ import type {
   Trigger,
 } from '../lib/schema'
 import { sampleProject } from '../lib/sample'
-import { projectSchema } from '../lib/schema'
 
 export type View = 'graph' | 'timeline' | 'characters' | 'analysis'
 export type Selection = { type: 'scene' | 'edge'; id: string } | null
+
+export const HISTORY_LIMIT = 50
 
 interface State {
   project: Project
@@ -23,7 +25,15 @@ interface State {
   view: View
   timelineSceneId: string | null
   selectedTriggerId: string | null
+  /** Undo/redo snapshots (session only, not persisted). */
+  past: Project[]
+  future: Project[]
+  /** Set when stored data existed but could not be read at startup. */
+  loadNotice: { message: string; raw: string | null } | null
 
+  undo: () => void
+  redo: () => void
+  dismissNotice: () => void
   setView: (v: View) => void
   select: (s: Selection) => void
   focusScene: (id: string) => void
@@ -36,6 +46,7 @@ interface State {
   updateScene: (id: string, patch: Partial<Scene>) => void
   moveScene: (id: string, position: { x: number; y: number }) => void
   deleteScene: (id: string) => void
+  deleteScenes: (ids: string[]) => void
   setStart: (id: string) => void
 
   addTransition: (source: string, target: string) => string | null
@@ -57,242 +68,359 @@ interface State {
   setSceneCharacterState: (sceneId: string, charId: string, stateId: string | null) => void
 }
 
+type Partialer = Partial<State> | ((s: State) => Partial<State>)
+/** `coalesce`: consecutive edits with the same key within `ms` share a single undo step. */
+type Setter = (partial: Partialer, coalesce?: { key: string; ms?: number }) => void
+
+let lastKey: string | null = null
+let lastTime = 0
+
+function withHistory(rawSet: (p: Partial<State>) => void, get: () => State): Setter {
+  return (partial, coalesce) => {
+    const s = get()
+    let next = typeof partial === 'function' ? partial(s) : partial
+    if (next.project && next.project !== s.project) {
+      const now = Date.now()
+      const merge = !!coalesce && lastKey === coalesce.key && now - lastTime < (coalesce.ms ?? 800)
+      lastKey = coalesce?.key ?? null
+      lastTime = now
+      if (!merge) next = { ...next, past: [...s.past, s.project].slice(-HISTORY_LIMIT), future: [] }
+    }
+    rawSet(next)
+  }
+}
+
+/** Drops selection/timeline references that no longer exist after a history jump. */
+function reconcile(project: Project, s: State): Partial<State> {
+  const scenes = new Set(project.scenes.map((x) => x.id))
+  const edges = new Set(project.transitions.map((x) => x.id))
+  const sel = s.selection
+  const selOk = !sel || (sel.type === 'scene' ? scenes.has(sel.id) : edges.has(sel.id))
+  const tl =
+    s.timelineSceneId && scenes.has(s.timelineSceneId) ? s.timelineSceneId : (project.scenes[0]?.id ?? null)
+  const trgOk = project.scenes.some((x) => x.triggers.some((t) => t.id === s.selectedTriggerId))
+  return {
+    selection: selOk ? sel : null,
+    timelineSceneId: tl,
+    selectedTriggerId: trgOk ? s.selectedTriggerId : null,
+  }
+}
+
 const mapScene = (p: Project, id: string, fn: (s: Scene) => Scene): Project => ({
   ...p,
   scenes: p.scenes.map((s) => (s.id === id ? fn(s) : s)),
 })
+const keysOf = (o: object) => Object.keys(o).sort().join(',')
+
+const storage = createSafeStorage(() => localStorage)
+if (typeof window !== 'undefined') {
+  window.addEventListener('pagehide', storage.flush)
+  window.addEventListener('beforeunload', storage.flush)
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') storage.flush()
+  })
+}
+export const flushSave = storage.flush
+
+// Stored text that is not even valid JSON never reaches `merge`; catch it here.
+let corruptRaw: string | null = null
+const guardedStorage: typeof storage = {
+  ...storage,
+  getItem: (name) => {
+    const raw = storage.getItem(name)
+    if (typeof raw === 'string') {
+      try {
+        JSON.parse(raw)
+      } catch {
+        corruptRaw = raw
+        return null
+      }
+    }
+    return raw
+  },
+}
+
+function unreadableNotice(raw: string | null): NonNullable<State['loadNotice']> {
+  let key: string | null = null
+  try {
+    key = preserveUnreadable(raw, localStorage)
+  } catch {
+    /* storage unavailable */
+  }
+  return {
+    message: key
+      ? 'Your saved project could not be read. The raw data was kept in browser storage and can be downloaded.'
+      : 'Your saved project could not be read and could not be backed up. Download the raw data before making changes.',
+    raw,
+  }
+}
 
 export const useStore = create<State>()(
   persist(
-    (set, get) => ({
-      project: sampleProject(),
-      selection: null,
-      view: 'graph',
-      timelineSceneId: 's_hall',
-      selectedTriggerId: null,
+    (rawSet, get) => {
+      const set = withHistory(rawSet, get)
+      return {
+        project: sampleProject(),
+        selection: null,
+        view: 'graph',
+        timelineSceneId: 's_hall',
+        selectedTriggerId: null,
+        past: [],
+        future: [],
+        loadNotice: null,
 
-      setView: (view) => set({ view }),
-      select: (selection) => set({ selection }),
-      focusScene: (id) => set({ view: 'graph', selection: { type: 'scene', id } }),
-      loadProject: (project) =>
-        set({
-          project,
-          selection: null,
-          selectedTriggerId: null,
-          timelineSceneId: project.startSceneId ?? project.scenes[0]?.id ?? null,
-        }),
-      resetProject: () => get().loadProject(emptyProject()),
-      loadSample: () => get().loadProject(sampleProject()),
-      updateProject: (patch) => set((s) => ({ project: { ...s.project, ...patch } })),
+        undo: () => {
+          const s = get()
+          const prev = s.past[s.past.length - 1]
+          if (!prev) return
+          lastKey = null
+          rawSet({
+            project: prev,
+            past: s.past.slice(0, -1),
+            future: [...s.future, s.project],
+            ...reconcile(prev, s),
+          })
+        },
+        redo: () => {
+          const s = get()
+          const next = s.future[s.future.length - 1]
+          if (!next) return
+          lastKey = null
+          rawSet({
+            project: next,
+            future: s.future.slice(0, -1),
+            past: [...s.past, s.project].slice(-HISTORY_LIMIT),
+            ...reconcile(next, s),
+          })
+        },
+        dismissNotice: () => rawSet({ loadNotice: null }),
 
-      addScene: (kind, position) => {
-        const scene = newScene(kind, position)
-        set((s) => ({
-          project: {
-            ...s.project,
-            scenes: [...s.project.scenes, scene],
-            startSceneId: s.project.startSceneId ?? scene.id,
-          },
-          selection: { type: 'scene', id: scene.id },
-        }))
-        return scene.id
-      },
-      updateScene: (id, patch) =>
-        set((s) => ({ project: mapScene(s.project, id, (sc) => ({ ...sc, ...patch })) })),
-      moveScene: (id, position) =>
-        set((s) => ({ project: mapScene(s.project, id, (sc) => ({ ...sc, position })) })),
-      deleteScene: (id) =>
-        set((s) => {
-          const scenes = s.project.scenes.filter((x) => x.id !== id)
-          return {
+        setView: (view) => rawSet({ view }),
+        select: (selection) => rawSet({ selection }),
+        focusScene: (id) => rawSet({ view: 'graph', selection: { type: 'scene', id } }),
+        loadProject: (project) =>
+          set({
+            project,
+            selection: null,
+            selectedTriggerId: null,
+            timelineSceneId: project.startSceneId ?? project.scenes[0]?.id ?? null,
+          }),
+        resetProject: () => get().loadProject(emptyProject()),
+        loadSample: () => get().loadProject(sampleProject()),
+        updateProject: (patch) =>
+          set((s) => ({ project: { ...s.project, ...patch } }), { key: `project:${keysOf(patch)}` }),
+
+        addScene: (kind, position) => {
+          const scene = newScene(kind, position)
+          set((s) => ({
             project: {
               ...s.project,
-              scenes,
-              transitions: s.project.transitions.filter((t) => t.source !== id && t.target !== id),
-              startSceneId:
-                s.project.startSceneId === id ? (scenes[0]?.id ?? null) : s.project.startSceneId,
+              scenes: [...s.project.scenes, scene],
+              startSceneId: s.project.startSceneId ?? scene.id,
             },
-            selection: s.selection?.id === id ? null : s.selection,
-            timelineSceneId: s.timelineSceneId === id ? (scenes[0]?.id ?? null) : s.timelineSceneId,
-          }
-        }),
-      setStart: (id) => set((s) => ({ project: { ...s.project, startSceneId: id } })),
-
-      addTransition: (source, target) => {
-        const exists = get().project.transitions.some(
-          (t) => t.source === source && t.target === target,
-        )
-        if (exists) return null
-        const t = newTransition(source, target)
-        if (source === target) t.style = 'loopback'
-        set((s) => ({
-          project: { ...s.project, transitions: [...s.project.transitions, t] },
-          selection: { type: 'edge', id: t.id },
-        }))
-        return t.id
-      },
-      updateTransition: (id, patch) =>
-        set((s) => ({
-          project: {
-            ...s.project,
-            transitions: s.project.transitions.map((t) => (t.id === id ? { ...t, ...patch } : t)),
-          },
-        })),
-      deleteTransition: (id) =>
-        set((s) => ({
-          project: { ...s.project, transitions: s.project.transitions.filter((t) => t.id !== id) },
-          selection: s.selection?.id === id ? null : s.selection,
-        })),
-
-      setTimelineScene: (id) => set({ timelineSceneId: id, selectedTriggerId: null }),
-      selectTrigger: (id) => set({ selectedTriggerId: id }),
-      addTrigger: (sceneId, time) => {
-        const t = newTrigger(Math.max(0, Math.round(time)))
-        set((s) => ({
-          project: mapScene(s.project, sceneId, (sc) => ({ ...sc, triggers: [...sc.triggers, t] })),
-          selectedTriggerId: t.id,
-        }))
-        return t.id
-      },
-      updateTrigger: (sceneId, id, patch) =>
-        set((s) => ({
-          project: mapScene(s.project, sceneId, (sc) => ({
-            ...sc,
-            triggers: sc.triggers.map((t) => (t.id === id ? { ...t, ...patch } : t)),
-          })),
-        })),
-      deleteTrigger: (sceneId, id) =>
-        set((s) => ({
-          project: mapScene(s.project, sceneId, (sc) => ({
-            ...sc,
-            triggers: sc.triggers.filter((t) => t.id !== id),
-          })),
-          selectedTriggerId: s.selectedTriggerId === id ? null : s.selectedTriggerId,
-        })),
-
-      addCharacter: () => {
-        const c = newCharacter()
-        set((s) => ({ project: { ...s.project, characters: [...s.project.characters, c] } }))
-        return c.id
-      },
-      updateCharacter: (id, patch) =>
-        set((s) => ({
-          project: {
-            ...s.project,
-            characters: s.project.characters.map((c) => (c.id === id ? { ...c, ...patch } : c)),
-          },
-        })),
-      deleteCharacter: (id) =>
-        set((s) => ({
-          project: {
-            ...s.project,
-            characters: s.project.characters.filter((c) => c.id !== id),
-            scenes: s.project.scenes.map((sc) => {
-              if (!(id in sc.characterStates)) return sc
-              const { [id]: _removed, ...rest } = sc.characterStates
-              return { ...sc, characterStates: rest }
-            }),
-          },
-        })),
-      addCharacterState: (charId) =>
-        set((s) => ({
-          project: {
-            ...s.project,
-            characters: s.project.characters.map((c) =>
-              c.id === charId
-                ? {
-                    ...c,
-                    states: [
-                      ...c.states,
-                      { id: uid('st'), name: 'New state', behavior: '', aggression: 0 },
-                    ],
-                  }
-                : c,
-            ),
-          },
-        })),
-      updateCharacterState: (charId, stateId, patch) =>
-        set((s) => ({
-          project: {
-            ...s.project,
-            characters: s.project.characters.map((c) =>
-              c.id === charId
-                ? { ...c, states: c.states.map((st) => (st.id === stateId ? { ...st, ...patch } : st)) }
-                : c,
-            ),
-          },
-        })),
-      deleteCharacterState: (charId, stateId) =>
-        set((s) => ({
-          project: {
-            ...s.project,
-            characters: s.project.characters.map((c) =>
-              c.id === charId ? { ...c, states: c.states.filter((st) => st.id !== stateId) } : c,
-            ),
-            scenes: s.project.scenes.map((sc) => {
-              if (sc.characterStates[charId] !== stateId) return sc
-              const { [charId]: _removed, ...rest } = sc.characterStates
-              return { ...sc, characterStates: rest }
-            }),
-          },
-        })),
-      setSceneCharacterState: (sceneId, charId, stateId) =>
-        set((s) => ({
-          project: mapScene(s.project, sceneId, (sc) => {
-            const next = { ...sc.characterStates }
-            if (stateId) next[charId] = stateId
-            else delete next[charId]
-            return { ...sc, characterStates: next }
+            selection: { type: 'scene', id: scene.id },
+          }))
+          return scene.id
+        },
+        updateScene: (id, patch) =>
+          set((s) => ({ project: mapScene(s.project, id, (sc) => ({ ...sc, ...patch })) }), {
+            key: `scene:${id}:${keysOf(patch)}`,
           }),
-        })),
-    }),
+        moveScene: (id, position) =>
+          set((s) => ({ project: mapScene(s.project, id, (sc) => ({ ...sc, position })) }), {
+            key: `move:${id}`,
+          }),
+        deleteScene: (id) => get().deleteScenes([id]),
+        deleteScenes: (ids) =>
+          set(
+            (s) => {
+              const gone = new Set(ids.filter((id) => s.project.scenes.some((x) => x.id === id)))
+              if (gone.size === 0) return {}
+              const scenes = s.project.scenes.filter((x) => !gone.has(x.id))
+              return {
+                project: {
+                  ...s.project,
+                  scenes,
+                  transitions: s.project.transitions.filter((t) => !gone.has(t.source) && !gone.has(t.target)),
+                  startSceneId:
+                    s.project.startSceneId && gone.has(s.project.startSceneId)
+                      ? (scenes[0]?.id ?? null)
+                      : s.project.startSceneId,
+                },
+                selection: s.selection && gone.has(s.selection.id) ? null : s.selection,
+                timelineSceneId:
+                  s.timelineSceneId && gone.has(s.timelineSceneId)
+                    ? (scenes[0]?.id ?? null)
+                    : s.timelineSceneId,
+              }
+            },
+            // React Flow reports a Delete keypress as several events; fold them into one step.
+            { key: 'delete', ms: 300 },
+          ),
+        setStart: (id) => set((s) => ({ project: { ...s.project, startSceneId: id } })),
+
+        addTransition: (source, target) => {
+          const exists = get().project.transitions.some((t) => t.source === source && t.target === target)
+          if (exists) return null
+          const t = newTransition(source, target)
+          if (source === target) t.style = 'loopback'
+          set((s) => ({
+            project: { ...s.project, transitions: [...s.project.transitions, t] },
+            selection: { type: 'edge', id: t.id },
+          }))
+          return t.id
+        },
+        updateTransition: (id, patch) =>
+          set(
+            (s) => ({
+              project: {
+                ...s.project,
+                transitions: s.project.transitions.map((t) => (t.id === id ? { ...t, ...patch } : t)),
+              },
+            }),
+            { key: `tr:${id}:${keysOf(patch)}` },
+          ),
+        deleteTransition: (id) =>
+          set(
+            (s) => {
+              if (!s.project.transitions.some((t) => t.id === id)) return {}
+              return {
+                project: { ...s.project, transitions: s.project.transitions.filter((t) => t.id !== id) },
+                selection: s.selection?.id === id ? null : s.selection,
+              }
+            },
+            { key: 'delete', ms: 300 },
+          ),
+
+        setTimelineScene: (id) => rawSet({ timelineSceneId: id, selectedTriggerId: null }),
+        selectTrigger: (id) => rawSet({ selectedTriggerId: id }),
+        addTrigger: (sceneId, time) => {
+          const t = newTrigger(Math.max(0, Math.round(time)))
+          set((s) => ({
+            project: mapScene(s.project, sceneId, (sc) => ({ ...sc, triggers: [...sc.triggers, t] })),
+            selectedTriggerId: t.id,
+          }))
+          return t.id
+        },
+        updateTrigger: (sceneId, id, patch) =>
+          set(
+            (s) => ({
+              project: mapScene(s.project, sceneId, (sc) => ({
+                ...sc,
+                triggers: sc.triggers.map((t) => (t.id === id ? { ...t, ...patch } : t)),
+              })),
+            }),
+            { key: `trg:${id}:${keysOf(patch)}` },
+          ),
+        deleteTrigger: (sceneId, id) =>
+          set((s) => ({
+            project: mapScene(s.project, sceneId, (sc) => ({
+              ...sc,
+              triggers: sc.triggers.filter((t) => t.id !== id),
+            })),
+            selectedTriggerId: s.selectedTriggerId === id ? null : s.selectedTriggerId,
+          })),
+
+        addCharacter: () => {
+          const c = newCharacter()
+          set((s) => ({ project: { ...s.project, characters: [...s.project.characters, c] } }))
+          return c.id
+        },
+        updateCharacter: (id, patch) =>
+          set(
+            (s) => ({
+              project: {
+                ...s.project,
+                characters: s.project.characters.map((c) => (c.id === id ? { ...c, ...patch } : c)),
+              },
+            }),
+            { key: `chr:${id}:${keysOf(patch)}` },
+          ),
+        deleteCharacter: (id) =>
+          set((s) => ({
+            project: {
+              ...s.project,
+              characters: s.project.characters.filter((c) => c.id !== id),
+              scenes: s.project.scenes.map((sc) => {
+                if (!(id in sc.characterStates)) return sc
+                const { [id]: _removed, ...rest } = sc.characterStates
+                return { ...sc, characterStates: rest }
+              }),
+            },
+          })),
+        addCharacterState: (charId) =>
+          set((s) => ({
+            project: {
+              ...s.project,
+              characters: s.project.characters.map((c) =>
+                c.id === charId
+                  ? {
+                      ...c,
+                      states: [...c.states, { id: uid('st'), name: 'New state', behavior: '', aggression: 0 }],
+                    }
+                  : c,
+              ),
+            },
+          })),
+        updateCharacterState: (charId, stateId, patch) =>
+          set(
+            (s) => ({
+              project: {
+                ...s.project,
+                characters: s.project.characters.map((c) =>
+                  c.id === charId
+                    ? { ...c, states: c.states.map((st) => (st.id === stateId ? { ...st, ...patch } : st)) }
+                    : c,
+                ),
+              },
+            }),
+            { key: `st:${stateId}:${keysOf(patch)}` },
+          ),
+        deleteCharacterState: (charId, stateId) =>
+          set((s) => ({
+            project: {
+              ...s.project,
+              characters: s.project.characters.map((c) =>
+                c.id === charId ? { ...c, states: c.states.filter((st) => st.id !== stateId) } : c,
+              ),
+              scenes: s.project.scenes.map((sc) => {
+                if (sc.characterStates[charId] !== stateId) return sc
+                const { [charId]: _removed, ...rest } = sc.characterStates
+                return { ...sc, characterStates: rest }
+              }),
+            },
+          })),
+        setSceneCharacterState: (sceneId, charId, stateId) =>
+          set((s) => ({
+            project: mapScene(s.project, sceneId, (sc) => {
+              const next = { ...sc.characterStates }
+              if (stateId) next[charId] = stateId
+              else delete next[charId]
+              return { ...sc, characterStates: next }
+            }),
+          })),
+      }
+    },
     {
-      name: 'horror-director:project:v1',
-      storage: createJSONStorage(() => debouncedLocalStorage()),
+      name: STORAGE_KEY,
+      storage: createJSONStorage(() => guardedStorage),
       merge: (persisted, current) => {
-        const p = persisted as { project?: unknown; timelineSceneId?: string | null } | undefined
-        const parsed = projectSchema.safeParse(p?.project)
-        if (!parsed.success) return current
-        return { ...current, project: parsed.data, timelineSceneId: p?.timelineSceneId ?? null }
+        if (corruptRaw !== null) return { ...current, loadNotice: unreadableNotice(corruptRaw) }
+        const h = hydrate(persisted)
+        if (h.unreadable) {
+          // Never let the default project silently overwrite data we could not read.
+          let raw: string | null = null
+          try {
+            raw = localStorage.getItem(STORAGE_KEY)
+          } catch {
+            /* ignore */
+          }
+          return { ...current, loadNotice: unreadableNotice(raw) }
+        }
+        if (!h.project) return current
+        return { ...current, project: h.project, timelineSceneId: h.timelineSceneId }
       },
       partialize: (s) => ({ project: s.project, timelineSceneId: s.timelineSceneId }),
     },
   ),
 )
-
-/** localStorage wrapper that coalesces rapid writes (node dragging) and survives storage errors. */
-function debouncedLocalStorage(): StateStorage {
-  let timer: ReturnType<typeof setTimeout> | undefined
-  let pending: [string, string] | null = null
-  const flush = () => {
-    if (!pending) return
-    try {
-      localStorage.setItem(pending[0], pending[1])
-    } catch (e) {
-      console.warn('Horror Director: could not save to localStorage', e)
-    }
-    pending = null
-  }
-  if (typeof window !== 'undefined') window.addEventListener('beforeunload', flush)
-  return {
-    getItem: (name) => {
-      try {
-        return localStorage.getItem(name)
-      } catch {
-        return null
-      }
-    },
-    setItem: (name, value) => {
-      pending = [name, value]
-      clearTimeout(timer)
-      timer = setTimeout(flush, 300)
-    },
-    removeItem: (name) => {
-      try {
-        localStorage.removeItem(name)
-      } catch {
-        /* ignore */
-      }
-    },
-  }
-}

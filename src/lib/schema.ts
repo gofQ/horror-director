@@ -93,6 +93,8 @@ export const exportSchema = z.object({
   format: z.literal(FORMAT_ID),
   schemaVersion: z.number().int().min(1).max(SCHEMA_VERSION),
   exportedAt: z.string().optional(),
+  /** Derived convenience data written by the exporter; regenerated on export, ignored on import. */
+  derived: z.unknown().optional(),
   project: projectSchema,
 })
 

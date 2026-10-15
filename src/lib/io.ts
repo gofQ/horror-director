@@ -1,4 +1,5 @@
 import { crossingOf, exportSchema, FORMAT_ID, SCHEMA_VERSION, projectSchema, type Project } from './schema'
+import { findDroppedKeys, validateProject } from './validate'
 
 export interface ExportFile {
   format: typeof FORMAT_ID
@@ -34,29 +35,72 @@ export function serializeProject(project: Project): string {
   return JSON.stringify(buildExport(project), null, 2)
 }
 
-export type ParseResult = { ok: true; project: Project } | { ok: false; error: string }
+export function exportFileName(project: Project): string {
+  return `${project.name.replace(/[^\w-]+/g, '_').replace(/^_+|_+$/g, '') || 'project'}.horror.json`
+}
 
-/** Accepts a full export file or a bare project object. */
+export type ParseResult =
+  | { ok: true; project: Project; warnings: string[] }
+  | { ok: false; errors: string[] }
+
+const MAX_LISTED = 50
+
+function cap(list: string[]): string[] {
+  return list.length > MAX_LISTED
+    ? [...list.slice(0, MAX_LISTED), `…and ${list.length - MAX_LISTED} more.`]
+    : list
+}
+
+/**
+ * Parses and validates an import file (full export or bare project object).
+ * Nothing is repaired or dropped: any integrity error or unrecognised field blocks the import.
+ */
 export function parseProject(text: string): ParseResult {
   let raw: unknown
   try {
     raw = JSON.parse(text)
   } catch {
-    return { ok: false, error: 'File is not valid JSON.' }
+    return { ok: false, errors: ['File is not valid JSON.'] }
   }
-  const wrapped = exportSchema.safeParse(raw)
-  const result = wrapped.success
-    ? { success: true as const, data: wrapped.data.project }
-    : projectSchema.safeParse(raw)
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw))
+    return { ok: false, errors: ['File must contain a JSON object.'] }
+
+  const obj = raw as Record<string, unknown>
+  const isExport = obj.format !== undefined || obj.schemaVersion !== undefined || obj.project !== undefined
+  if (isExport) {
+    if (obj.format !== FORMAT_ID)
+      return { ok: false, errors: [`Unrecognised file format (expected "${FORMAT_ID}").`] }
+    if (typeof obj.schemaVersion === 'number' && obj.schemaVersion > SCHEMA_VERSION)
+      return {
+        ok: false,
+        errors: [
+          `File uses schema version ${obj.schemaVersion}, newer than this app supports (${SCHEMA_VERSION}). Update Horror Director to open it.`,
+        ],
+      }
+  }
+
+  const rawProject = isExport ? obj.project : raw
+  const result = isExport ? exportSchema.safeParse(raw) : projectSchema.safeParse(raw)
   if (!result.success) {
-    const issue = result.error.issues[0]
-    const where = issue?.path.join('.') || 'root'
-    return { ok: false, error: `Invalid project file (${where}): ${issue?.message ?? 'unknown error'}` }
+    return {
+      ok: false,
+      errors: cap(
+        result.error.issues.map((i) => `${i.path.join('.') || 'root'}: ${i.message}`),
+      ),
+    }
   }
-  const project = result.data
-  // Drop dangling references rather than failing the whole import.
-  const ids = new Set(project.scenes.map((s) => s.id))
-  project.transitions = project.transitions.filter((t) => ids.has(t.source) && ids.has(t.target))
-  if (project.startSceneId && !ids.has(project.startSceneId)) project.startSceneId = null
-  return { ok: true, project }
+  const project = isExport ? (result.data as { project: Project }).project : (result.data as Project)
+
+  const errors: string[] = []
+  const warnings: string[] = []
+  const dropped = findDroppedKeys(rawProject, project)
+  if (dropped.length)
+    errors.push(
+      `Unrecognised field(s) that would be lost on import: ${dropped.slice(0, 10).join(', ')}${dropped.length > 10 ? ` (+${dropped.length - 10} more)` : ''}.`,
+    )
+  const v = validateProject(project)
+  errors.push(...v.errors)
+  warnings.push(...v.warnings)
+  if (errors.length) return { ok: false, errors: cap(errors) }
+  return { ok: true, project, warnings: cap(warnings) }
 }
