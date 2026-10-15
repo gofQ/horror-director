@@ -20,10 +20,10 @@ const full = (): Project => {
 
 describe('schema 6 export and round trip', () => {
   it('writes schemaVersion 6 and round-trips flags, Set Flag nodes and structured conditions exactly', () => {
-    expect(SCHEMA_VERSION).toBe(6)
+    expect(SCHEMA_VERSION).toBe(7)
     const p = full()
     const text = serializeProject(p)
-    expect(exportOf(p).schemaVersion).toBe(6)
+    expect(exportOf(p).schemaVersion).toBe(7)
     const r = parseProject(text)
     expect(r.ok).toBe(true)
     if (!r.ok) return
@@ -63,7 +63,7 @@ describe('older files import into v6 without changes', () => {
     expect(r.project.logicNodes).toEqual(base.logicNodes)
     expect(r.project.logicNodes.every((n) => n.expression === undefined && n.flagId === undefined)).toBe(true)
     if (v === 5) expect(r.project).toEqual(base)
-    expect(exportOf(r.project).schemaVersion).toBe(6)
+    expect(exportOf(r.project).schemaVersion).toBe(7)
   })
   it('a bare legacy project imports with no flags', () => {
     const bare = exportOf(sampleProject()).project
@@ -83,7 +83,7 @@ describe('malformed v6 data is rejected without repair', () => {
     fn(e)
     return e
   }
-  it('schema versions newer than 6', () => expect(errorsOf(mutate((e) => (e.schemaVersion = 7)))).toMatch(/schema version 7/))
+  it('schema versions newer than 7', () => expect(errorsOf(mutate((e) => (e.schemaVersion = 8)))).toMatch(/schema version 8/))
   it('unknown fields and bad flag data', () => {
     expect(errorsOf(mutate((e) => (e.project.flags![0].type = 'number')))).toMatch(/type/)
     expect(errorsOf(mutate((e) => (e.project.flags![0].defaultValue = 'yes')))).toMatch(/defaultValue/)

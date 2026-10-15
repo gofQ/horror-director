@@ -3,7 +3,7 @@ import { emptyProject, newAudioCue, newCharacter, newComment, newFlag, newLogicN
 import { getLang } from '../i18n/store'
 import { translate } from '../i18n'
 import { uid } from '../lib/id'
-import { loadLibrary, type LibraryIndex, type LoadNotice, type LoadedLibrary } from '../lib/library'
+import { loadLibrary, type DamagedEntry, type LibraryIndex, type LoadNotice, type LoadedLibrary } from '../lib/library'
 import { browserBackend, useSaveStatus } from '../lib/persist'
 import type {
   AudioCue,
@@ -29,6 +29,8 @@ import { nextStart, shotReferences, sortedByTime } from '../lib/shots'
 import { transitionDirectionSchema } from '../lib/schema'
 import { canConnect, linkDuration } from '../lib/graphRules'
 import { exprFlags, exprWithoutFlag, flagIsUsed, flagNameTaken } from '../lib/flags'
+import { copyGraph, pasteGraph, type ClipboardData } from '../lib/graphClipboard'
+import { insertAt, removeAt, translate as translatePoints } from '../lib/waypoints'
 
 export type View = 'graph' | 'timeline' | 'characters' | 'analysis' | 'simulator'
 export type Selection = { type: 'scene' | 'edge' | 'node' | 'comment'; id: string } | null
@@ -63,6 +65,10 @@ export function defaultNames(): DefaultNames {
 interface State {
   project: Project
   selection: Selection
+  /** Selected graph nodes (scenes, logic nodes, comments). `selection` mirrors it when exactly one node is selected. */
+  selectedNodeIds: string[]
+  /** Graph-local clipboard (session only, bound to the active project). */
+  clipboard: { projectId: string | null; data: ClipboardData; pastes: number } | null
   view: View
   timelineSceneId: string | null
   selectedTriggerId: string | null
@@ -77,7 +83,7 @@ interface State {
   /** Library metadata (active id + project list). Never part of a project or its export. */
   library: LibraryIndex
   /** Listed projects whose stored record is unreadable (raw kept untouched in storage). */
-  damaged: Record<string, { raw: string | null }>
+  damaged: Record<string, DamagedEntry>
   notices: LoadNotice[]
   /** Another tab changed this library; library operations are blocked until reload. */
   externalChange: boolean
@@ -89,6 +95,21 @@ interface State {
   swapActive: (p: { project: Project; library: LibraryIndex; damaged?: State['damaged'] }) => void
   setView: (v: View) => void
   select: (s: Selection) => void
+  /** Replaces the node selection (no-op when unchanged; an edge selection survives an empty node selection). */
+  selectNodes: (ids: string[]) => void
+  /** Moves several nodes in ONE undo step; waypoints of links whose both ends move by the same delta travel along. */
+  moveNodes: (positions: Record<string, { x: number; y: number }>) => void
+  /** Reroute points (presentation only). `setWaypoints` is the drag commit: one undo step. */
+  addWaypoint: (transitionId: string, index: number, point: { x: number; y: number }) => boolean
+  setWaypoints: (transitionId: string, points: { x: number; y: number }[]) => void
+  removeWaypoint: (transitionId: string, index: number) => void
+  clearWaypoints: (transitionId: string) => void
+  /** Copies the selected nodes (and the connections between them) into the session clipboard; returns how many nodes. */
+  copySelection: () => number
+  /** Pastes the clipboard (cursor/anchor or offset from the original) atomically; null when empty or from another project. */
+  paste: (anchor?: { x: number; y: number }) => string[] | null
+  /** Copy + paste of the selection in one undo step (titles get `suffix`). */
+  duplicateSelection: (suffix?: string) => string[] | null
   focusScene: (id: string) => void
   loadProject: (p: Project) => void
   resetProject: () => void
@@ -135,7 +156,7 @@ interface State {
   /** Connects two nodes (scene or IF node; `sourcePort` is required when `source` is an IF node). Returns null when `canConnect` refuses. */
   addTransition: (source: string, target: string, sourcePort?: BranchPort) => string | null
   /** Endpoints and output pin are fixed after creation (shot links in a direction depend on them). */
-  updateTransition: (id: string, patch: Partial<Omit<Transition, 'source' | 'target' | 'sourcePort'>>) => void
+  updateTransition: (id: string, patch: Partial<Omit<Transition, 'source' | 'target' | 'sourcePort' | 'waypoints'>>) => void
   /** Creates the direction when absent and merges the patch. Refuses (false) shot links outside the transition's source/target scene. */
   updateDirection: (transitionId: string, patch: Partial<TransitionDirection>) => boolean
   /** Removes the direction of a transition (explicit, undoable). */
@@ -209,6 +230,8 @@ function reconcile(project: Project, s: State): Partial<State> {
   const nodes = new Set(project.logicNodes.map((x) => x.id))
   const comments = new Set(project.comments.map((x) => x.id))
   const sel = s.selection
+  const all = new Set([...scenes, ...nodes, ...comments])
+  const selectedNodeIds = s.selectedNodeIds.filter((id) => all.has(id))
   const selOk =
     !sel ||
     (sel.type === 'scene' ? scenes.has(sel.id) : sel.type === 'node' ? nodes.has(sel.id) : sel.type === 'comment' ? comments.has(sel.id) : edges.has(sel.id))
@@ -217,6 +240,7 @@ function reconcile(project: Project, s: State): Partial<State> {
   const trgOk = project.scenes.some((x) => x.triggers.some((t) => t.id === s.selectedTriggerId))
   return {
     selection: selOk ? sel : null,
+    selectedNodeIds,
     timelineSceneId: tl,
     selectedTriggerId: trgOk ? s.selectedTriggerId : null,
   }
@@ -242,11 +266,16 @@ if (boot.bootError) useSaveStatus.setState({ status: { state: 'error', reason: b
 const startScene = (p: Project) => p.startSceneId ?? p.scenes[0]?.id ?? null
 
 export const useStore = create<State>()(
-  (rawSet, get) => {
+  (rawSet0, get) => {
+      // `selectedNodeIds` follows every direct `selection` write (programmatic selects after create/focus/etc.)
+      const rawSet = (p: Partial<State>) =>
+        rawSet0('selection' in p && !('selectedNodeIds' in p) ? { ...p, selectedNodeIds: p.selection && p.selection.type !== 'edge' ? [p.selection.id] : [] } : p)
       const set = withHistory(rawSet, get)
       return {
         project: boot.project,
         selection: null,
+        selectedNodeIds: [],
+        clipboard: null,
         view: 'graph',
         timelineSceneId: startScene(boot.project),
         timelineMode: 'triggers',
@@ -291,6 +320,7 @@ export const useStore = create<State>()(
             library,
             ...(damaged ? { damaged } : {}),
             selection: null,
+            clipboard: null,
             selectedTriggerId: null,
             timelineSceneId: startScene(project),
             past: [], // undo/redo never crosses project boundaries
@@ -300,11 +330,23 @@ export const useStore = create<State>()(
 
         setView: (view) => rawSet({ view }),
         select: (selection) => rawSet({ selection }),
+        selectNodes: (ids) => {
+          const s = get()
+          if (ids.length === s.selectedNodeIds.length && ids.every((id) => s.selectedNodeIds.includes(id))) return
+          const p = s.project
+          const one = ids.length === 1 ? ids[0] : null
+          const type = one ? (p.scenes.some((x) => x.id === one) ? 'scene' : p.logicNodes.some((x) => x.id === one) ? 'node' : 'comment') : null
+          rawSet({
+            selectedNodeIds: ids,
+            selection: one && type ? { type, id: one } : ids.length === 0 && s.selection?.type === 'edge' ? s.selection : null,
+          })
+        },
         focusScene: (id) => rawSet({ view: 'graph', selection: { type: 'scene', id } }),
         loadProject: (project) =>
           set({
             project,
             selection: null,
+            clipboard: null,
             selectedTriggerId: null,
             timelineSceneId: project.startSceneId ?? project.scenes[0]?.id ?? null,
           }),
@@ -360,6 +402,115 @@ export const useStore = create<State>()(
             },
             { key: `move:${id}` },
           ),
+        moveNodes: (positions) =>
+          set(
+            (s) => {
+              const p = s.project
+              const cur = new Map<string, { x: number; y: number }>([...p.scenes, ...p.logicNodes, ...p.comments].map((n) => [n.id, n.position]))
+              const delta = new Map<string, { dx: number; dy: number }>()
+              for (const [id, pos] of Object.entries(positions)) {
+                const c = cur.get(id)
+                if (c && (c.x !== pos.x || c.y !== pos.y)) delta.set(id, { dx: pos.x - c.x, dy: pos.y - c.y })
+              }
+              if (delta.size === 0) return {}
+              const mv = <T extends { id: string; position: { x: number; y: number } }>(n: T): T => (delta.has(n.id) ? { ...n, position: positions[n.id] } : n)
+              return {
+                project: {
+                  ...p,
+                  scenes: p.scenes.map(mv),
+                  logicNodes: p.logicNodes.map(mv),
+                  comments: p.comments.map(mv),
+                  transitions: p.transitions.map((t) => {
+                    const a = delta.get(t.source)
+                    const b = delta.get(t.target)
+                    return t.waypoints?.length && a && b && a.dx === b.dx && a.dy === b.dy ? { ...t, waypoints: translatePoints(t.waypoints, a.dx, a.dy) } : t
+                  }),
+                },
+              }
+            },
+            { key: `move:${Object.keys(positions).sort().join('|')}` },
+          ),
+        addWaypoint: (transitionId, index, point) => {
+          const t = get().project.transitions.find((x) => x.id === transitionId)
+          if (!t || (t.waypoints?.length ?? 0) >= 16) return false
+          set((s) => ({
+            project: { ...s.project, transitions: s.project.transitions.map((x) => (x.id === transitionId ? { ...x, waypoints: insertAt(x.waypoints, index, point) } : x)) },
+          }))
+          return true
+        },
+        setWaypoints: (transitionId, points) =>
+          set((s) => {
+            const t = s.project.transitions.find((x) => x.id === transitionId)
+            if (!t) return {}
+            const same = JSON.stringify(t.waypoints ?? []) === JSON.stringify(points)
+            if (same) return {}
+            return {
+              project: {
+                ...s.project,
+                transitions: s.project.transitions.map((x) => {
+                  if (x.id !== transitionId) return x
+                  const { waypoints, ...rest } = x
+                  void waypoints
+                  return points.length ? { ...rest, waypoints: points.slice(0, 16) } : rest
+                }),
+              },
+            }
+          }),
+        removeWaypoint: (transitionId, index) => {
+          const t = get().project.transitions.find((x) => x.id === transitionId)
+          if (!t?.waypoints || index < 0 || index >= t.waypoints.length) return
+          get().setWaypoints(transitionId, removeAt(t.waypoints, index))
+        },
+        clearWaypoints: (transitionId) => get().setWaypoints(transitionId, []),
+        copySelection: () => {
+          const s = get()
+          const data = copyGraph(s.project, s.selectedNodeIds)
+          if (!data) return 0
+          rawSet({ clipboard: { projectId: s.library.activeId, data, pastes: 0 } })
+          return data.scenes.length + data.logicNodes.length + data.comments.length
+        },
+        paste: (anchor) => {
+          const s = get()
+          const c = s.clipboard
+          if (!c || c.projectId !== s.library.activeId) return null
+          const all = [...c.data.scenes, ...c.data.logicNodes, ...c.data.comments].map((n) => n.position)
+          const at = anchor ?? { x: Math.min(...all.map((q) => q.x)) + 40 * (c.pastes + 1), y: Math.min(...all.map((q) => q.y)) + 60 * (c.pastes + 1) }
+          const r = pasteGraph(s.project, c.data, at)
+          set((st) => ({
+            project: {
+              ...st.project,
+              scenes: [...st.project.scenes, ...r.scenes],
+              logicNodes: [...st.project.logicNodes, ...r.logicNodes],
+              comments: [...st.project.comments, ...r.comments],
+              transitions: [...st.project.transitions, ...r.transitions],
+            },
+            selectedNodeIds: r.ids,
+            selection: null,
+            clipboard: st.clipboard ? { ...st.clipboard, pastes: st.clipboard.pastes + 1 } : null,
+          }))
+          get().selectNodes(r.ids.slice())
+          return r.ids
+        },
+        duplicateSelection: (suffix = '') => {
+          const s = get()
+          const data = copyGraph(s.project, s.selectedNodeIds)
+          if (!data) return null
+          const all = [...data.scenes, ...data.logicNodes, ...data.comments].map((n) => n.position)
+          const r = pasteGraph(s.project, data, { x: Math.min(...all.map((q) => q.x)) + 40, y: Math.min(...all.map((q) => q.y)) + 60 }, suffix)
+          set((st) => ({
+            project: {
+              ...st.project,
+              scenes: [...st.project.scenes, ...r.scenes],
+              logicNodes: [...st.project.logicNodes, ...r.logicNodes],
+              comments: [...st.project.comments, ...r.comments],
+              transitions: [...st.project.transitions, ...r.transitions],
+            },
+            selectedNodeIds: r.ids,
+            selection: null,
+          }))
+          get().selectNodes(r.ids.slice())
+          return r.ids
+        },
         deleteScene: (id) => get().deleteScenes([id]),
         deleteScenes: (ids) =>
           set(
@@ -380,6 +531,7 @@ export const useStore = create<State>()(
                   startSceneId: p.startSceneId && gone.has(p.startSceneId) ? (scenes[0]?.id ?? null) : p.startSceneId,
                 },
                 selection: s.selection && gone.has(s.selection.id) ? null : s.selection,
+                selectedNodeIds: s.selectedNodeIds.filter((id) => !gone.has(id)),
                 timelineSceneId:
                   s.timelineSceneId && gone.has(s.timelineSceneId) ? (scenes[0]?.id ?? null) : s.timelineSceneId,
               }
@@ -600,6 +752,13 @@ export const useStore = create<State>()(
               ...s.project,
               scenes: s.project.scenes.map((sc) => (pos[sc.id] ? { ...sc, position: pos[sc.id] } : sc)),
               logicNodes: s.project.logicNodes.map((n) => (pos[n.id] ? { ...n, position: pos[n.id] } : n)),
+              // stale reroute points would bend wires around the old layout: cleared in the same undo step
+              transitions: s.project.transitions.map((t) => {
+                if (!t.waypoints) return t
+                const { waypoints, ...rest } = t
+                void waypoints
+                return rest
+              }),
             },
           }))
           return true
@@ -621,8 +780,8 @@ export const useStore = create<State>()(
         },
         updateTransition: (id, patch) => {
           // endpoints and the output pin are fixed at runtime too (not only by the type)
-          const { source, target, sourcePort, ...safe } = patch as typeof patch & { source?: string; target?: string; sourcePort?: string }
-          void source, void target, void sourcePort
+          const { source, target, sourcePort, waypoints, ...safe } = patch as typeof patch & { source?: string; target?: string; sourcePort?: string; waypoints?: unknown }
+          void source, void target, void sourcePort, void waypoints
           set(
             (s) => ({
               project: {

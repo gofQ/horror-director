@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { Check, Copy, FileUp, FolderPlus, Pencil, Sparkles, Trash2, TriangleAlert } from 'lucide-react'
 import { useStore, defaultNames } from '../store/useStore'
-import { addAndOpen, deleteProject, duplicateProject, flushNow, openProject, renameProject } from '../store/library'
+import { addAndOpen, deleteProject, duplicateProject, flushNow, openInconsistent, openProject, renameProject } from '../store/library'
 import { useT } from '../i18n/store'
 import { emptyProject } from '../lib/factory'
 import { downloadText } from '../lib/download'
+import { formatDiagnostic } from '../lib/diagnostics'
 import { sampleProject } from '../lib/sample'
 import type { LibError, LibResult } from '../lib/library'
 import { libErrorText } from './ImportDialog'
@@ -27,6 +28,7 @@ export function LibraryDialog({ onClose, onPickImport, onBackup }: Props) {
   const [status, setStatus] = useState('')
   const [renaming, setRenaming] = useState<{ id: string; value: string } | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
+  const [confirmOpen, setConfirmOpen] = useState<string | null>(null)
   const { menu, open: openMenu, close: closeMenu } = useContextMenu()
 
   useEffect(() => {
@@ -170,12 +172,42 @@ export function LibraryDialog({ onClose, onPickImport, onBackup }: Props) {
                         {isActive && <span className="badge start">{t('lib.active')}</span>}
                       </div>
                       <div className="muted">{t('lib.updated', { date: when(m.updatedAt) })}</div>
-                      {bad && <div className="library-damaged">{t('lib.damaged')}</div>}
+                      {bad && !bad.problems && <div className="library-damaged">{t('lib.damaged')}</div>}
+                      {bad?.problems && (
+                        <div className="library-damaged" data-testid="library-inconsistent">
+                          {t('lib.inconsistent', { n: bad.problems.length })}
+                          <ul>
+                            {bad.problems.slice(0, 3).map((p, i) => (
+                              <li key={i}>{formatDiagnostic(t, p)}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
                     </>
                   )}
                 </div>
 
-                {confirmDelete === m.id ? (
+                {confirmOpen === m.id ? (
+                  <div className="library-confirm" role="alert" data-testid="library-open-anyway-confirm">
+                    <span>{t('lib.openAnywayConfirm', { name: m.name })}</span>
+                    <span className="library-row-actions">
+                      <button className="btn small" onClick={() => setConfirmOpen(null)}>
+                        {t('btn.cancel')}
+                      </button>
+                      <button
+                        className="btn small danger"
+                        data-testid="library-open-anyway-yes"
+                        onClick={() => {
+                          const r = openInconsistent(m.id)
+                          if (r.ok) setConfirmOpen(null)
+                          finish(r, t('lib.status.opened', { name: m.name }), true)
+                        }}
+                      >
+                        {t('lib.openAnywayYes')}
+                      </button>
+                    </span>
+                  </div>
+                ) : confirmDelete === m.id ? (
                   <div className="library-confirm" role="alert">
                     <span>{bad ? t('lib.removeDamagedConfirm', { name: m.name }) : t('lib.deleteConfirm', { name: m.name })}</span>
                     <span className="library-row-actions">
@@ -203,11 +235,18 @@ export function LibraryDialog({ onClose, onPickImport, onBackup }: Props) {
                 ) : (
                   <div className="library-row-actions">
                     {bad ? (
-                      bad.raw && (
-                        <button className="btn small" onClick={() => downloadText(`${m.id}.raw.json`, bad.raw!)}>
-                          {t('lib.downloadRaw')}
-                        </button>
-                      )
+                      <>
+                        {bad.raw && (
+                          <button className="btn small" data-testid="library-download-raw" onClick={() => downloadText(`${m.id}.raw.json`, bad.raw!)}>
+                            {t('lib.downloadRaw')}
+                          </button>
+                        )}
+                        {bad.problems && (
+                          <button className="btn small" data-testid="library-open-anyway" disabled={externalChange} onClick={() => setConfirmOpen(m.id)}>
+                            {t('lib.openAnyway')}
+                          </button>
+                        )}
+                      </>
                     ) : (
                       <>
                         {!isActive && (

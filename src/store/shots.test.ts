@@ -145,7 +145,7 @@ describe('persistence and isolation', () => {
     st().addShot(SCENE)
     flushNow()
     const rec = rawRecord()
-    expect(rec.v).toBe(6)
+    expect(rec.v).toBe(7)
     expect(rec.project.scenes.find((s) => s.id === SCENE)!.shots).toHaveLength(1)
   })
 
@@ -162,7 +162,8 @@ describe('persistence and isolation', () => {
 })
 
 describe('migration of older stored data', () => {
-  const noShots = (p: Project) => ({ ...p, scenes: p.scenes.map(({ shots, ...rest }) => (void shots, rest)) })
+  // a schema-1 file has neither shots nor transition directions (directions link shots)
+  const noShots = (p: Project) => ({ ...p, scenes: p.scenes.map(({ shots, ...rest }) => (void shots, rest)), transitions: p.transitions.map(({ direction, ...rest }) => (void direction, rest)) })
 
   it('reads a v:1 record without shots as empty shot lists and rewrites nothing until the first edit', () => {
     const id = st().library.activeId!
@@ -175,7 +176,7 @@ describe('migration of older stored data', () => {
     st().updateProject({ description: 'edit' })
     flushNow()
     const rec = rawRecord()
-    expect(rec.v).toBe(6)
+    expect(rec.v).toBe(7)
     expect(rec.project.description).toBe('edit')
     expect(rec.project.scenes.every((s) => Array.isArray(s.shots))).toBe(true)
   })

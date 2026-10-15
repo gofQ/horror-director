@@ -3,13 +3,33 @@
 Version history of Horror Director, newest first. This file is the canonical user-facing history; the READMEs describe
 the current product only and `progress.md` tracks engineering status.
 
-The labels below (MVP/v0.1 through v0.7B) are **development milestones**, not published releases: the project has no
+The labels below (MVP/v0.1 through v0.7C) are **development milestones**, not published releases: the project has no
 tagged releases and `package.json` stays at `0.1.0`. Each milestone after the MVP was developed on its own branch and
 merged through a pull request into the integration branch (`claude/optimistic-tesla-r2v8g6`). The JSON schema was
 `schemaVersion: 1` until v0.6A introduced `schemaVersion: 2` (scene shots) and v0.6B `schemaVersion: 3`
-(transition direction) v0.6C `schemaVersion: 4` (scene audio cues) v0.7A `schemaVersion: 5` (IF nodes, comments, custom scene types, branch-port links) and v0.7B `schemaVersion: 6` (narrative flags, Set Flag nodes, structured IF conditions); files of every earlier version, and bare project files, are still imported.
+(transition direction) v0.6C `schemaVersion: 4` (scene audio cues) v0.7A `schemaVersion: 5` (IF nodes, comments, custom scene types, branch-port links) v0.7B `schemaVersion: 6` (narrative flags, Set Flag nodes, structured IF conditions) and v0.7C `schemaVersion: 7` (reroute points); files of every earlier version, and bare project files, are still imported.
 
 Every future feature or fix milestone must add an entry here (see `CLAUDE.md`).
+
+## v0.7C — Graph productivity & reliability
+
+Pull request: _link added when the pull request is opened_
+
+### Added
+- **Reroute points**: movable waypoints on existing connections (scene, IF and Set Flag links). Right-click a connection → *Add Reroute Point* at the cursor (inserted into the nearest part of the wire), drag points to reshape it (one undo step per drag), right-click a point → *Remove Point*, *Clear Reroute Points*, arrow keys nudge and Delete removes a focused point; the connection inspector lists the points (move earlier/later, remove, add on the wire) as the keyboard/touch alternative. Several points per connection (max 16). The route is a smooth curve through the points with horizontal tangents at the pins, so arrowheads and labels stay readable; connections without points are drawn exactly as before.
+- **Multi-selection and batch editing**: Ctrl/Cmd-click, Shift+drag box selection and a Select/Pan toggle (plain-drag box selection, touch-friendly); a "N selected" badge and a batch panel in the Inspector. Selected nodes move together as one undo step (a drag is one step, and links whose two ends move together carry their reroute points along), and Delete removes the batch with its connections as one step. A tiny drag threshold, no store writes while panning or while a connection is being dragged.
+- **Copy / Paste / Duplicate** (Ctrl/Cmd+C, V, D and context menus; paste at the cursor or offset from the original, repeated pastes cascade): scenes, IF nodes, Set Flag nodes and comments; connections only when both ends are copied; fresh ids for nodes, triggers, shots, audio cues and connections; shot-linked transition directions are remapped; branch ports, structured conditions, character states and custom scene types are kept; a deleted flag detaches a pasted Set Flag / drops its checks, a deleted scene type is dropped, the start scene never changes. Atomic and undoable; the clipboard is session-only and cleared when the project changes.
+- **Large-graph UX**: Fit Selection and Center on Selection (menus, toolbar, `F`), Select All, stronger selected-node and selected-wire emphasis, viewport culling for graphs over 60 nodes, and no full analysis or edge rebuild while dragging (reachability is recomputed from the structure only). Shortcuts are active on the canvas (or with nothing focused) and never inside inputs, menus, dialogs or other panels.
+- **Library integrity check**: stored records are now integrity-checked on load with the same rules as import errors (dangling scene/logic-node/flag/shot/character/scene-type references, invalid pins, duplicate ids, …). An inconsistent record is listed with its first problems, is never opened, repaired, overwritten or deleted automatically, can be downloaded byte-exact, and can be opened with an explicit, confirmed *Open anyway* (the raw record is saved under `horror-director:unreadable:<time>` first; nothing is repaired until you edit).
+
+### Changed
+- **JSON schema 7**: optional `transition.waypoints` (≤ 16 `{x, y}` points, finite coordinates within ±100000, unknown keys rejected). Schema 1–6 and bare project files are still imported unchanged; points are presentation only and are never read by simulation, analysis, pacing or comparison (covered by equality tests). Library records are written as `{ v: 7, project }`; `v: 1`–`v: 6` are still read and never rewritten at boot; an older build treats `v: 7` records as damaged and preserves them.
+- **Auto Arrange** also clears reroute points in its single undo step (stale points would bend wires around the old layout) and says so.
+- The legacy-migration check is unaffected by the integrity check (the migrated record is verified for equality only).
+- `CLAUDE.md` compatibility rules now state schema 7 and records `{ v: 7 }`. `package.json` version metadata is unchanged.
+
+### Not included
+Event, Delay, Random Branch, new variable types, cross-project paste, Unreal integration.
 
 ## v0.7B — Narrative state & logic
 

@@ -31,8 +31,18 @@ documentation: [README.tr.md](README.tr.md).
 - **Context menus:** accessible right-click menus on the graph canvas, scenes, IF nodes, comments and connections, and on
   Timeline/Sequence items and project rows (also Shift+F10 / the menu key, and long-press on touch). Native right-click is
   kept in inputs and text fields.
-- **Auto Arrange:** a deterministic left-to-right layout of the scenes. It runs only when you press the button, changes
-  only scene positions and is a single undo/redo step.
+- **Reroute points:** right-click a connection → **Add Reroute Point** (or use the buttons in the connection inspector), drag
+  the points to reshape the wire, right-click a point → **Remove Point**. Several points per connection are supported (up to
+  16); scene, IF and Set Flag connections all work. Points only change how the wire is drawn: endpoints, ports, ids,
+  conditions and design notes stay as they are, and simulation, analysis, pacing and comparison ignore them.
+- **Selection and productivity:** Ctrl/Cmd-click or Shift+drag (or the Select/Pan toggle) selects several scenes, IF/Set Flag
+  nodes and comments; they move, copy, duplicate and delete together, each batch as one undo step. **Copy / Paste /
+  Duplicate** (Ctrl/Cmd+C, V, D, also in the context menus) is graph-local and per project: connections are copied only when both
+  ends are copied, every id is regenerated (including shots, cues, triggers, shot-linked direction notes), ports and flag
+  references stay valid, and a paste lands at the cursor. **Fit Selection**, **Center on Selection**, Select All and `F` help in
+  large graphs. Shortcuts never act while you type in a field.
+- **Auto Arrange:** a deterministic left-to-right layout of the scenes and logic nodes. It runs only when you press the button,
+  changes only positions (reroute points on connections are cleared, undo restores them) and is a single undo/redo step.
 - **Loops:** self-loops, per-scene loop settings (max iterations, exit condition) and automatic cycle detection.
 - **Horror timeline:** per-scene trigger track with draggable markers, intensity (0–10), trigger types (jumpscare,
   audio, visual, AI, environment, narrative), conditions and a fire-once flag.
@@ -160,13 +170,13 @@ library or undo history, it is not exported, and it resets when you switch proje
 - **Storage** (browser `localStorage`): `horror-director:library:v1` (index), `horror-director:proj:<id>` (one record per
   project), `horror-director:lang` (language). Ids are internal and independent of names. Library data (ids,
   timestamps, active project) is never written into project JSON.
-- **Backup** downloads the *active* project in the schema-6 export format. Importing validates strictly (duplicate ids,
+- **Backup** downloads the *active* project in the schema-7 export format. Importing validates strictly (duplicate ids,
   dangling references, invalid values, unrecognised fields, newer schema versions are errors shown before anything is replaced). A file
   can be imported as a new project or, with confirmation, replace the active project.
-- **Older files and data:** schema-1 to schema-5 exports and bare project files are still imported; missing shots, audio
+- **Older files and data:** schema-1 to schema-6 exports and bare project files are still imported; missing shots, audio
   cues, IF nodes, comments, scene types and flags start as empty lists and missing transition directions stay absent (an informational notice appears for
-  schema-1/bare files), and the next backup is schema 6 with all other fields unchanged. Stored projects from earlier versions are read the
-  same way and are only rewritten when you edit them. Project records are stored as `{ v: 6, project }` (earlier `v: 1`–`v: 5`
+  schema-1/bare files), and the next backup is schema 7 with all other fields unchanged. Stored projects from earlier versions are read the
+  same way and are only rewritten when you edit them. Project records are stored as `{ v: 7, project }` (earlier `v: 1`–`v: 6`
   records are still read); an older build that cannot read the new fields shows such a record as damaged and preserves it
   rather than dropping data. Downgrading is not supported.
 - **Migration:** the single-project storage of early versions is validated, copied into the library under the id
@@ -179,7 +189,7 @@ library or undo history, it is not exported, and it resets when you switch proje
 ```jsonc
 {
   "format": "horror-director",
-  "schemaVersion": 6,
+  "schemaVersion": 7,
   "exportedAt": "ISO-8601",
   "project": {
     "name": "", "description": "", "startSceneId": "scene id | null",
@@ -204,6 +214,7 @@ library or undo history, it is not exported, and it resets when you switch proje
     "comments": [{ "id","title","text","color","position": {"x","y"},"width","height" }],
     "sceneTypes": [{ "id","name","color","icon","baseKind": "reality|dream|nightmare|memory|ending","description","duration?" }],
     "transitions": [{ "id","source": "scene or IF node id","target": "scene or IF node id","label","style","condition","duration",
+                      "waypoints": "[{x,y}] reroute points, ≤ 16, flow coordinates, optional (presentation only)",
                       "sourcePort": "true|false (only for connections leaving an IF node)",
                       "direction": { "technique": "none|match-cut|impossible-space|identity-discontinuity|false-awakening|reality-reveal",
                                      "playerBelief","reality","visualContinuity","audioContinuity","reveal","unrealNotes",
@@ -262,8 +273,10 @@ Chromium and uses test ids and DOM geometry rather than screenshot comparisons.
 - Audio cues are planning notes: no playback, waveform, 3D spatialization, AI generation or engine/Unreal runtime
   instructions, and no asset library. Cues are independent of triggers and do not affect pacing statistics.
 - Transition directions are planning notes: no generated images, animation or 3D preview, and no Unreal execution. Stored
-  records are schema-checked on load but not integrity-checked (a link to a missing shot is flagged in the designer and can
-  be cleared; imports reject it).
+  records are schema-checked **and integrity-checked** on load (dangling scene, logic-node, flag, shot, character or scene-type
+  references, invalid pins and similar problems): an inconsistent record is listed as such in Projects with its first problems, is
+  never opened, repaired, overwritten or deleted automatically, can be downloaded byte-exact, and can be opened explicitly with
+  **Open anyway** (a raw copy is saved first; nothing is repaired until you edit).
 - Undo/redo history is session-only and cleared when switching projects.
 - No Unreal-side importer yet; the JSON format is documented above. The production bundle is not code-split.
 - Turkish strings have not been reviewed by a native game-industry editor; E2E covers Chromium only.

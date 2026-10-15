@@ -9,12 +9,14 @@ import {
   type SaveErrorReason,
 } from './persist'
 import { projectSchema, type Project } from './schema'
+import { validateProject } from './validate'
+import type { Diagnostic } from './diagnostics'
 
 /**
  * Multi-project library storage (v0.4A).
  *
  *  - `LIBRARY_KEY`      → index: library metadata only (never part of a project or an export)
- *  - `RECORD_PREFIX+id` → `{ v: 6, project }` (`v: 1`–`v: 5` records from earlier builds are still read), the project exactly as exported
+ *  - `RECORD_PREFIX+id` → `{ v: 7, project }` (`v: 1`–`v: 6` records from earlier builds are still read), the project exactly as exported
  *  - `STORAGE_KEY`      → legacy single-project data (v0.1–v0.3): read for migration, never modified
  */
 export const LIBRARY_KEY = 'horror-director:library:v1'
@@ -38,8 +40,8 @@ const indexSchema = z.object({
   projects: z.array(metaSchema),
   migratedFrom: z.string().optional(),
 })
-/** Records are `v: 1`–`v: 5` (older builds; missing fields are normalized in memory on read) or `v: 6` (written now; older builds treat it as damaged and preserve it). */
-const recordSchema = z.object({ v: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(5), z.literal(6)]), project: projectSchema })
+/** Records are `v: 1`–`v: 6` (older builds; missing fields are normalized in memory on read) or `v: 7` (written now; older builds treat it as damaged and preserve it). */
+const recordSchema = z.object({ v: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(5), z.literal(6), z.literal(7)]), project: projectSchema })
 
 export type ProjectMeta = z.infer<typeof metaSchema>
 export type LibraryIndex = z.infer<typeof indexSchema>
@@ -72,7 +74,7 @@ export interface LoadedLibrary {
   index: LibraryIndex
   project: Project
   /** Listed projects whose stored record is missing or unreadable (raw kept untouched). */
-  damaged: Record<string, { raw: string | null }>
+  damaged: Record<string, DamagedEntry>
   notices: LoadNotice[]
   /** The index needs (re)writing; the store schedules it so failures surface in the save status. */
   indexDirty: boolean
@@ -90,7 +92,7 @@ export interface LoadDeps {
 
 /* ---------- low-level helpers ---------- */
 
-export const serializeRecord = (project: Project) => JSON.stringify({ v: 6, project })
+export const serializeRecord = (project: Project) => JSON.stringify({ v: 7, project })
 export const serializeIndex = (index: LibraryIndex) => JSON.stringify(index)
 
 function safeGet(b: Backend, key: string): string | null {
@@ -129,16 +131,32 @@ export function parseIndex(raw: string): LibraryIndex | null {
   }
 }
 
+/** A listed project whose stored record is unusable. `problems` is set for records that parse but are internally inconsistent. */
+export interface DamagedEntry {
+  raw: string | null
+  problems?: Diagnostic[]
+}
+
 export type RecordRead =
   | { ok: true; project: Project }
   | { ok: false; reason: 'missing' | 'invalid'; raw: string | null }
+  | { ok: false; reason: 'inconsistent'; raw: string; problems: Diagnostic[] }
 
-export function readRecord(b: Backend, id: string): RecordRead {
+/**
+ * Reads one stored record. Beyond the schema check the project's references and graph are integrity-checked
+ * (`validateProject` errors; warnings never block): an inconsistent record is reported, never repaired.
+ * `integrity: false` skips that second check (used to verify a just-written migration).
+ */
+export function readRecord(b: Backend, id: string, integrity = true): RecordRead {
   const raw = safeGet(b, recordKey(id))
   if (raw === null) return { ok: false, reason: 'missing', raw: null }
   try {
     const r = recordSchema.safeParse(JSON.parse(raw))
-    if (r.success) return { ok: true, project: r.data.project }
+    if (r.success) {
+      if (!integrity) return { ok: true, project: r.data.project }
+      const problems = validateProject(r.data.project).errors
+      return problems.length === 0 ? { ok: true, project: r.data.project } : { ok: false, reason: 'inconsistent', raw, problems }
+    }
   } catch {
     /* fall through */
   }
@@ -175,9 +193,9 @@ function rebuildIndex(b: Backend, now: number): { index: LibraryIndex; damaged: 
     const id = k.slice(RECORD_PREFIX.length)
     const rec = readRecord(b, id)
     if (rec.ok) projects.push(makeMeta(id, rec.project.name, now))
-    else if (rec.reason === 'invalid') {
+    else if (rec.reason !== 'missing') {
       projects.push(makeMeta(id, id, now))
-      damaged[id] = { raw: rec.raw }
+      damaged[id] = rec.reason === 'inconsistent' ? { raw: rec.raw, problems: rec.problems } : { raw: rec.raw }
     }
   }
   if (projects.length === 0) return null
@@ -252,7 +270,7 @@ function migrateLegacy(b: Backend, project: Project, deps: LoadDeps, notices: Lo
   }
   const werr = writeVerified(b, recordKey(LEGACY_ID), serializeRecord(project))
   if (werr) return fail(werr.code === 'storageFull' ? 'full' : werr.code === 'verifyFailed' ? 'verify' : 'unavailable')
-  const back = readRecord(b, LEGACY_ID)
+  const back = readRecord(b, LEGACY_ID, false)
   if (!back.ok || JSON.stringify(back.project) !== JSON.stringify(project)) return fail('verify')
   const ierr = writeVerified(b, LIBRARY_KEY, serializeIndex(index))
   if (ierr) return fail(ierr.code === 'storageFull' ? 'full' : ierr.code === 'verifyFailed' ? 'verify' : 'unavailable')
@@ -292,7 +310,7 @@ export function loadLibrary(b: Backend | null, deps: LoadDeps): LoadedLibrary {
         if (rec.project.name !== m.name) dirty = true
         return { ...m, name: rec.project.name }
       }
-      damaged[m.id] = { raw: rec.raw }
+      damaged[m.id] = rec.reason === 'inconsistent' ? { raw: rec.raw, problems: rec.problems } : { raw: rec.raw }
       return m
     })
     const healthy = projects.filter((m) => !(m.id in damaged))

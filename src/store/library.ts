@@ -9,6 +9,7 @@ import {
   serializeRecord,
   validateName,
   writeVerified,
+  type DamagedEntry,
   type LibError,
   type LibraryIndex,
   type LibResult,
@@ -110,7 +111,7 @@ function writeIndex(index: LibraryIndex): LibError | null {
   return err
 }
 
-function setLibrary(library: LibraryIndex, damaged?: Record<string, { raw: string | null }>) {
+function setLibrary(library: LibraryIndex, damaged?: Record<string, DamagedEntry>) {
   suppress = true
   useStore.setState({ library, ...(damaged ? { damaged } : {}) })
   suppress = false
@@ -169,6 +170,36 @@ export function openProject(id: string): LibResult {
   if (err) return fail(err)
   suppress = true
   s.swapActive({ project: rec.project, library: index })
+  suppress = false
+  return { ok: true }
+}
+
+/**
+ * Explicit, user-confirmed recovery for a record that parses but is internally inconsistent: its raw text is first
+ * preserved under the `unreadable` prefix, then the project is opened in memory. Nothing is repaired or rewritten
+ * until the user edits (autosave then writes the edited project; the raw copy stays).
+ */
+export function openInconsistent(id: string): LibResult {
+  const pre = precheck()
+  if (pre) return fail(pre)
+  const s = useStore.getState()
+  const entry = s.damaged[id]
+  if (!entry?.problems || !entry.raw) return fail({ code: 'damaged' })
+  if (!safe.flush()) return fail(saveFailure())
+  const rec = readRecord(backend!, id, false)
+  if (!rec.ok) return fail({ code: 'damaged' })
+  if (preserveUnreadable(entry.raw, backend!, Date.now()) === null) return fail({ code: 'storageFull' })
+  const damaged = { ...s.damaged }
+  delete damaged[id]
+  const index: LibraryIndex = {
+    ...s.library,
+    activeId: id,
+    projects: s.library.projects.map((m) => (m.id === id ? { ...m, name: rec.project.name } : m)),
+  }
+  const err = writeIndex(index)
+  if (err) return fail(err)
+  suppress = true
+  s.swapActive({ project: rec.project, library: index, damaged })
   suppress = false
   return { ok: true }
 }
