@@ -4,6 +4,7 @@ import { useStore } from './useStore'
 import { useSim } from './simulator'
 import { addAndOpen, bootLibrary, deleteProject, flushNow, openProject } from './library'
 import { simulateRoute } from '../lib/simulate'
+import { analyzePacing } from '../lib/pacing'
 import { emptyProject } from '../lib/factory'
 import { sampleProject } from '../lib/sample'
 
@@ -16,6 +17,7 @@ beforeEach(() => {
   bootLibrary(b)
   sim().reset()
   sim().setOptions({ stepCap: 40, unlimitedLimit: 5 })
+  sim().setPacing({ kindWindow: 120, silenceMin: 90 })
 })
 
 describe('simulator state', () => {
@@ -97,6 +99,49 @@ describe('isolation from project data, autosave and history', () => {
     expect(writes).not.toHaveBeenCalled()
     expect(JSON.stringify([...b.data])).toBe(snapshot)
     expect(st().project).toEqual(sampleProject())
+    writes.mockRestore()
+  })
+})
+
+describe('pacing state', () => {
+  it('toggles the selected finding and clears it when the route changes or the project switches', () => {
+    sim().selectFinding('f1')
+    expect(sim().selectedFindingId).toBe('f1')
+    sim().selectFinding('f1')
+    expect(sim().selectedFindingId).toBeNull()
+    for (const action of [() => sim().choose('e1'), () => sim().back(), () => sim().restart(), () => sim().reset()]) {
+      sim().selectFinding('f2')
+      action()
+      expect(sim().selectedFindingId).toBeNull()
+    }
+    sim().selectFinding('f3')
+    addAndOpen(emptyProject())
+    expect(sim().selectedFindingId).toBeNull()
+  })
+
+  it('clamps the adjustable thresholds and keeps them across project switches', () => {
+    sim().setPacing({ kindWindow: 99999, silenceMin: 0 })
+    expect(sim().pacing.kindWindow).toBe(3600)
+    expect(sim().pacing.silenceMin).toBe(1)
+    sim().setPacing({ kindWindow: 60 })
+    addAndOpen(emptyProject())
+    expect(sim().pacing.kindWindow).toBe(60)
+  })
+
+  it('analysis never touches project data, history or storage', () => {
+    flushNow()
+    const project = st().project
+    const past = st().past
+    const writes = vi.spyOn(b, 'setItem')
+    for (const id of ['e1', 'e2', 'e5']) sim().choose(id)
+    const result = simulateRoute(st().project, sim().choices, sim().options)
+    analyzePacing(result, sim().pacing)
+    sim().setPacing({ silenceMin: 30 })
+    sim().selectFinding('x')
+    expect(st().project).toBe(project)
+    expect(st().past).toBe(past)
+    expect(flushNow()).toBe(true)
+    expect(writes).not.toHaveBeenCalled()
     writes.mockRestore()
   })
 })

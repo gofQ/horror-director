@@ -7,6 +7,8 @@ import { formatDiagnostic } from '../lib/diagnostics'
 import { formatClock, simulateRoute, type SimEvent, type SimOption, type SimStatus } from '../lib/simulate'
 import { KIND_COLOR, TRIGGER_COLOR } from '../lib/theme'
 import { NumberInput } from './fields'
+import { PacingPanel } from './PacingPanel'
+import { analyzePacing } from '../lib/pacing'
 
 const W = 1000
 const H = 300
@@ -16,7 +18,7 @@ const TICKS = [5, 10, 15, 30, 60, 120, 300, 600, 1200, 1800, 3600]
 export function SimulatorView() {
   const { t, formatNumber } = useT()
   const project = useStore((s) => s.project)
-  const { choices, options, selectedEventKey, invalidatedNotice, choose, back, restart, setOptions, prune, selectEvent } = useSim()
+  const { choices, options, selectedEventKey, selectedFindingId, pacing, invalidatedNotice, choose, back, restart, setOptions, prune, selectEvent } = useSim()
 
   const result = useMemo(() => simulateRoute(project, choices, options), [project, choices, options])
 
@@ -24,6 +26,11 @@ export function SimulatorView() {
   useEffect(() => {
     if (result.validChoices.length !== choices.length) prune(result.validChoices, result.invalidated)
   }, [result, choices.length, prune])
+
+  const analysis = useMemo(() => analyzePacing(result, pacing), [result, pacing])
+  const selectedFinding = analysis.findings.find((f) => f.id === selectedFindingId) ?? null
+  const highlighted = useMemo(() => new Set(selectedFinding?.eventKeys ?? []), [selectedFinding])
+  const sceneTitle = (id: string) => project.scenes.find((sc) => sc.id === id)?.title || t('scene.untitled')
 
   const selected = result.events.find((e) => e.key === selectedEventKey) ?? null
   const cur = result.current
@@ -262,6 +269,22 @@ export function SimulatorView() {
                   </g>
                 )
               })}
+              {selectedFinding && (
+                <rect
+                  data-testid="pacing-range"
+                  x={x(selectedFinding.start)}
+                  y={PAD.t - 20}
+                  width={Math.max(x(selectedFinding.end) - x(selectedFinding.start), 4)}
+                  height={H - PAD.t - PAD.b + 20}
+                  fill="#ffffff"
+                  opacity={0.12}
+                  stroke="#ffffff"
+                  strokeOpacity={0.5}
+                  strokeDasharray="4 3"
+                >
+                  <title>{`${t('pacing.rangeLabel')}: ${formatClock(selectedFinding.start)}–${formatClock(selectedFinding.end)}`}</title>
+                </rect>
+              )}
               <line x1={x(result.stats.totalDuration)} x2={x(result.stats.totalDuration)} y1={PAD.t - 20} y2={H - PAD.b} className="end-line" />
               {ticks.map((tk) => (
                 <text key={tk} x={x(tk)} y={H - PAD.b + 18} className="axis-text" textAnchor="middle">
@@ -271,6 +294,7 @@ export function SimulatorView() {
               {result.events.map((e) => {
                 const color = TRIGGER_COLOR[e.kind]
                 const sel = e.key === selectedEventKey
+                const hl = highlighted.has(e.key)
                 return (
                   <g
                     key={e.key}
@@ -280,6 +304,7 @@ export function SimulatorView() {
                     data-testid="sim-marker"
                     data-hypothetical={e.hypothetical}
                     data-beyond={e.beyondDuration}
+                    data-highlighted={hl}
                     aria-label={`${e.name} — ${e.sceneTitle} — ${formatClock(e.absoluteTime)} — ${e.intensity}/10`}
                     onClick={() => pick(e)}
                     onKeyDown={(ev) => {
@@ -293,10 +318,10 @@ export function SimulatorView() {
                     <circle
                       cx={x(e.absoluteTime)}
                       cy={y(e.intensity)}
-                      r={sel ? 9 : 7}
+                      r={sel || hl ? 9 : 7}
                       fill={e.hypothetical ? 'var(--bg)' : color}
-                      stroke={e.beyondDuration ? '#ff4d6a' : color}
-                      strokeWidth={e.hypothetical || e.beyondDuration ? 2.5 : 2}
+                      stroke={hl ? '#ffffff' : e.beyondDuration ? '#ff4d6a' : color}
+                      strokeWidth={hl || e.hypothetical || e.beyondDuration ? 2.5 : 2}
                       strokeDasharray={e.hypothetical ? '3 2' : undefined}
                     />
                     <title>{`${e.name} (${formatClock(e.absoluteTime)}, ${e.intensity}/10)`}</title>
@@ -308,11 +333,13 @@ export function SimulatorView() {
             <p className="muted sim-disclaimer">{t('sim.disclaimer')}</p>
           </div>
 
+          <PacingPanel analysis={analysis} sceneTitle={sceneTitle} selectedId={selectedFinding?.id ?? null} />
+
           <div className="timeline-lower">
             <div className="card trigger-list">
               <div className="section-title">{t('sim.events')}</div>
               {result.events.map((e) => (
-                <button key={e.key} className={`trigger-row${e.key === selectedEventKey ? ' selected' : ''}`} data-testid="sim-event" onClick={() => pick(e)}>
+                <button key={e.key} className={`trigger-row${e.key === selectedEventKey ? ' selected' : ''}${highlighted.has(e.key) ? ' highlighted' : ''}`} data-testid="sim-event" data-highlighted={highlighted.has(e.key)} onClick={() => pick(e)}>
                   <span className="trigger-time">{formatClock(e.absoluteTime)}</span>
                   <i style={{ background: TRIGGER_COLOR[e.kind] }} />
                   <span className="trigger-name">

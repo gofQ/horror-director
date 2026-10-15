@@ -174,3 +174,27 @@ Unreal importer plugin / DataTable CSV export, audio cue library, scene thumbnai
 - Simulation state and limits are session-only (not saved, not exported); per-project routes are not remembered across switches or reloads.
 - The chart shows planned trigger markers, not continuous "intensity"; very long routes make scene labels illegible (labels are hidden when bands are narrow).
 - E2E covers Chromium desktop; the mobile layout was checked manually (no automated mobile E2E).
+
+## V0.5B — Horror pacing analyzer
+
+### Delivered
+- **Pure engine** (`src/lib/pacing.ts`): `analyzePacing(simResult, options?)` reuses the v0.5A `SimResult` (no second traversal). Input = valid planned events (beyond-duration excluded, once-skipped already absent), sorted deterministically. Patterns with documented, inclusive thresholds: **cluster** (≥4 in 20 s), **high-intensity repetition** (≥2 events ≥8 within 45 s), **repetitive trigger type** (≥4 of one kind within an adjustable 120 s window), **trigger-free interval** (≥90 s adjustable; leading, interior and — only for finished routes — trailing; always informational/neutral) and **escalation** (≥3 consecutive strictly rising events, ≤60 s apart). Overlapping windows are merged into one finding per maximal run; findings carry category, severity (informational/caution), exact start/end, event keys, scene ids, supporting values and `dependsOnHypothetical` / `dependsOnAssumedTransitions`.
+- **Overview:** planned events, events per minute, distribution by trigger kind, high-intensity count, hypothetical count, longest trigger-free interval, route completeness; `insufficient` (<2 planned events) gives an explanatory empty state. Handles empty/no-start, short, looping, unfinished and step-limited routes.
+- **UI** (`src/components/PacingPanel.tsx`, inside the Simulator): localized TR/EN overview, per-kind bars, findings with what/where/why-review text, exact ranges, hypothetical/assumed-transition badges, threshold explanations with the two adjustable inputs (repeated-type window, trigger-free minimum). Selecting a finding highlights its markers and event rows and draws a band over its exact time range. **No tension curve, no score**, prominent disclaimer.
+- **State:** `src/store/simulator.ts` gained session-only `pacing` options and `selectedFindingId` (cleared on route changes and project switches). Analysis is recomputed immediately from the route/project; it never touches project data, autosave, library storage or undo history (tested incl. storage writes).
+
+### Changed files
+- New: `src/lib/pacing.ts`, `src/lib/pacing.test.ts`, `src/components/PacingPanel.tsx`, `e2e/pacing.spec.ts`.
+- Modified: `src/components/SimulatorView.tsx`, `src/store/simulator.ts`, `src/store/simulator.test.ts`, `src/i18n/{en,tr}.ts`, `src/styles.css`, `README.md`, `README.tr.md`.
+
+### Test results (all executed in this Cloud Session)
+- `npm run typecheck` clean; `npm test`: 15 files, **250 tests** (+39: 36 pacing engine incl. every threshold boundary, dedup, ordering, hypothetical/assumed flags, invalid events, repeated visits, empty/unfinished/step-limited routes; 3 store); `npm run build` passes.
+- `npm run test:e2e`: **24/24** passed (17 existing + 7 new pacing tests); **48/48** with `--repeat-each=2` (no flakiness observed).
+- Hand-verified sample route to "Let Go": 12 planned events, 1.1/min, 3 high-intensity, longest trigger-free interval 7:23–9:14, findings: escalation 1:46–3:06, escalation 6:15–7:23 (assumed transitions), silence 7:23–9:14, final silence 9:14–11:05.
+
+### Known limitations
+- Observations only: thresholds are fixed heuristics (only the repeated-type window and trigger-free minimum are adjustable in the UI), not tuned to any audience and not validated against player behaviour; no score, curve, or recommendations to change content.
+- Based on authored intensity and the simulator's assumption that the full scene duration is spent in every scene; real play timing will differ.
+- Only the current manually chosen route is analyzed (no cross-route comparison or enumeration).
+- Hypothetical events are included in all counts (flagged on findings); the overview shows how many there are but does not recompute without them.
+- Trailing silence is not evaluated for unfinished or step-limited routes; findings are sorted by time, with no ranking of importance.
