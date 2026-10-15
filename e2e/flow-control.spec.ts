@@ -264,7 +264,7 @@ test.describe('Event, Delay and Random Branch nodes', () => {
     // backup is schema 8 with the new node types
     const [dl] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: /backup/i }).first().click()])
     const exported = JSON.parse(readFileSync((await dl.path())!, 'utf8')) as { schemaVersion: number; project: { logicNodes: { type: string; seconds?: number; probabilityA?: number }[]; transitions: { sourcePort?: string }[] } }
-    expect(exported.schemaVersion).toBe(8)
+    expect(exported.schemaVersion).toBe(9)
     expect(exported.project.logicNodes.map((n) => n.type).sort()).toEqual(['delay', 'delay', 'event', 'event', 'random', 'random'])
     expect(exported.project.logicNodes.find((n) => n.type === 'delay')!.seconds).toBe(20)
     expect(exported.project.logicNodes.find((n) => n.type === 'random')!.probabilityA).toBe(30)
@@ -290,7 +290,7 @@ test.describe('Event, Delay and Random Branch nodes', () => {
     await page.getByRole('button', { name: 'Add project' }).click()
     await expect(nodes(page)).toHaveCount(8)
     const versions = await page.evaluate(() => Object.entries(localStorage).filter(([k]) => k.includes('proj:')).map(([, v]) => JSON.parse(v).v))
-    expect(versions).toContain(8)
+    expect(versions).toContain(9)
   })
 
   test('keyboard: nodes are reachable, the node menu opens from the keyboard and shortcuts do not fire while typing', async ({ page }) => {

@@ -193,7 +193,7 @@ test.describe('persistence, isolation and file compatibility', () => {
   test('imports a schema-1 file and backs it up as schema 5 without losing fields', async ({ page }) => {
     await openApp(page)
     const original = await backup(page)
-    expect(original.schemaVersion).toBe(8)
+    expect(original.schemaVersion).toBe(9)
     const v1 = structuredClone(original)
     v1.schemaVersion = 1
     for (const s of v1.project.scenes) {
@@ -209,7 +209,7 @@ test.describe('persistence, isolation and file compatibility', () => {
     await expect(nodes(page)).toHaveCount(8)
 
     const migrated = await backup(page)
-    expect(migrated.schemaVersion).toBe(8)
+    expect(migrated.schemaVersion).toBe(9)
     expect(migrated.project.scenes.every((s) => Array.isArray(s.shots) && (s.shots as unknown[]).length === 0)).toBe(true)
     const strip = (scenes: Record<string, unknown>[]) => scenes.map(({ shots, audioCues, ...rest }) => (void shots, void audioCues, rest))
     expect(strip(migrated.project.scenes)).toEqual(strip(original.project.scenes))
