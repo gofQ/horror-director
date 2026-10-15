@@ -1,4 +1,5 @@
 import { diag, type Diagnostic } from './diagnostics'
+import { exprFlags } from './flags'
 import { crossingOf, isDreamLayer, type Project } from './schema'
 
 export type Severity = 'error' | 'warning' | 'info'
@@ -23,6 +24,8 @@ export interface Analysis {
     realityScenes: number
     crossings: number
     branches: number
+    setFlags: number
+    flags: number
     loops: number
     endings: number
     avgIntensity: number
@@ -181,11 +184,21 @@ export function analyze(p: Project): Analysis {
   for (const n of p.logicNodes) {
     const label = n.title || n.id
     if (hasStart && !reachable.has(n.id)) add('warning', diag('diag.branchUnreachable', { node: label }))
-    for (const port of ['true', 'false'] as const)
-      if (!p.transitions.some((t) => t.source === n.id && t.sourcePort === port && known(t.target)))
-        add('warning', diag('diag.branchOpenOutput', { node: label, port: port.toUpperCase() }))
-    if (!n.condition.trim()) add('info', diag('diag.branchNoCondition', { node: label }))
+    if (n.type === 'branch') {
+      for (const port of ['true', 'false'] as const)
+        if (!p.transitions.some((t) => t.source === n.id && t.sourcePort === port && known(t.target)))
+          add('warning', diag('diag.branchOpenOutput', { node: label, port: port.toUpperCase() }))
+      if (!n.condition.trim() && !n.expression) add('info', diag('diag.branchNoCondition', { node: label }))
+    } else {
+      if (!n.flagId) add('warning', diag('diag.setFlagNoFlag', { node: label }))
+      if (!p.transitions.some((t) => t.source === n.id && known(t.target))) add('warning', diag('diag.setFlagNoOutput', { node: label }))
+    }
   }
+  // Flags that structured conditions test but that no Set Flag node ever changes: the test always yields the default.
+  const setIds = new Set(p.logicNodes.filter((n) => n.type === 'setFlag' && n.flagId).map((n) => n.flagId as string))
+  const flagName = new Map(p.flags.map((f) => [f.id, f.name]))
+  const tested = new Set(p.logicNodes.flatMap((n) => (n.type === 'branch' && n.expression ? exprFlags(n.expression) : [])))
+  for (const id of tested) if (flagName.has(id) && !setIds.has(id)) add('info', diag('diag.flagNeverSet', { flag: flagName.get(id)! }))
 
   const triggers = p.scenes.flatMap((s) => s.triggers)
   const crossings = effectiveHops(p).filter((h) => crossingOf(byId.get(h.from)!.kind, byId.get(h.to)!.kind) !== 'same-layer').length
@@ -205,7 +218,9 @@ export function analyze(p: Project): Analysis {
       dreamScenes: dream,
       realityScenes: p.scenes.filter((s) => !isDreamLayer(s.kind) && s.kind !== 'ending').length,
       crossings,
-      branches: p.logicNodes.length,
+      branches: p.logicNodes.filter((n) => n.type === 'branch').length,
+      setFlags: p.logicNodes.filter((n) => n.type === 'setFlag').length,
+      flags: p.flags.length,
       loops: loops.length,
       endings: p.scenes.filter((s) => s.kind === 'ending').length,
       avgIntensity: triggers.length

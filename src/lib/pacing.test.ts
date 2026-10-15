@@ -16,7 +16,7 @@ const sc = (id: string, duration: number, list: T[] = [], kind: Scene['kind'] = 
   triggers: trigs(list),
 })
 const tr = (id: string, s: string, t: string, o: Partial<Transition> = {}): Transition => ({ ...newTransition(s, t), id, duration: 1, ...o })
-const proj = (scenes: Scene[], transitions: Transition[] = []): Project => ({ name: 'p', description: '', startSceneId: scenes[0]?.id ?? null, scenes, transitions, logicNodes: [], comments: [], sceneTypes: [], characters: [] })
+const proj = (scenes: Scene[], transitions: Transition[] = []): Project => ({ name: 'p', description: '', startSceneId: scenes[0]?.id ?? null, scenes, transitions, logicNodes: [], comments: [], sceneTypes: [], flags: [], characters: [] })
 
 /** One scene route. `complete` = the route ends in a dead end (finished); otherwise another scene follows. */
 function analyze(list: T[], o: { duration?: number; complete?: boolean; options?: Parameters<typeof analyzePacing>[1] } = {}): PacingAnalysis {

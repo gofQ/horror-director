@@ -14,7 +14,7 @@ const proj = (scenes: Scene[], transitions: Transition[], start: string | null =
   startSceneId: start,
   scenes,
   transitions,
-  logicNodes: [], comments: [], sceneTypes: [], characters: [],
+  logicNodes: [], comments: [], sceneTypes: [], flags: [], characters: [],
 })
 const loopScene = (id: string, maxIterations: number, o: Partial<Scene> = {}) =>
   sc(id, { loop: { enabled: true, maxIterations, exitCondition: '' }, ...o })

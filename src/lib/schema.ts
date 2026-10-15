@@ -2,9 +2,10 @@ import { z } from 'zod'
 
 /**
  * 2 added `scene.shots`; 3 the optional `transition.direction`; 4 `scene.audioCues`; 5 adds logic (branch) nodes,
- * graph comments, custom scene types and branch-port links. Older files and bare projects are still imported.
+ * graph comments, custom scene types and branch-port links; 6 adds narrative flags, Set Flag nodes and optional
+ * structured branch conditions. Older files and bare projects are still imported.
  */
-export const SCHEMA_VERSION = 5
+export const SCHEMA_VERSION = 6
 export const FORMAT_ID = 'horror-director'
 
 export const SCENE_KINDS = ['reality', 'dream', 'nightmare', 'memory', 'ending'] as const
@@ -25,7 +26,7 @@ export const DIRECTION_TECHNIQUES = [...SHOT_TECHNIQUES, 'reality-reveal'] as co
 export const AUDIO_CUE_TYPES = ['ambience', 'music', 'sfx', 'voice', 'whisper', 'stinger', 'silence'] as const
 export const AUDIO_ORIGINS = ['diegetic', 'non-diegetic', 'ambiguous'] as const
 export const AUDIO_DIRECTIONS = ['nonspatial', 'front', 'behind', 'left', 'right', 'above', 'moving'] as const
-export const LOGIC_NODE_TYPES = ['branch'] as const
+export const LOGIC_NODE_TYPES = ['branch', 'setFlag'] as const
 export const BRANCH_PORTS = ['true', 'false'] as const
 /** Curated, safe presentation sets for custom scene types and comments (hex colors / lucide icon names). */
 export const TYPE_COLORS = ['#c4263d', '#d98cff', '#7dcfff', '#9ece6a', '#e0af68', '#ff9e64', '#bb9af7', '#9aa0b4'] as const
@@ -157,13 +158,48 @@ export const transitionSchema = z.object({
 
 const position = z.object({ x: z.number(), y: z.number() })
 
-/** Narrative IF node: `condition` is a human-readable preproduction description, never evaluated. */
+/** Boolean narrative flag. Nodes reference flags by `id` only, so renaming never breaks a connection. */
+export const flagSchema = z.object({
+  id,
+  name: z.string().min(1),
+  description: z.string().default(''),
+  defaultValue: z.boolean().default(false),
+})
+
+/**
+ * Structured Boolean condition: pure data (no strings are ever parsed or evaluated). Depth and size limits
+ * are enforced by `validateProject` (`EXPR_MAX_DEPTH`, `EXPR_MAX_NODES`).
+ */
+export type Expr =
+  | { op: 'flag'; flagId: string; is: boolean }
+  | { op: 'not'; arg: Expr }
+  | { op: 'and'; args: Expr[] }
+  | { op: 'or'; args: Expr[] }
+export const EXPR_MAX_DEPTH = 6
+export const EXPR_MAX_NODES = 32
+export const exprSchema: z.ZodType<Expr> = z.lazy(() =>
+  z.discriminatedUnion('op', [
+    z.object({ op: z.literal('flag'), flagId: id, is: z.boolean() }),
+    z.object({ op: z.literal('not'), arg: exprSchema }),
+    z.object({ op: z.literal('and'), args: z.array(exprSchema).min(1) }),
+    z.object({ op: z.literal('or'), args: z.array(exprSchema).min(1) }),
+  ]),
+)
+
+/**
+ * Zero-time logic node. `branch` (IF): `condition` is a human-readable description that is never evaluated;
+ * the optional `expression` is evaluated against simulated flags. `setFlag`: assigns `value` to `flagId`
+ * (null = not configured yet). `flagId`/`value` are only meaningful for `setFlag`, `expression` only for `branch`.
+ */
 export const logicNodeSchema = z.object({
   id,
   type: z.enum(LOGIC_NODE_TYPES),
   title: z.string().default(''),
   description: z.string().default(''),
   condition: z.string().default(''),
+  expression: exprSchema.optional(),
+  flagId: id.nullable().optional(),
+  value: z.boolean().optional(),
   position,
 })
 
@@ -213,6 +249,7 @@ export const projectSchema = z.object({
   logicNodes: z.array(logicNodeSchema).default([]),
   comments: z.array(graphCommentSchema).default([]),
   sceneTypes: z.array(sceneTypeSchema).default([]),
+  flags: z.array(flagSchema).default([]),
   characters: z.array(characterSchema).default([]),
 })
 
@@ -228,6 +265,7 @@ export const exportSchema = z.object({
 export type TransitionDirection = z.infer<typeof transitionDirectionSchema>
 export type AudioCue = z.infer<typeof audioCueSchema>
 export type LogicNode = z.infer<typeof logicNodeSchema>
+export type Flag = z.infer<typeof flagSchema>
 export type GraphComment = z.infer<typeof graphCommentSchema>
 export type SceneType = z.infer<typeof sceneTypeSchema>
 export type Shot = z.infer<typeof shotSchema>

@@ -25,7 +25,7 @@ import {
   type NodeChange,
   type NodeProps,
 } from '@xyflow/react'
-import { Clapperboard, Copy, Flag, GitBranch, Focus, Maximize, Network, Pencil, Plus, Repeat, StickyNote, Trash2, Volume2, Zap } from 'lucide-react'
+import { Clapperboard, Copy, Flag, FlagTriangleRight, GitBranch, Focus, Maximize, Network, Pencil, Plus, Repeat, StickyNote, Trash2, Volume2, Zap } from 'lucide-react'
 import { useStore, type NewNodeSpec } from '../store/useStore'
 import { BRANCH_PORTS, SCENE_KINDS, crossingOf, type BranchPort, type GraphComment, type LogicNode, type Scene, type SceneType, type TransitionStyle } from '../lib/schema'
 import { KIND_COLOR } from '../lib/theme'
@@ -36,11 +36,13 @@ import { NODE_H, NODE_W } from '../lib/layout'
 import { canConnect, type ConnectReason } from '../lib/graphRules'
 import { TYPE_ICON_COMPONENTS } from '../lib/sceneTypes'
 import { ContextMenu, isEditableTarget, longPressHandlers, useContextMenu, type MenuItem } from './ContextMenu'
+import { useExprText } from './useExprText'
 import { ShotPlannerDialog } from './ShotPlannerDialog'
 import { AudioPlannerDialog } from './AudioPlannerDialog'
 
 const PORT_COLOR: Record<BranchPort, string> = { true: '#6ee7a1', false: '#ff6b7d' }
 const LOGIC_COLOR = '#e0af68'
+const SET_COLOR = '#5fd6c4'
 /** Vertical centre of the first pin row (head height + half a row) and the row pitch. */
 const PIN_TOP = 47
 const PIN_PITCH = 26
@@ -53,11 +55,13 @@ type SceneNodeData = {
   chips: { id: string; name: string; color: string; state: string }[]
 }
 type BranchNodeData = { node: LogicNode; unreachable: boolean }
+type SetFlagNodeData = { node: LogicNode; unreachable: boolean; flagName: string | null }
 type CommentNodeData = { comment: GraphComment }
 type SceneFlowNode = Node<SceneNodeData, 'scene'>
 type BranchFlowNode = Node<BranchNodeData, 'branch'>
+type SetFlagFlowNode = Node<SetFlagNodeData, 'setFlag'>
 type CommentFlowNode = Node<CommentNodeData, 'comment'>
-type FlowNode = SceneFlowNode | BranchFlowNode | CommentFlowNode
+type FlowNode = SceneFlowNode | BranchFlowNode | SetFlagFlowNode | CommentFlowNode
 
 function SceneNode({ data, selected }: NodeProps<SceneFlowNode>) {
   const { scene, sceneType, isStart, unreachable, chips } = data
@@ -116,6 +120,7 @@ function SceneNode({ data, selected }: NodeProps<SceneFlowNode>) {
 function BranchNode({ data, selected }: NodeProps<BranchFlowNode>) {
   const { node, unreachable } = data
   const { t } = useT()
+  const exprText = useExprText()
   return (
     <div className={`bp-node bp-branch${selected ? ' selected' : ''}${unreachable ? ' unreachable' : ''}`} data-testid="branch-node" style={{ ['--kind' as string]: LOGIC_COLOR, ['--accent' as string]: LOGIC_COLOR }}>
       <div className="bp-head">
@@ -143,8 +148,42 @@ function BranchNode({ data, selected }: NodeProps<BranchFlowNode>) {
           <span className="bp-pinlabel out false" style={{ color: PORT_COLOR.false }}>{t('pin.false')}</span>
         </span>
       </div>
+      {node.expression && (
+        <div className="bp-expr" data-testid="branch-expression" title={exprText(node.expression)}>
+          <span className="badge">{t('expr.badge')}</span> {exprText(node.expression)}
+        </div>
+      )}
       <div className={`bp-condition${node.condition.trim() ? '' : ' empty'}`} data-testid="branch-condition">
-        {node.condition.trim() || t('branch.noCondition')}
+        {node.condition.trim() || (node.expression ? '' : t('branch.noCondition'))}
+      </div>
+    </div>
+  )
+}
+
+function SetFlagNode({ data, selected }: NodeProps<SetFlagFlowNode>) {
+  const { node, unreachable, flagName } = data
+  const { t } = useT()
+  return (
+    <div className={`bp-node bp-setflag${selected ? ' selected' : ''}${unreachable ? ' unreachable' : ''}`} data-testid="setflag-node" style={{ ['--kind' as string]: SET_COLOR, ['--accent' as string]: SET_COLOR }}>
+      <div className="bp-head">
+        <FlagTriangleRight size={13} aria-hidden="true" />
+        <span className="bp-title">{node.title || t('default.setFlag')}</span>
+        <span className="badge">{t('setflag.badge')}</span>
+      </div>
+      <Handle id="in" type="target" position={Position.Left} className="bp-handle exec" style={{ top: PIN_TOP }} aria-label={t('pin.in')} />
+      <Handle id="out" type="source" position={Position.Right} className="bp-handle exec" style={{ top: PIN_TOP }} aria-label={t('pin.out')} />
+      <div className="bp-pinrow">
+        <span className="bp-pinlabel">{t('pin.in')}</span>
+        <span className="bp-pinlabel">{t('pin.out')}</span>
+      </div>
+      <div className={`bp-assign${flagName ? '' : ' empty'}`} data-testid="setflag-assign">
+        {flagName ? (
+          <>
+            <span className="bp-assign-name">{flagName}</span> = <span className={`bp-bool ${node.value ? 'on' : 'off'}`}>{node.value ? t('bool.true') : t('bool.false')}</span>
+          </>
+        ) : (
+          t('setflag.noFlag')
+        )}
       </div>
     </div>
   )
@@ -251,7 +290,7 @@ function ConnectionLine({ fromX, fromY, toX, toY, connectionStatus, fromPosition
   )
 }
 
-const nodeTypes = { scene: SceneNode, branch: BranchNode, comment: CommentNode }
+const nodeTypes = { scene: SceneNode, branch: BranchNode, setFlag: SetFlagNode, comment: CommentNode }
 const edgeTypes = { transition: TransitionEdge }
 const isPort = (v: unknown): v is BranchPort => v === 'true' || v === 'false'
 
@@ -315,14 +354,25 @@ function Canvas() {
         }),
       },
     }))
-    const branches: BranchFlowNode[] = project.logicNodes.map((node) => ({
-      id: node.id,
-      type: 'branch' as const,
-      position: node.position,
-      measured: dims[node.id],
-      selected: selection?.type === 'node' && selection.id === node.id,
-      data: { node, unreachable: hasStart && !analysis.reachable.has(node.id) },
-    }))
+    const branches: (BranchFlowNode | SetFlagFlowNode)[] = project.logicNodes.map((node) =>
+      node.type === 'setFlag'
+        ? ({
+            id: node.id,
+            type: 'setFlag' as const,
+            position: node.position,
+            measured: dims[node.id],
+            selected: selection?.type === 'node' && selection.id === node.id,
+            data: { node, unreachable: hasStart && !analysis.reachable.has(node.id), flagName: project.flags.find((f) => f.id === node.flagId)?.name ?? null },
+          } satisfies SetFlagFlowNode)
+        : ({
+            id: node.id,
+            type: 'branch' as const,
+            position: node.position,
+            measured: dims[node.id],
+            selected: selection?.type === 'node' && selection.id === node.id,
+            data: { node, unreachable: hasStart && !analysis.reachable.has(node.id) },
+          } satisfies BranchFlowNode),
+    )
     return [...comments, ...scenes, ...branches]
   }, [project, selection, analysis, typeById, dims])
 
@@ -452,10 +502,10 @@ function Canvas() {
     if (spec.type === 'comment') return void s.addComment(pos)
     if (from) {
       const r = s.addNodeFromPin({ fromId: from.id, fromPort: from.port, position: pos, node: spec })
-      if (!r) say(t('connect.portTaken'))
+      if (!r) say(t(from.port ? 'connect.portTaken' : 'connect.outputTaken'))
       return
     }
-    if (spec.type === 'branch') return void s.addLogicNode(pos)
+    if (spec.type === 'branch' || spec.type === 'setFlag') return void s.addLogicNode(pos, spec.type)
     s.addScene(spec.kind, pos, spec.typeId)
   }
 
@@ -484,6 +534,7 @@ function Canvas() {
         }
       }),
       { id: 'branch', label: t('pick.branch'), group: t('pick.logic'), keywords: 'if branch condition true false', icon: <GitBranch size={13} />, onSelect: () => create({ type: 'branch' }, x, y, from) },
+      { id: 'setflag', label: t('pick.setFlag'), group: t('pick.logic'), keywords: 'set flag variable state assign bayrak ata', icon: <FlagTriangleRight size={13} />, onSelect: () => create({ type: 'setFlag' }, x, y, from) },
       ...(from ? [] : [{ id: 'comment', label: t('pick.comment'), group: t('pick.notes'), keywords: 'comment note frame', icon: <StickyNote size={13} />, onSelect: () => create({ type: 'comment' }, x, y) } as MenuItem]),
     ]
   }
@@ -506,6 +557,7 @@ function Canvas() {
         }),
       },
       { id: 'add-branch', label: t('ctx.addBranch'), icon: <GitBranch size={13} />, onSelect: () => create({ type: 'branch' }, x, y) },
+      { id: 'add-setflag', label: t('ctx.addSetFlag'), icon: <FlagTriangleRight size={13} />, onSelect: () => create({ type: 'setFlag' }, x, y) },
       { id: 'add-comment', label: t('ctx.addComment'), icon: <StickyNote size={13} />, onSelect: () => create({ type: 'comment' }, x, y) },
       { id: 'add-node', label: t('ctx.addNode'), icon: <Plus size={13} />, onSelect: () => openPicker(x, y) },
       { id: 'arrange', label: t('graph.autoArrange'), icon: <Network size={13} />, separatorBefore: true, disabled: sceneCount < 2, onSelect: autoArrange },
@@ -529,8 +581,9 @@ function Canvas() {
   }
   const branchMenu = (id: string): MenuItem[] => {
     const s = store()
+    const isSet = s.project.logicNodes.find((n) => n.id === id)?.type === 'setFlag'
     return [
-      { id: 'cond', label: t('ctx.editCondition'), icon: <Pencil size={13} />, onSelect: () => { s.select({ type: 'node', id }); s.requestInspectorFocus(id) } },
+      { id: 'cond', label: t(isSet ? 'ctx.editSetFlag' : 'ctx.editCondition'), icon: <Pencil size={13} />, onSelect: () => { s.select({ type: 'node', id }); s.requestInspectorFocus(id) } },
       { id: 'duplicate', label: t('ctx.duplicate'), icon: <Copy size={13} />, onSelect: () => void s.duplicateNode(id) },
       { id: 'delete', label: t('btn.delete'), icon: <Trash2 size={13} />, danger: true, separatorBefore: true, onSelect: () => s.deleteScenes([id]) },
     ]
@@ -640,6 +693,9 @@ function Canvas() {
         <button className="btn small" data-testid="add-branch" onClick={() => addAtCenter({ type: 'branch' })} title={t('branch.hint')} style={{ ['--kind' as string]: LOGIC_COLOR }}>
           <GitBranch size={14} /> {t('pick.branch')}
         </button>
+        <button className="btn small" data-testid="add-setflag" onClick={() => addAtCenter({ type: 'setFlag' })} title={t('setflag.hint')} style={{ ['--kind' as string]: SET_COLOR }}>
+          <FlagTriangleRight size={14} /> {t('pick.setFlag')}
+        </button>
         <button className="btn small" data-testid="add-comment" onClick={() => addAtCenter({ type: 'comment' })} title={t('comment.hint')}>
           <StickyNote size={14} /> {t('pick.comment')}
         </button>
@@ -693,7 +749,7 @@ function Canvas() {
           zoomable
           maskColor="rgba(8,6,10,0.7)"
           nodeColor={(n) =>
-            n.type === 'branch' ? LOGIC_COLOR : n.type === 'comment' ? '#3a3445' : KIND_COLOR[(n.data as SceneNodeData).scene.kind]
+            n.type === 'branch' ? LOGIC_COLOR : n.type === 'setFlag' ? SET_COLOR : n.type === 'comment' ? '#3a3445' : KIND_COLOR[(n.data as SceneNodeData).scene.kind]
           }
         />
       </ReactFlow>

@@ -62,6 +62,7 @@ function CompareBody({ cmp, selected, setSelected, bNotice }: { cmp: RouteCompar
       row('events', t('compare.row.events'), a.events, b.events, d.events),
       row('hypothetical', t('compare.row.hypothetical'), a.hypothetical, b.hypothetical, d.hypothetical),
       row('assumed', t('compare.row.assumed'), a.assumedTransitions, b.assumedTransitions, d.assumedTransitions),
+      { key: 'overrides', label: t('compare.row.overrides'), a: num(a.overrides), b: num(b.overrides), delta: sign(b.overrides - a.overrides) },
       row('perMinute', t('compare.row.perMinute'), a.eventsPerMinute, b.eventsPerMinute, d.eventsPerMinute),
       row('avg', t('compare.row.avg'), a.avgIntensity, b.avgIntensity, d.avgIntensity),
       row('peak', t('compare.row.peak'), a.peakIntensity, b.peakIntensity, d.peakIntensity),
@@ -224,6 +225,11 @@ function CompareBody({ cmp, selected, setSelected, bNotice }: { cmp: RouteCompar
         {!(a.unavailable || b.unavailable) && (
           <>
             <p className="muted">{t('compare.hypNote')}</p>
+            {a.overrides + b.overrides > 0 && (
+              <p className="muted" role="note" data-testid="compare-overrides-note">
+                {t('compare.overridesNote')}
+              </p>
+            )}
             {table(t('compare.sec.summary'), summary, 'summary')}
             {table(t('compare.sec.kinds'), kinds, 'kinds')}
             {table(t('compare.sec.findings'), findings, 'findings')}

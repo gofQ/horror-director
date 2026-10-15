@@ -238,6 +238,7 @@ export function sampleProject(): Project {
     logicNodes: [],
     comments: [],
     sceneTypes: [],
+    flags: [],
     characters,
   }
 }

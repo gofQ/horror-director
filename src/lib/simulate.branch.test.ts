@@ -13,7 +13,7 @@ const route = (...ids: string[]) => simulateRoute(base, ids)
 describe('branch in the story path simulator', () => {
   it('stops at the IF node and asks for an explicit TRUE/FALSE choice (assumption, never evaluated)', () => {
     const r = route('into')
-    expect(r.pending).toEqual({ nodeId: 'if1', title: 'Insulted?', condition: 'Did the protagonist insult the villagers?' })
+    expect(r.pending).toEqual({ nodeId: 'if1', kind: 'branch', title: 'Insulted?', condition: 'Did the protagonist insult the villagers?', evaluated: null })
     expect(r.status).toBe('active')
     expect(r.steps).toHaveLength(1) // no extra visit for the IF node
     expect(r.current!.sceneId).toBe('sq')
@@ -38,7 +38,7 @@ describe('branch in the story path simulator', () => {
     // sq runs 0–60, hop = 2 (into) + 0 (output) seconds
     expect(t.steps[1]).toMatchObject({ start: 62, end: 122, visit: 1 })
     expect(t.steps[1].via).toMatchObject({ transitionId: 'yes', duration: 2, linkIds: ['into', 'yes'], label: 'Talk', crossing: 'reality->dream' })
-    expect(t.steps[1].via!.branches).toEqual([{ nodeId: 'if1', title: 'Insulted?', condition: 'Did the protagonist insult the villagers?', port: 'true' }])
+    expect(t.steps[1].via!.branches).toEqual([{ nodeId: 'if1', title: 'Insulted?', condition: 'Did the protagonist insult the villagers?', port: 'true', logic: 'manual', evaluated: null }])
     expect(t.stats.visits).toBe(2)
     expect(t.stats.realityToDream).toBe(1)
     expect(f.stats.realityToDream).toBe(0)
@@ -160,6 +160,7 @@ describe('legacy scene-to-scene routes are unchanged', () => {
       crossing: r.steps[1].via!.crossing,
       linkIds: [tr.id],
       branches: [],
+      changes: [],
     })
     expect(r.steps[1].start).toBe(first.current!.end + tr.duration)
   })

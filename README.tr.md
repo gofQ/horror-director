@@ -17,9 +17,15 @@ korku ritmini planlamak isteyen bağımsız geliştiriciler ve küçük ekipler.
 - **Blueprint tarzı düzenleyici:** yazılı Giriş/Çıkış pinli sahne düğümleri, yönlü teller, üzerine gelme ve seçim geri
   bildirimi, bırakmadan önce hedefin geçerli olup olmadığını gösteren bağlantı önizlemesi, mini harita, kaydırma/yakınlaştırma
   ve Geri al/Yinele. **EĞER / Dal** düğümlerinin bir girişi ile düzenlenebilir, insan tarafından okunur bir koşullu DOĞRU /
-  YANLIŞ çıkışları vardır: gezinme, simülatör, analiz ve Otomatik Düzenle'ye katılırlar ama koşul bir hazırlık notudur ve
-  **asla değerlendirilmez**. **Yorumlar**, alanları düzenlemek için çalıştırılmayan çerçevelerdir. Bir çıkış pinini boş
+  YANLIŞ çıkışları vardır: gezinme, simülatör, analiz ve Otomatik Düzenle'ye katılırlar; serbest metin koşulu bir hazırlık
+  notudur ve **asla değerlendirilmez**. **Yorumlar**, alanları düzenlemek için çalıştırılmayan çerçevelerdir. Bir çıkış pinini boş
   tuvale sürüklemek, düğümü tek bir geri alınabilir adımda oluşturup bağlayan aranabilir bir düğüm seçici açar.
+- **Anlatı durumu:** proje başına Doğru/Yanlış **bayraklar** (ad, açıklama, varsayılan DOĞRU/YANLIŞ; kimlikle başvurulur,
+  bu yüzden yeniden adlandırmak güvenlidir) proje denetçisinde yönetilir. **Bayrak Ata** düğümü (bir giriş, bir çıkış) bir
+  bayrağa DOĞRU ya da YANLIŞ atar. Bir EĞER düğümü ayrıca **yapılandırılmış bir koşul** taşıyabilir (bir bayrağın DOĞRU/YANLIŞ
+  olduğunu denetle; VE, VEYA ve DEĞİL ile birleştirilir, iç içe olabilir); koşul erişilebilir bir formla kurulur, betik yoktur.
+  Simülatör bayrak durumunu rota boyunca izler, yalnızca yapılandırılmış koşulları değerlendirir ve bir Durum denetçisi
+  gösterir. Bayrak Ata ve EĞER düğümleri sıfır süreli planlama mantığıdır, sahne değildir.
 - **Özel sahne türleri:** proje başına, yeniden kullanılabilir sahne türleri (ad, seçilmiş renk ve simge, temel tür,
   varsayılan açıklama ve süre). Özel bir sahne, temel türü (gerçeklik, rüya, kâbus, anı, son) geçişleri, simülasyonu ve
   analizi yönlendirmeye devam eden normal bir sahnedir.
@@ -78,7 +84,9 @@ npm run preview    # üretim derlemesini sun
    tuvale sürüklerseniz seçeceğiniz yeni düğüm otomatik bağlanır. Bir bağlantıya sağ tıklayıp içine EĞER düğümü ekleyin.
    **EĞER / Dal** düğümünün bir DOĞRU ve bir YANLIŞ çıkışı vardır (her birine bir bağlantı): koşulu kendi sözlerinizle yazın,
    çıkışları sahnelere bağlayın ve Simülatörde kullanın; DOĞRU ya da YANLIŞ'ı kendiniz seçersiniz — seçim bir varsayım olarak
-   gösterilir, EĞER düğümü sahne süresi harcamaz ve fazladan ziyaret ya da tetikleyici eklemez. Yeniden kullanılabilir
+   gösterilir, EĞER düğümü sahne süresi harcamaz ve fazladan ziyaret ya da tetikleyici eklemez. Hikâye durumunu modellemek için proje denetçisinde (hiçbir şey seçili değilken)
+   **bayrak** oluşturun, bir **Bayrak Ata** düğümü ekleyin (**Bayrak Ata ekle**, seçici ya da pinden sürükleme), bayrağını ve
+   DOĞRU/YANLIŞ değerini seçin, EĞER düğümünün denetçisinde ona **yapılandırılmış koşul** verin. Yeniden kullanılabilir
    **Sahne türleri**ni proje denetçisinde (hiçbir şey seçili değilken) tanımlayın. Bir öğeyi seçip `Del` ile silin
    (bağlantıları tek bir geri alma adımında onunla gider). Başlangıç sahnesini sahne denetçisinden belirleyin. **Örnek**, rüya katmanları, bir döngü ve iki final
    içeren "The Hollow Apartment" demo projesini yükler (İngilizce yazılmıştır).
@@ -90,8 +98,13 @@ npm run preview    # üretim derlemesini sun
    tetikleyici düzenleyicide açın. Sahne sonunu aşan öğeler yazdığınız yerde kalır (eksen uzar ve not gösterilir); koşullu
    tetikleyiciler oyunda hiç çalışmayabileceği için koşullu olarak işaretlenir. Katmanlı ses ve sessizlik normaldir, hata değildir.
 3. **Karakterleri izleyin** (**Karakterler**) ve yapıyı **Analiz**de kontrol edin.
-4. **Rota simüle edin** (**Simülatör**): bulunduğunuz sahneden geçişleri seçin. Geçiş koşulları *asla
-   değerlendirilmez*; o geçişi seçerek yaptığınız varsayımlar olarak gösterilir.
+4. **Rota simüle edin** (**Simülatör**): bulunduğunuz sahneden geçişleri seçin. Serbest metin koşulları (geçişlerde,
+   tetikleyicilerde ve EĞER düğümlerinde) *asla değerlendirilmez*; o geçişi seçerek yaptığınız varsayımlar olarak gösterilir.
+   - Bayraklar varsayılanlarıyla başlar ve rota bir Bayrak Ata düğümünden geçince, rota sırasıyla değişir; Durum denetçisi
+     güncel değerleri listeler. Yapılandırılmış koşullu EĞER, değerlendirilen sonucu gösterir: eşleşen çıkış *koşulla uyumlu*
+     işaretlenir, diğeri açık bir *geçersiz kılma (ya şöyle olsaydı)* olarak seçilebilir kalır; sayılır ve işaretlenir
+     (rota karşılaştırmasında da). Rotanız asla sessizce değiştirilmez. Bayrak durumu her yeniden oynatmada, Geri'de,
+     Yeniden başlat'ta ve grafik düzenlemesinde baştan hesaplanır ve asla kaydedilmez.
    - Döngüdeki `En çok yineleme`, ilk ziyaretten *sonraki ek tekrar ziyaretleri* sayar (4 ⇒ en fazla 5 ziyaret). `0`
      (sınırsız) ayarlanabilir bir güvenlik sınırıyla (varsayılan 5); diğer döngüler ise sabit bir adım sınırıyla
      (varsayılan 40, 1–200) kısıtlanır.
@@ -152,14 +165,14 @@ geçmişini değiştirmez, dışa aktarılmaz ve proje değiştirdiğinizde sıf
 - **Depolama** (tarayıcı `localStorage`): `horror-director:library:v1` (dizin), `horror-director:proj:<id>` (proje başına
   bir kayıt), `horror-director:lang` (dil). Kimlikler dahilidir ve adlardan bağımsızdır. Kütüphane verisi (kimlikler,
   zaman damgaları, etkin proje) proje JSON'una asla yazılmaz.
-- **Yedek**, *etkin* projeyi şema 5 dışa aktarma biçiminde indirir. İçe aktarma katı doğrulama yapar (yinelenen
+- **Yedek**, *etkin* projeyi şema 6 dışa aktarma biçiminde indirir. İçe aktarma katı doğrulama yapar (yinelenen
   kimlikler, boşta kalan referanslar, geçersiz değerler, tanınmayan alanlar, daha yeni şema sürümleri hatadır ve hiçbir şey
   değiştirilmeden önce gösterilir). Bir dosya yeni proje olarak ya da onayla etkin projenin yerine aktarılabilir.
-- **Eski dosyalar ve veriler:** şema 1'den şema 4'e kadar dışa aktarmalar ile yalın proje dosyaları hâlâ içe aktarılır; eksik
-  çekim planları, ses ipuçları, EĞER düğümleri, yorumlar ve sahne türleri boş liste olarak başlar, eksik geçiş yönlendirmeleri yok olarak kalır (şema 1/yalın dosyalar
-  için bilgilendirici bir not çıkar) ve sonraki yedek, diğer tüm alanlar değişmeden şema 5 olur. Önceki sürümlerden kalan kayıtlı projeler aynı
-  şekilde okunur ve yalnızca siz düzenleyince yeniden yazılır. Proje kayıtları `{ v: 5, project }` olarak saklanır (eski
-  `v: 1`–`v: 4` kayıtlar hâlâ okunur); yeni alanları okuyamayan eski bir sürüm böyle bir kaydı hasarlı gösterir ve veriyi
+- **Eski dosyalar ve veriler:** şema 1'den şema 5'e kadar dışa aktarmalar ile yalın proje dosyaları hâlâ içe aktarılır; eksik
+  çekim planları, ses ipuçları, EĞER düğümleri, yorumlar, sahne türleri ve bayraklar boş liste olarak başlar, eksik geçiş yönlendirmeleri yok olarak kalır (şema 1/yalın dosyalar
+  için bilgilendirici bir not çıkar) ve sonraki yedek, diğer tüm alanlar değişmeden şema 6 olur. Önceki sürümlerden kalan kayıtlı projeler aynı
+  şekilde okunur ve yalnızca siz düzenleyince yeniden yazılır. Proje kayıtları `{ v: 6, project }` olarak saklanır (eski
+  `v: 1`–`v: 5` kayıtlar hâlâ okunur); yeni alanları okuyamayan eski bir sürüm böyle bir kaydı hasarlı gösterir ve veriyi
   atmak yerine korur. Sürüm düşürme desteklenmez.
 - **Taşıma:** erken sürümlerin tek projelik depolaması doğrulanır, `legacy` kimliğiyle kütüphaneye kopyalanır, kontrol
   edilir ve ancak ondan sonra dizine eklenir. Özgün anahtar (`horror-director:project:v1`) asla değiştirilmez ya da silinmez.
@@ -168,7 +181,7 @@ geçmişini değiştirmez, dışa aktarılmaz ve proje değiştirdiğinizde sıf
 - **Birden çok sekme birleştirilmez** (son yazan kazanır); başka bir sekmeden gelen değişiklik algılanır, bir başlık
   gösterilir ve yeniden yükleyene kadar kütüphane işlemleri engellenir.
 
-JSON şeması `README.md` içinde belgelenmiştir ve dilden bağımsızdır (`format: "horror-director"`, `schemaVersion: 5`, sahnelerde `shots` ve `audioCues` dizileri, projede `logicNodes`, `comments` ve `sceneTypes`, bağlantılarda isteğe bağlı `sourcePort`, geçişlerde isteğe bağlı `direction` nesnesi;
+JSON şeması `README.md` içinde belgelenmiştir ve dilden bağımsızdır (`format: "horror-director"`, `schemaVersion: 6`, sahnelerde `shots` ve `audioCues` dizileri, projede `logicNodes` (`branch` ve `setFlag`; EĞER'de isteğe bağlı `expression`), `flags`, `comments` ve `sceneTypes`, bağlantılarda isteğe bağlı `sourcePort`, geçişlerde isteğe bağlı `direction` nesnesi;
 `derived` bloğu içe aktarmada yok sayılır). Türkçe metin (ç, ğ, ı, İ, ö, ş, ü) UTF-8 olarak aynen korunur.
 
 ## Dil
@@ -197,7 +210,7 @@ derlemesine karşı Chromium'da çalışır; ekran görüntüsü karşılaştır
 
 ## Bilinen sınırlamalar
 
-- Simülasyon elle yapılır: otomatik rota sıralaması, olasılık ya da "en iyi yol" yoktur; koşullar yalnızca görüntülenen metindir.
+- Simülasyon elle yapılır: otomatik rota sıralaması, olasılık ya da "en iyi yol" yoktur; serbest metin koşulları yalnızca görüntülenir; yalnızca yapılandırılmış bayrak koşulları ve yalnızca simülatörde değerlendirilir.
 - Zamanlama, her sahnede sahne süresinin tamamının geçirildiğini varsayar; gerçek oynanış zamanlaması farklı olur.
 - Ritim eşikleri sabit sezgisel değerlerdir (yalnızca tekrarlanan tür penceresi ve tetikleyicisiz asgari süre ayarlanabilir);
   belirli bir kitleye göre ayarlanmamış ya da oyuncu davranışıyla doğrulanmamıştır. Yoğunluk, ölçülmüş korku değil, yazılmış tasarım niyetidir.
@@ -206,8 +219,11 @@ derlemesine karşı Chromium'da çalışır; ekran görüntüsü karşılaştır
 - Otomatik Düzenle en az kesişimi değil okunabilirliği hedefleyen bir sezgisel yöntemdir; çok yoğun graflarda etiketler yine üst üste binebilir.
 - Çekim planları basit bir liste halinde planlama notlarıdır: storyboard görseli, kamera zaman çizelgesi düzenleyicisi ya da
   motor/Unreal içe aktarımı henüz yoktur. Liste yazılış sırasını korur; zamana göre sıralama açık bir eylemdir.
-- EĞER düğümleri planlama notlarıdır: koşullar serbest metindir ve asla değerlendirilmez; henüz değişken, VE/VEYA mantığı, olay,
-  gecikme, yönlendirme (reroute) düğümü ya da panodan yapıştırma yoktur. Bir EĞER düğümüne dokunan bağlantılar geçiş tasarımı taşıyamaz.
+- Serbest metin koşulları planlama notlarıdır ve asla ayrıştırılmaz ya da değerlendirilmez. Yalnızca Doğru/Yanlış bayraklar
+  üzerindeki yapılandırılmış EĞER koşulları ve yalnızca simülatörde değerlendirilir (bir oyunda hiçbir şey çalıştırılmaz);
+  sayısal değişken, betik, ayrı VE/VEYA/DEĞİL düğümleri, olay, gecikme, rastgele dal, yönlendirme (reroute) düğümü ya da
+  panodan yapıştırma yoktur. Bayrak Ata düğümünün bir girişi ve bir çıkışı vardır; EĞER ya da Bayrak Ata düğümüne dokunan
+  bağlantılar geçiş tasarımı taşıyamaz.
 - Sekans görünümü türetilmiş bir özettir: çalma, dalga biçimi ya da simülasyon yoktur, öğeleri kendisi düzenleyemez, seçim, yakınlık
   ve imleci yalnızca oturum boyunca tutar ve koşullu tetikleyicileri değerlendirmek yerine koşullu olarak işaretler.
 - Ses ipuçları planlama notlarıdır: çalma, dalga biçimi, 3B uzamsallaştırma, yapay zekâ üretimi ya da motor/Unreal çalışma

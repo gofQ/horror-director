@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { emptyProject, newAudioCue, newCharacter, newComment, newLogicNode, newSceneType, newScene, newShot, newTransition, newTrigger, type DefaultNames } from '../lib/factory'
+import { emptyProject, newAudioCue, newCharacter, newComment, newFlag, newLogicNode, newSetFlagNode, newSceneType, newScene, newShot, newTransition, newTrigger, type DefaultNames } from '../lib/factory'
 import { getLang } from '../i18n/store'
 import { translate } from '../i18n'
 import { uid } from '../lib/id'
@@ -9,6 +9,7 @@ import type {
   AudioCue,
   BranchPort,
   Character,
+  Flag,
   GraphComment,
   LogicNode,
   SceneType,
@@ -27,12 +28,13 @@ import { nextCueStart } from '../lib/audio'
 import { nextStart, shotReferences, sortedByTime } from '../lib/shots'
 import { transitionDirectionSchema } from '../lib/schema'
 import { canConnect, linkDuration } from '../lib/graphRules'
+import { exprFlags, exprWithoutFlag, flagIsUsed, flagNameTaken } from '../lib/flags'
 
 export type View = 'graph' | 'timeline' | 'characters' | 'analysis' | 'simulator'
 export type Selection = { type: 'scene' | 'edge' | 'node' | 'comment'; id: string } | null
 
 /** What `addNodeFromPin` creates at the drop position. */
-export type NewNodeSpec = { type: 'scene'; kind: SceneKind; typeId?: string } | { type: 'branch' }
+export type NewNodeSpec = { type: 'scene'; kind: SceneKind; typeId?: string } | { type: 'branch' } | { type: 'setFlag' }
 
 export const HISTORY_LIMIT = 50
 
@@ -48,6 +50,8 @@ export function defaultNames(): DefaultNames {
     shot: translate(l, 'default.shot'),
     audioCue: translate(l, 'default.audioCue'),
     branch: translate(l, 'default.branch'),
+    setFlag: translate(l, 'default.setFlag'),
+    flag: translate(l, 'default.flag'),
     comment: translate(l, 'default.comment'),
     sceneType: translate(l, 'default.sceneType'),
     character: translate(l, 'default.character'),
@@ -103,8 +107,14 @@ interface State {
   /** Copies a scene's content with fresh ids (no connections), offset to the right-bottom; returns the new id. */
   duplicateScene: (id: string, copySuffix: string) => string | null
   duplicateNode: (id: string) => string | null
-  addLogicNode: (position: { x: number; y: number }) => string
+  addLogicNode: (position: { x: number; y: number }, type?: 'branch' | 'setFlag') => string
   updateLogicNode: (id: string, patch: Partial<Omit<LogicNode, 'id' | 'type'>>) => void
+  /** Adds a flag with a unique default name (or `name` when free); returns its id. */
+  addFlag: (name?: string) => string
+  /** Renames/edits a flag; references are by id so nothing else changes. Returns false (nothing changes) for an empty or already used name. */
+  updateFlag: (id: string, patch: Partial<Omit<Flag, 'id'>>) => boolean
+  /** Refuses ('inUse', nothing changes) while Set Flag nodes or conditions reference the flag unless `detach`; then references are cleared in the same undo step. */
+  deleteFlag: (id: string, opts?: { detach?: boolean }) => 'deleted' | 'inUse' | 'missing'
   addComment: (position: { x: number; y: number }) => string
   updateComment: (id: string, patch: Partial<Omit<GraphComment, 'id'>>) => void
   /** Creates a node at `position` and connects `fromId` (output pin `fromPort`) to it in ONE undo step; null (nothing changes) when the connection is invalid. */
@@ -397,7 +407,7 @@ export const useStore = create<State>()(
           const n = p.logicNodes.find((x) => x.id === id)
           const c = p.comments.find((x) => x.id === id)
           if (n) {
-            const copy: LogicNode = { ...n, id: uid('if'), position: { x: n.position.x + 40, y: n.position.y + 60 } }
+            const copy: LogicNode = { ...structuredClone(n), id: uid(n.type === 'setFlag' ? 'set' : 'if'), position: { x: n.position.x + 40, y: n.position.y + 60 } }
             set((s) => ({ project: { ...s.project, logicNodes: [...s.project.logicNodes, copy] }, selection: { type: 'node', id: copy.id } }))
             return copy.id
           }
@@ -408,8 +418,44 @@ export const useStore = create<State>()(
           }
           return null
         },
-        addLogicNode: (position) => {
-          const n = newLogicNode(position, defaultNames())
+        addFlag: (name) => {
+          const names = defaultNames()
+          const base = name?.trim() || names.flag
+          let candidate = base
+          for (let i = 2; flagNameTaken(get().project, candidate); i++) candidate = `${base} ${i}`
+          const f = newFlag(candidate)
+          set((s) => ({ project: { ...s.project, flags: [...s.project.flags, f] } }))
+          return f.id
+        },
+        updateFlag: (id, patch) => {
+          const p = get().project
+          if (!p.flags.some((f) => f.id === id)) return false
+          if (patch.name !== undefined && (!patch.name.trim() || flagNameTaken(p, patch.name, id))) return false
+          set((s) => ({ project: { ...s.project, flags: s.project.flags.map((f) => (f.id === id ? { ...f, ...patch } : f)) } }), { key: `flag:${id}:${keysOf(patch)}` })
+          return true
+        },
+        deleteFlag: (id, opts) => {
+          const p = get().project
+          if (!p.flags.some((f) => f.id === id)) return 'missing'
+          if (flagIsUsed(p, id) && !opts?.detach) return 'inUse'
+          set((s) => ({
+            project: {
+              ...s.project,
+              flags: s.project.flags.filter((f) => f.id !== id),
+              logicNodes: s.project.logicNodes.map((n) => {
+                if (n.type === 'setFlag') return n.flagId === id ? { ...n, flagId: null } : n
+                if (!n.expression || !exprFlags(n.expression).includes(id)) return n
+                const { expression: _old, ...rest } = n
+                void _old
+                const next = exprWithoutFlag(n.expression, id)
+                return next ? { ...rest, expression: next } : rest
+              }),
+            },
+          }))
+          return 'deleted'
+        },
+        addLogicNode: (position, type = 'branch') => {
+          const n = type === 'setFlag' ? newSetFlagNode(position, defaultNames()) : newLogicNode(position, defaultNames())
           set((s) => ({ project: { ...s.project, logicNodes: [...s.project.logicNodes, n] }, selection: { type: 'node', id: n.id } }))
           return n.id
         },
@@ -433,8 +479,8 @@ export const useStore = create<State>()(
           let newScenes = base.scenes
           let newBranches = base.logicNodes
           let nodeId: string
-          if (node.type === 'branch') {
-            const n = newLogicNode(position, defaultNames())
+          if (node.type === 'branch' || node.type === 'setFlag') {
+            const n = node.type === 'setFlag' ? newSetFlagNode(position, defaultNames()) : newLogicNode(position, defaultNames())
             newBranches = [...base.logicNodes, n]
             nodeId = n.id
           } else {

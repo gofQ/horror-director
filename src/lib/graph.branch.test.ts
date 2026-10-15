@@ -44,7 +44,7 @@ describe('analysis with IF nodes', () => {
     const p: Project = { ...base, scenes: [...base.scenes, scene('island')], logicNodes: [...base.logicNodes, branch('orphan')] }
     const t = text(p)
     expect(t).toMatch(/island/)
-    expect(t).toMatch(/IF node "orphan" cannot be reached/)
+    expect(t).toMatch(/Logic node "orphan" cannot be reached/)
   })
   it('warns about unconnected TRUE/FALSE outputs and treats a scene feeding only an IF node as having an exit', () => {
     const p: Project = { ...base, transitions: base.transitions.filter((t) => t.id !== 'no') }

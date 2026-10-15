@@ -40,14 +40,14 @@ const withSelfLoop = (): Project => {
 
 describe('schema 3 export and round trip', () => {
   it('writes schemaVersion 3 and keeps directions (links, nulls, unicode, self-loop) exactly', () => {
-    expect(SCHEMA_VERSION).toBe(5)
+    expect(SCHEMA_VERSION).toBe(6)
     const p = withSelfLoop()
     const first = serializeProject(p)
     const r = parseProject(first)
     expect(r.ok).toBe(true)
     if (!r.ok) return
     expect(r.project).toEqual(p)
-    expect(r.schemaVersion).toBe(5)
+    expect(r.schemaVersion).toBe(6)
     expect(r.warnings.map((w) => w.code)).not.toContain('diag.migratedV1')
     const strip = (s: string) => s.replace(/"exportedAt": "[^"]+"/, '')
     expect(strip(serializeProject(r.project))).toBe(strip(first))
@@ -98,7 +98,7 @@ describe('v1 and v2 files import into v3', () => {
     expect(r.project.scenes).toEqual(p.scenes) // shots preserved
     expect(r.project.transitions.every((t) => t.direction === undefined)).toBe(true)
     const out = exportOf(r.project)
-    expect(out.schemaVersion).toBe(5)
+    expect(out.schemaVersion).toBe(6)
     expect(out.project.transitions.every((t) => !('direction' in t))).toBe(true)
     expect(out.project.scenes).toEqual(exportOf(p).project.scenes)
   })
@@ -115,7 +115,7 @@ describe('v1 and v2 files import into v3', () => {
       expect(r.project.scenes.every((s) => s.shots.length === 0)).toBe(true)
       expect(r.project.transitions.every((t) => t.direction === undefined)).toBe(true)
       const out = exportOf(r.project)
-      expect(out.schemaVersion).toBe(5)
+      expect(out.schemaVersion).toBe(6)
       expect(out.project.transitions.map((t) => t.id)).toEqual(e.project.transitions.map((t) => t.id))
       expect(out.project.scenes.map((s) => s.id)).toEqual(e.project.scenes.map((s) => s.id))
     }
@@ -164,10 +164,10 @@ describe('malformed v3 data is rejected without repair', () => {
     expect(reject(edit((d) => (d.lens = '35mm')))).toMatch(/lens/)
   })
 
-  it('schema versions newer than 5', () => {
+  it('schema versions newer than 6', () => {
     const e = exportOf(clone())
-    e.schemaVersion = 6
-    expect(reject(e)).toMatch(/schema version 6/)
+    e.schemaVersion = 7
+    expect(reject(e)).toMatch(/schema version 7/)
   })
 })
 

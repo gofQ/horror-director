@@ -485,3 +485,31 @@ kbd { background: var(--panel-2); border: 1px solid var(--border); border-radius
 .swatch:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
 .scene-type-card { border: 1px solid var(--border); border-radius: 10px; padding: 10px; margin-bottom: 10px; display: flex; flex-direction: column; gap: 8px; }
 .branch-outs { list-style: none; padding: 0; margin: 0 0 8px; display: flex; flex-direction: column; gap: 4px; }
+
+/* v0.7B — narrative flags, Set Flag node, structured conditions, state inspector */
+.bp-setflag { min-width: 190px; max-width: 240px; border-radius: 12px; background: linear-gradient(180deg, #11231f, #0d1816); border: 1px solid color-mix(in srgb, var(--kind) 50%, var(--border)); box-shadow: 0 6px 20px rgba(0,0,0,.45); padding-bottom: 12px; }
+.bp-setflag.selected { box-shadow: 0 0 0 2px var(--kind), 0 0 24px color-mix(in srgb, var(--kind) 55%, transparent); }
+.bp-setflag.unreachable { opacity: .6; border-style: dashed; }
+.bp-assign { margin: 8px 12px 0; font-size: 13px; overflow-wrap: anywhere; }
+.bp-assign.empty { color: var(--muted); font-style: italic; }
+.bp-assign-name { font-weight: 600; }
+.bp-bool { font-weight: 700; font-size: 12px; padding: 1px 7px; border-radius: 999px; border: 1px solid currentColor; }
+.bp-bool.on { color: #6ee7a1; }
+.bp-bool.off { color: #ff6b7d; }
+.bp-expr { margin: 4px 12px 0; font-size: 12px; color: var(--text); overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.expr-builder { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+.expr-group { border: 1px solid var(--border); border-radius: 8px; padding: 6px; display: flex; flex-direction: column; gap: 6px; }
+.expr-children { display: flex; flex-direction: column; gap: 6px; padding-left: 10px; border-left: 2px solid var(--border); }
+.expr-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.expr-row .input { width: auto; min-width: 0; flex: 1 1 120px; }
+.expr-preview { margin: 0; font-size: 13px; overflow-wrap: anywhere; }
+.state-list { list-style: none; margin: 0 0 8px; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.state-list li { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; }
+.state-name { font-weight: 600; overflow-wrap: anywhere; }
+.sim-logic { font-size: 12px; font-weight: 600; }
+.sim-logic.valid { color: #6ee7a1; }
+.sim-logic.override { color: #f0c36d; }
+.sim-change { color: #5fd6c4; font-size: 12.5px; }
+.flag-affected { margin: 4px 0 8px; padding-left: 18px; }
+.linklike { background: none; border: 0; padding: 0; color: var(--accent, #9ecbff); text-decoration: underline; cursor: pointer; font: inherit; }
+.expr-row select[data-testid="expr-flag"] { flex-basis: 100%; }

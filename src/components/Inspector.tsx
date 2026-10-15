@@ -9,6 +9,7 @@ import { Field, NumberInput, Select, TextArea, TextInput } from './fields'
 import { AudioPlannerDialog } from './AudioPlannerDialog'
 import { ShotPlannerDialog } from './ShotPlannerDialog'
 import { TransitionDesignerDialog } from './TransitionDesignerDialog'
+import { ConditionBuilder, FlagManager, SetFlagInspector } from './FlagInspectors'
 
 function SceneInspector({ id }: { id: string }) {
   const { t } = useT()
@@ -251,6 +252,7 @@ function BranchInspector({ id }: { id: string }) {
       <Field label={t('field.title')}>
         <TextInput value={node.title} onChange={(title) => update(id, { title })} />
       </Field>
+      <ConditionBuilder nodeId={id} />
       <div ref={condRef}>
         <Field label={t('field.condition')} hint={t('branch.conditionHint')}>
           <TextArea value={node.condition} rows={3} onChange={(condition) => update(id, { condition })} />
@@ -273,6 +275,11 @@ function BranchInspector({ id }: { id: string }) {
       <p className="muted">{t('branch.incoming', { n: project.transitions.filter((x) => x.target === id).length })}</p>
     </>
   )
+}
+
+function NodeInspector({ id }: { id: string }) {
+  const type = useStore((s) => s.project.logicNodes.find((n) => n.id === id)?.type)
+  return type === 'setFlag' ? <SetFlagInspector id={id} /> : <BranchInspector id={id} />
 }
 
 function CommentInspector({ id }: { id: string }) {
@@ -417,6 +424,7 @@ function ProjectInspector() {
         <TextArea value={project.description} rows={5} onChange={(description) => update({ description })} />
       </Field>
       <p className="muted">{t('help.graph')}</p>
+      <FlagManager />
       <SceneTypesManager />
     </>
   )
@@ -435,7 +443,7 @@ export function Inspector({ onClose }: { onClose?: () => void }) {
       {selection?.type === 'scene' ? (
         <SceneInspector key={selection.id} id={selection.id} />
       ) : selection?.type === 'node' ? (
-        <BranchInspector key={selection.id} id={selection.id} />
+        <NodeInspector key={selection.id} id={selection.id} />
       ) : selection?.type === 'comment' ? (
         <CommentInspector key={selection.id} id={selection.id} />
       ) : selection?.type === 'edge' ? (

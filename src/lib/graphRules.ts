@@ -7,13 +7,16 @@ import { BRANCH_PORTS, type BranchPort, type Project } from './schema'
  */
 type GraphData = Pick<Project, 'scenes' | 'logicNodes' | 'comments' | 'transitions'>
 
-export type NodeKind = 'scene' | 'branch' | 'comment'
+export type NodeKind = 'scene' | 'branch' | 'setFlag' | 'comment'
+/** Zero-time logic nodes (IF and Set Flag). */
+export const isLogicKind = (k: NodeKind | null): k is 'branch' | 'setFlag' => k === 'branch' || k === 'setFlag'
 export type ConnectReason =
   | 'missing'
   | 'comment'
   | 'portMissing'
   | 'portUnexpected'
   | 'portTaken'
+  | 'outputTaken'
   | 'duplicate'
   | 'pairExists'
   | 'self'
@@ -28,14 +31,15 @@ export type ConnectResult = { ok: true } | { ok: false; reason: ConnectReason }
 
 export function nodeKind(p: GraphData, id: string): NodeKind | null {
   if (p.scenes.some((s) => s.id === id)) return 'scene'
-  if (p.logicNodes.some((n) => n.id === id)) return 'branch'
+  const n = p.logicNodes.find((x) => x.id === id)
+  if (n) return n.type === 'setFlag' ? 'setFlag' : 'branch'
   if (p.comments.some((c) => c.id === id)) return 'comment'
   return null
 }
 
 const isPort = (v: unknown): v is BranchPort => (BRANCH_PORTS as readonly unknown[]).includes(v)
 
-/** Branch ids reachable from `from` through links that only touch branch nodes. */
+/** Logic node ids (IF and Set Flag) reachable from `from` through links that only touch logic nodes. */
 function logicReach(p: GraphData, from: string): Set<string> {
   const branch = new Set(p.logicNodes.map((n) => n.id))
   const seen = new Set<string>()
@@ -68,15 +72,18 @@ export function canConnect(p: GraphData, c: Connect): ConnectResult {
       return { ok: false, reason: 'portTaken' }
   } else if (c.sourcePort !== undefined) {
     return { ok: false, reason: 'portUnexpected' }
+  } else if (a === 'setFlag') {
+    if (c.source === c.target) return { ok: false, reason: 'self' }
+    if (p.transitions.some((t) => t.source === c.source)) return { ok: false, reason: 'outputTaken' }
   }
   if (a === 'scene' && b === 'scene') {
     if (p.transitions.some((t) => t.source === c.source && t.target === c.target)) return { ok: false, reason: 'pairExists' }
   } else if (p.transitions.some((t) => t.source === c.source && t.target === c.target && t.sourcePort === c.sourcePort)) {
     return { ok: false, reason: 'duplicate' }
   }
-  if (a === 'branch' && b === 'branch' && logicReach(p, c.target).has(c.source)) return { ok: false, reason: 'logicCycle' }
+  if (isLogicKind(a) && isLogicKind(b) && logicReach(p, c.target).has(c.source)) return { ok: false, reason: 'logicCycle' }
   return { ok: true }
 }
 
-/** Default duration of a new link: transitions into a branch keep the usual 1 s, branch outputs take no time. */
-export const linkDuration = (p: GraphData, source: string): number => (nodeKind(p, source) === 'branch' ? 0 : 1)
+/** Default duration of a new link: transitions into a logic node keep the usual 1 s, logic node outputs take no time. */
+export const linkDuration = (p: GraphData, source: string): number => (isLogicKind(nodeKind(p, source)) ? 0 : 1)
