@@ -19,6 +19,29 @@ projeler tarayıcınızın `localStorage` alanında saklanır.
 - **İçe / dışa aktarma**: şema doğrulamalı (zod), sürümlü JSON biçimi (`schemaVersion: 1`).
 - **Türkçe / İngilizce arayüz** (aşağıya bakın).
 
+## Graf kullanılabilirliği (v0.4B)
+
+- **Otomatik Düzenle** (graf araç çubuğu): sahneleri hikâye akışına göre soldan sağa katmanlar halinde yerleştirir;
+  dallanma, birleşme, döngüler, kendine döngüler, bağlantısız gruplar (dikeyde alt alta) ve birden çok final (tek son
+  sütun) desteklenir. Yalnızca **sahne konumlarını** değiştirir (kimlikler, geçişler, tetikleyiciler, karakterler ve
+  metinler değişmez), **yalnızca düğmeye bastığınızda** çalışır (açılışta, yenilemede veya proje değiştirirken asla),
+  **tek bir geri al/yinele adımıdır** ve konumları birebir geri getirir; aynı sonucu verir (tekrar basmak bir şey
+  değiştirmez). Elle sürükleme çalışmaya devam eder. Ardından görünüm sonuca sığdırılır (görünüm projede saklanmaz).
+- **Kenar yönlendirme:** A→B ve B→A ayrı yollar ve ayrı etiketlerle çizilir; geri yönlü kenarlar sahnelerin içinden
+  geçmek yerine altından yay çizer veya S eğrisi olur; kendine döngüler sahnenin üstünden yay çizer. Kenar etiketleri
+  tıklanabilir (kenarı seçer) ve tam metni ipucu olarak gösterir. Şema değişmedi; aynı sıralı çiftin tekrarı yine reddedilir.
+
+## Testler
+
+```bash
+npm test            # birim testleri (vitest)
+npm run test:e2e    # Playwright tarayıcı testleri (uygulamayı kendisi derleyip sunar)
+```
+E2E için Chromium gerekir: bir kez `npx playwright install chromium` çalıştırın veya `PW_CHROMIUM_PATH` ile mevcut bir
+ikili dosyayı gösterin (Cloud Session: `PW_CHROMIUM_PATH=/opt/pw-browsers/chromium npm run test:e2e`). Paket; açılış,
+sahne ekleme ve bağlama, Otomatik Düzenle + geri al/yinele, karşılıklı kenarlar ve kendine döngüler, proje değiştirme,
+yenileme sonrası kalıcılık ve TR/EN geçişini test ID'leri ve DOM geometrisiyle doğrular (ekran görüntüsü karşılaştırması yok).
+
 ## Proje kütüphanesi (v0.4A)
 
 Üst çubuktaki **Projeler** düğmesi kütüphaneyi açar: proje oluşturma, açma, yeniden adlandırma, çoğaltma ve silme; örnek

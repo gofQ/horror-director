@@ -48,6 +48,10 @@ export const tr: Record<MessageKey, string> = {
 
   'palette.title': 'Sahne ekle',
   'scene.untitled': 'Adsız',
+  'graph.autoArrange': 'Otomatik Düzenle',
+  'graph.autoArrangeTip': 'Sahneleri soldan sağa düzenler. Yalnızca konumlar değişir; Ctrl/Cmd+Z ile geri alınır.',
+  'graph.arranged': 'Sahneler düzenlendi.',
+  'graph.alreadyArranged': 'Sahneler zaten düzenli.',
   'node.start': 'Başlangıç sahnesi',
   'node.loops': 'Döngülü',
   'node.triggers': '{n} tetikleyici',

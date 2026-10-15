@@ -233,3 +233,8 @@ kbd { background: var(--panel-2); border: 1px solid var(--border); border-radius
 .library-confirm { display: flex; flex-direction: column; gap: 8px; flex: 1 1 100%; color: #ffb3bf; }
 .library-error { flex-wrap: wrap; }
 .library-error span:first-of-type { flex: 1 1 200px; }
+
+/* v0.4B: graph usability */
+.palette-sep { width: 1px; align-self: stretch; background: var(--border); margin: 0 2px; }
+.edge-label { max-width: 170px; overflow: hidden; text-overflow: ellipsis; cursor: pointer; z-index: 1; }
+.edge-label.selected { z-index: 5; }

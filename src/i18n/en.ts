@@ -49,6 +49,10 @@ export const en = {
   // scene graph
   'palette.title': 'Add scene',
   'scene.untitled': 'Untitled',
+  'graph.autoArrange': 'Auto Arrange',
+  'graph.autoArrangeTip': 'Arrange scenes left to right. Only positions change; undo with Ctrl/Cmd+Z.',
+  'graph.arranged': 'Scenes arranged.',
+  'graph.alreadyArranged': 'Scenes are already arranged.',
   'node.start': 'Start scene',
   'node.loops': 'Loops',
   'node.triggers': '{n} triggers',
