@@ -35,6 +35,15 @@ documentation: [README.tr.md](README.tr.md).
   would only pass through logic nodes without a scene are refused. All three work with the context menu and picker,
   drag-to-create from a pin, the Inspector, copy/paste/duplicate, multi-selection, undo/redo, Auto Arrange, reroute points,
   reachability and the minimap.
+- **Ordered Sequence:** a **Sequence** node has one input and three outputs, **Then 0**, **Then 1** and **Completed**. It runs
+  the Then 0 subflow, returns to the Sequence, runs the Then 1 subflow, returns again, and only then follows Completed into the
+  normal story. The Then outputs are two stages that run one after the other, never alternative branches (exactly two stages;
+  no nesting or parallel execution). A stage is a straight line of **Event, Delay and Set Flag** nodes that ends in its own
+  **Sequence Return** (one input, no output; it names its Sequence and the stage it closes). Scenes, IF, Random Branch and nested
+  Sequence nodes are not allowed inside a stage, and a stage can only be entered through its own Then output and left through
+  its Return; the editor refuses other connections and says why. An output or stage that is not connected or closed yet is allowed
+  while you edit, is marked *Incomplete* on the node and in the Inspector, and is never treated as finished by the simulator.
+  Sequence and Return take no time; copying a complete Sequence subgraph keeps the stage and owner links.
 - **Custom scene types:** per-project, reusable scene types (name, curated colour and icon, base kind, default description
   and duration). A custom scene is a normal scene whose base kind (reality, dream, nightmare, memory, ending) still drives
   crossings, simulation and analysis.
@@ -127,6 +136,11 @@ npm run preview    # serve the production build
      (scene and connection durations are unchanged) and its scene-local triggers shift with it. An **Event** is stamped
      with the absolute route time. Neither is a scene visit or a trigger occurrence. The **Flow trace** lists events,
      delay start/end, IF choices, Set Flag assignments and Random decisions in chronological order.
+   - A **Sequence** shows the stage it waits for: the route can only take Then 0, then (after its Return) Then 1, and only
+     then Completed. Every connection is still your explicit choice and the Return hands control back without a choice of its own;
+     Delay seconds in a stage count once, Event and Set Flag effects keep their order, and the Flow trace adds *Sequence
+     started*, *stage entered*, *stage returned* and *Sequence completed*. Back, Restart and graph edits rebuild the position from the
+     chosen connections; visiting the Sequence again starts it afresh. A stage that cannot continue is reported, not skipped.
    - At a **Random Branch** you either pick A or B yourself (marked as a *what-if*) or press **Roll outcome**: a seeded draw
      (the seed is a session-only field) that only previews the result until you commit it. The same seed and decision
      always give the same draw, and nothing is rerolled by Back, replay, project edits or reload. The chosen connection is
@@ -189,13 +203,13 @@ library or undo history, it is not exported, and it resets when you switch proje
 - **Storage** (browser `localStorage`): `horror-director:library:v1` (index), `horror-director:proj:<id>` (one record per
   project), `horror-director:lang` (language). Ids are internal and independent of names. Library data (ids,
   timestamps, active project) is never written into project JSON.
-- **Backup** downloads the *active* project in the schema-8 export format. Importing validates strictly (duplicate ids,
+- **Backup** downloads the *active* project in the schema-9 export format. Importing validates strictly (duplicate ids,
   dangling references, invalid values, unrecognised fields, newer schema versions are errors shown before anything is replaced). A file
   can be imported as a new project or, with confirmation, replace the active project.
-- **Older files and data:** schema-1 to schema-7 exports and bare project files are still imported; missing shots, audio
+- **Older files and data:** schema-1 to schema-8 exports and bare project files are still imported; missing shots, audio
   cues, IF nodes, comments, scene types and flags start as empty lists and missing transition directions stay absent (an informational notice appears for
-  schema-1/bare files), and the next backup is schema 8 with all other fields unchanged. Stored projects from earlier versions are read the
-  same way and are only rewritten when you edit them. Project records are stored as `{ v: 8, project }` (earlier `v: 1`–`v: 7`
+  schema-1/bare files), and the next backup is schema 9 with all other fields unchanged. Stored projects from earlier versions are read the
+  same way and are only rewritten when you edit them. Project records are stored as `{ v: 9, project }` (earlier `v: 1`–`v: 8`
   records are still read); an older build that cannot read the new fields shows such a record as damaged and preserves it
   rather than dropping data. Downgrading is not supported.
 - **Migration:** the single-project storage of early versions is validated, copied into the library under the id
@@ -208,7 +222,7 @@ library or undo history, it is not exported, and it resets when you switch proje
 ```jsonc
 {
   "format": "horror-director",
-  "schemaVersion": 8,
+  "schemaVersion": 9,
   "exportedAt": "ISO-8601",
   "project": {
     "name": "", "description": "", "startSceneId": "scene id | null",
@@ -232,12 +246,14 @@ library or undo history, it is not exported, and it resets when you switch proje
                    { "id", "type": "setFlag", "title", "description", "flagId": "flag id | null", "value": true, "position": {"x","y"} },
                    { "id", "type": "event", "title", "description", "eventCategory": "story|reveal|threat|relief|decision|custom", "position": {"x","y"} },
                    { "id", "type": "delay", "title", "description": "planning notes", "seconds": "0–3600", "position": {"x","y"} },
-                   { "id", "type": "random", "title", "description", "probabilityA": "0–100 (B = 100 − A)", "labelA", "labelB", "position": {"x","y"} }],
+                   { "id", "type": "random", "title", "description", "probabilityA": "0–100 (B = 100 − A)", "labelA", "labelB", "position": {"x","y"} },
+                   { "id", "type": "sequence", "title", "description", "position": {"x","y"} },
+                   { "id", "type": "seqReturn", "title", "description", "sequenceId": "owning Sequence id | null", "stage": "0|1", "position": {"x","y"} }],
     "comments": [{ "id","title","text","color","position": {"x","y"},"width","height" }],
     "sceneTypes": [{ "id","name","color","icon","baseKind": "reality|dream|nightmare|memory|ending","description","duration?" }],
     "transitions": [{ "id","source": "scene or IF node id","target": "scene or IF node id","label","style","condition","duration",
                       "waypoints": "[{x,y}] reroute points, ≤ 16, flow coordinates, optional (presentation only)",
-                      "sourcePort": "true|false (leaving an IF node) or a|b (leaving a Random Branch); absent for every other source",
+                      "sourcePort": "true|false (leaving an IF node), a|b (Random Branch) or then0|then1|completed (Sequence); absent for every other source",
                       "direction": { "technique": "none|match-cut|impossible-space|identity-discontinuity|false-awakening|reality-reveal",
                                      "playerBelief","reality","visualContinuity","audioContinuity","reveal","unrealNotes",
                                      "sourceShotId": "shot id of the source scene | null",
@@ -290,8 +306,8 @@ Chromium and uses test ids and DOM geometry rather than screenshot comparisons.
   selection, zoom and cursor only for the session, and shows triggers with a condition as conditional rather than evaluating them.
 - Free-text conditions are planning notes and are never parsed or evaluated. Only structured IF conditions on Boolean flags are
   evaluated, and only inside the simulator (nothing is executed in a game); there are no numeric variables, scripting, separate
-  AND/OR/NOT nodes, Sequence or parallel nodes, or runtime execution. Set Flag, Event and Delay nodes have one input and one
-  output, and connections touching any logic node cannot carry a transition design. A Delay is extra time between scene visits,
+  AND/OR/NOT nodes, parallel execution, nested Sequences, Sequences with more than two stages, or runtime execution. Set Flag, Event and Delay nodes have one input and one
+  output, a Sequence Return has no output, and connections touching any logic node cannot carry a transition design. A Delay is extra time between scene visits,
   not an in-scene timeline editor; scenes still consume their full authored duration.
 - Audio cues are planning notes: no playback, waveform, 3D spatialization, AI generation or engine/Unreal runtime
   instructions, and no asset library. Cues are independent of triggers and do not affect pacing statistics.
