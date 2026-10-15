@@ -13,7 +13,7 @@ Every future feature or fix milestone must add an entry here (see `CLAUDE.md`).
 
 ## v0.7C — Graph productivity & reliability
 
-Pull request: _link added when the pull request is opened_
+Pull request: [#14](https://github.com/gofQ/horror-director/pull/14)
 
 ### Added
 - **Reroute points**: movable waypoints on existing connections (scene, IF and Set Flag links). Right-click a connection → *Add Reroute Point* at the cursor (inserted into the nearest part of the wire), drag points to reshape it (one undo step per drag), right-click a point → *Remove Point*, *Clear Reroute Points*, arrow keys nudge and Delete removes a focused point; the connection inspector lists the points (move earlier/later, remove, add on the wire) as the keyboard/touch alternative. Several points per connection (max 16). The route is a smooth curve through the points with horizontal tangents at the pins, so arrowheads and labels stay readable; connections without points are drawn exactly as before.
