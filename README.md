@@ -34,6 +34,11 @@ documentation: [README.tr.md](README.tr.md).
   what the player believes vs. what is actually happening, the reveal, visual/audio continuity, Unreal notes and links to
   shots of the source and destination scenes, with a before → transition → after preview. Planning data only: never
   evaluated, independent of the transition's style, condition and duration.
+- **Audio planner:** ordered audio cues per scene (ambience, music, SFX, voice, whisper, stinger, silence) with start/duration
+  relative to the scene, diegetic / non-diegetic / ambiguous origin, spatial direction (non-spatial, front, behind, left,
+  right, above, moving), a descriptive target level, fades, loop flag, asset reference, direction notes and an optional
+  text-to-audio brief, opened from the scene Inspector with a layered timeline. Planning notes only — no playback,
+  spatialization, generation or engine commands; independent of triggers, scene ambience, shot sound notes and pacing.
 - **Project library:** several projects, open/create/rename/duplicate/delete, import as new, remembered active project.
 - **Safety:** undo/redo (50 steps), strict import validation, save-status indicator, JSON backup, recovery of unreadable data.
 - **English and Turkish** interface, responsive dark UI (the inspector becomes a bottom sheet on small screens).
@@ -98,7 +103,15 @@ npm run preview    # serve the production build
    continuity and Unreal notes, and optionally link a shot from the source scene and one from the destination scene
    (self-loops choose both from the same scene). The preview shows before → transition → after. Deleting a shot that a
    transition links asks for confirmation and clears the link in the same undo step; **Clear design** removes a design.
-9. Use **Backup** regularly — browser storage can be cleared.
+9. **Plan audio:** select a scene and open **Audio planner** in the Inspector. Add cues, set type, origin, spatial
+   direction, start/duration (seconds from the scene start), target level (0–10, a planning value rather than measured
+   loudness), fades, loop, asset reference, direction notes and an optional text-to-audio brief; duplicate, move up/down
+   or delete them. The timeline shows each cue as a bar in layers: overlapping cues are normal and simply use more
+   layers, silence cues are drawn hatched and represent an authored intention (they do not mute other cues). Warnings
+   flag cues that end after the scene and fades longer than their cue; nothing is changed automatically. Spatial ideas
+   (a whisper behind the player, a sound moving left to right, ambience that suddenly disappears, a distant voice with
+   ambiguous origin, a stinger after silence) are expressed through the structured fields and notes. Undo/Redo covers every change.
+10. Use **Backup** regularly — browser storage can be cleared.
 
 Simulation, pacing and comparison state is separate from the project: it never changes project data, autosave, the
 library or undo history, it is not exported, and it resets when you switch projects.
@@ -108,13 +121,13 @@ library or undo history, it is not exported, and it resets when you switch proje
 - **Storage** (browser `localStorage`): `horror-director:library:v1` (index), `horror-director:proj:<id>` (one record per
   project), `horror-director:lang` (language). Ids are internal and independent of names. Library data (ids,
   timestamps, active project) is never written into project JSON.
-- **Backup** downloads the *active* project in the schema-3 export format. Importing validates strictly (duplicate ids,
+- **Backup** downloads the *active* project in the schema-4 export format. Importing validates strictly (duplicate ids,
   dangling references, invalid values, unrecognised fields, newer schema versions are errors shown before anything is replaced). A file
   can be imported as a new project or, with confirmation, replace the active project.
-- **Older files and data:** schema-1 and schema-2 exports and bare project files are still imported; missing shots start
-  as empty lists and missing transition directions stay absent (an informational notice appears for schema-1/bare files),
-  and the next backup is schema 3 with all other fields unchanged. Stored projects from earlier versions are read the
-  same way and are only rewritten when you edit them. Project records are stored as `{ v: 3, project }` (earlier `v: 1`/`v: 2`
+- **Older files and data:** schema-1, schema-2 and schema-3 exports and bare project files are still imported; missing shots
+  and audio cues start as empty lists and missing transition directions stay absent (an informational notice appears for
+  schema-1/bare files), and the next backup is schema 4 with all other fields unchanged. Stored projects from earlier versions are read the
+  same way and are only rewritten when you edit them. Project records are stored as `{ v: 4, project }` (earlier `v: 1`–`v: 3`
   records are still read); an older build that cannot read the new fields shows such a record as damaged and preserves it
   rather than dropping data. Downgrading is not supported.
 - **Migration:** the single-project storage of early versions is validated, copied into the library under the id
@@ -127,7 +140,7 @@ library or undo history, it is not exported, and it resets when you switch proje
 ```jsonc
 {
   "format": "horror-director",
-  "schemaVersion": 3,
+  "schemaVersion": 4,
   "exportedAt": "ISO-8601",
   "project": {
     "name": "", "description": "", "startSceneId": "scene id | null",
@@ -138,6 +151,11 @@ library or undo history, it is not exported, and it resets when you switch proje
                              "movement": "static|pan|tilt|tracking|handheld",
                              "technique": "none|match-cut|impossible-space|identity-discontinuity|false-awakening",
                              "soundNotes","visualNotes" }],
+                 "audioCues": [{ "id","title","start","duration",
+                                 "type": "ambience|music|sfx|voice|whisper|stinger|silence",
+                                 "origin": "diegetic|non-diegetic|ambiguous",
+                                 "direction": "nonspatial|front|behind|left|right|above|moving",
+                                 "level": "0–10 planning value","fadeIn","fadeOut","loop","asset","notes","prompt" }],
                  "characterStates": { "<characterId>": "<stateId>" } }],
     "transitions": [{ "id","source","target","label","style","condition","duration",
                       "direction": { "technique": "none|match-cut|impossible-space|identity-discontinuity|false-awakening|reality-reveal",
@@ -188,6 +206,8 @@ Chromium and uses test ids and DOM geometry rather than screenshot comparisons.
 - Auto Arrange uses a readability heuristic, not minimal crossings; very dense graphs can still have overlapping labels.
 - Shots are planning notes in a simple list: no storyboard images, camera timeline editor or engine/Unreal import yet. The list
   keeps authored order; sorting by time is an explicit action.
+- Audio cues are planning notes: no playback, waveform, 3D spatialization, AI generation or engine/Unreal runtime
+  instructions, and no asset library. Cues are independent of triggers and do not affect pacing statistics.
 - Transition directions are planning notes: no generated images, animation or 3D preview, and no Unreal execution. Stored
   records are schema-checked on load but not integrity-checked (a link to a missing shot is flagged in the designer and can
   be cleared; imports reject it).

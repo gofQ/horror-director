@@ -292,7 +292,7 @@ describe('import / export compatibility', () => {
     const text = serializeProject(st().project)
     const parsed = JSON.parse(text)
     expect(Object.keys(parsed).sort()).toEqual(['derived', 'exportedAt', 'format', 'project', 'schemaVersion'])
-    expect(parsed.schemaVersion).toBe(3)
+    expect(parsed.schemaVersion).toBe(4)
     expect(Object.keys(parsed.project).sort()).toEqual(Object.keys(sampleProject()).sort())
     expect(text).not.toMatch(/activeId|migratedFrom|createdAt|updatedAt|"library"/)
     const back = parseProject(text)

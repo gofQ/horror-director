@@ -151,7 +151,7 @@ export function parseProject(text: string): ParseResult {
   errors.push(...v.errors)
   if (errors.length) return { ok: false, errors: cap(errors) }
   const declared = isExport ? (result.data as { schemaVersion: number }).schemaVersion : null
-  // Files older than schema 2 carry no shots: they start empty and the next export is schema 2.
+  // Files older than schema 2 carry no shots or directions (and none carry audio cues): they start empty and the next export is the current schema.
   const warnings = declared === null || declared < 2 ? [diag('diag.migratedV1'), ...v.warnings] : v.warnings
   return { ok: true, project, warnings: cap(warnings), schemaVersion: declared }
 }

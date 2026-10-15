@@ -145,7 +145,7 @@ describe('persistence and isolation', () => {
     st().addShot(SCENE)
     flushNow()
     const rec = rawRecord()
-    expect(rec.v).toBe(3)
+    expect(rec.v).toBe(4)
     expect(rec.project.scenes.find((s) => s.id === SCENE)!.shots).toHaveLength(1)
   })
 
@@ -175,7 +175,7 @@ describe('migration of older stored data', () => {
     st().updateProject({ description: 'edit' })
     flushNow()
     const rec = rawRecord()
-    expect(rec.v).toBe(3)
+    expect(rec.v).toBe(4)
     expect(rec.project.description).toBe('edit')
     expect(rec.project.scenes.every((s) => Array.isArray(s.shots))).toBe(true)
   })

@@ -3,13 +3,28 @@
 Version history of Horror Director, newest first. This file is the canonical user-facing history; the READMEs describe
 the current product only and `progress.md` tracks engineering status.
 
-The labels below (MVP/v0.1 through v0.6B) are **development milestones**, not published releases: the project has no
+The labels below (MVP/v0.1 through v0.6C) are **development milestones**, not published releases: the project has no
 tagged releases and `package.json` stays at `0.1.0`. Each milestone after the MVP was developed on its own branch and
 merged through a pull request into the integration branch (`claude/optimistic-tesla-r2v8g6`). The JSON schema was
-`schemaVersion: 1` until v0.6A introduced `schemaVersion: 2` (scene shots) and v0.6B introduced `schemaVersion: 3`
-(transition direction); files of every earlier version, and bare project files, are still imported.
+`schemaVersion: 1` until v0.6A introduced `schemaVersion: 2` (scene shots) and v0.6B `schemaVersion: 3`
+(transition direction) and v0.6C `schemaVersion: 4` (scene audio cues); files of every earlier version, and bare project files, are still imported.
 
 Every future feature or fix milestone must add an entry here (see `CLAUDE.md`).
+
+## v0.6C — Audio & atmosphere planner
+
+Pull request: [#10](https://github.com/gofQ/horror-director/pull/10)
+
+### Added
+- **Audio cues** per scene: ordered planning notes with a stable id, title, start and duration (seconds relative to the scene), type (ambience, music, SFX, voice, whisper, stinger, silence), origin (diegetic / non-diegetic / ambiguous), spatial direction (non-spatial, front, behind, left, right, above, moving), a descriptive target level (0–10, not measured loudness), fade-in/fade-out, loop flag, asset/reference identifier, sound direction notes and an optional text-to-audio brief. They are planning data only — not playable audio or engine commands — and independent of triggers, scene ambience, shot sound notes and transition audio continuity (nothing is migrated or overwritten). They do not influence pacing statistics.
+- **Audio planner** dialog (TR/EN) from the scene Inspector: add, edit, duplicate, move up/down and delete cues; a layered SVG/CSS timeline with per-type styling (silence hatched); overlapping cues are shown as layers and never as errors; silence is an authored intention and does not mute other cues; warnings for cues ending after the scene and for fades longer than the cue. Authored timing is never changed automatically. Keyboard-operable, Undo/Redo inside the dialog, mobile layout.
+- Sample project demonstrates a layered cue set (hum bed, intentional silence, whisper from behind, stinger) in the first scene.
+
+### Changed
+- **JSON schema 4**: exports are written as `schemaVersion: 4` and include `scene.audioCues`. Schema 1, 2, 3 and bare project files are still imported (missing `audioCues` become empty lists; shots, transition directions, triggers, characters and all other fields are preserved). Duplicate cue ids (per scene), invalid values and unknown fields (also inside cues) are blocking import errors; cues past the scene end or with over-long fades are warnings only.
+- Library project records are now written as `{ v: 4, project }`. Records with `v: 1`–`v: 3` are still read, normalized in memory only and not rewritten until the project is edited; the legacy single-project key is never modified. An older build reading a `v: 4` record treats it as damaged and preserves it.
+- `CLAUDE.md` compatibility rules now state the current schema (4) and the accepted older versions.
+- `package.json` version metadata is unchanged.
 
 ## v0.6B — Psychological transition designer
 

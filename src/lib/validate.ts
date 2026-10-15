@@ -1,5 +1,6 @@
 import { diag, type Diagnostic } from './diagnostics'
 import type { Project } from './schema'
+import { analyzeAudioCues } from './audio'
 import { analyzeShots } from './shots'
 
 export interface ValidationResult {
@@ -34,6 +35,9 @@ export function validateProject(p: Project): ValidationResult {
 
   for (const s of p.scenes)
     for (const id of duplicates(s.shots.map((x) => x.id))) errors.push(diag('diag.dupShot', { id, scene: s.title }))
+
+  for (const s of p.scenes)
+    for (const id of duplicates(s.audioCues.map((x) => x.id))) errors.push(diag('diag.dupAudioCue', { id, scene: s.title }))
 
   const sceneIds = new Set(p.scenes.map((s) => s.id))
   if (p.startSceneId !== null && !sceneIds.has(p.startSceneId))
@@ -79,6 +83,9 @@ export function validateProject(p: Project): ValidationResult {
     const sa = analyzeShots(s)
     if (sa.overlapPairs) warnings.push(diag('diag.shotOverlap', { scene: s.title, n: sa.overlapPairs }))
     if (sa.exceeding) warnings.push(diag('diag.shotLate', { scene: s.title, n: sa.exceeding, duration: s.duration }))
+    const au = analyzeAudioCues(s)
+    if (au.exceeding) warnings.push(diag('diag.audioLate', { scene: s.title, n: au.exceeding, duration: s.duration }))
+    if (au.fadeTooLong) warnings.push(diag('diag.audioFade', { scene: s.title, n: au.fadeTooLong }))
   }
 
   return { errors, warnings }

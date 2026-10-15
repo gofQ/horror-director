@@ -1,4 +1,4 @@
-import type { Character, Project, Scene, SceneKind, Shot, Transition, Trigger } from './schema'
+import type { AudioCue, Character, Project, Scene, SceneKind, Shot, Transition, Trigger } from './schema'
 
 const sc = (
   id: string,
@@ -19,6 +19,7 @@ const sc = (
   loop: { enabled: false, maxIterations: 0, exitCondition: '' },
   triggers: [],
   shots: [],
+  audioCues: [],
   characterStates: {},
   ...extra,
 })
@@ -34,6 +35,20 @@ const sh = (
   soundNotes = '',
   visualNotes = '',
 ): Shot => ({ id, title, start, duration, framing, movement, technique, soundNotes, visualNotes })
+
+const au = (
+  id: string,
+  title: string,
+  start: number,
+  duration: number,
+  type: AudioCue['type'],
+  direction: AudioCue['direction'],
+  origin: AudioCue['origin'],
+  extra: Partial<AudioCue> = {},
+): AudioCue => ({
+  id, title, start, duration, type, origin, direction,
+  level: 5, fadeIn: 0, fadeOut: 0, loop: false, asset: '', notes: '', prompt: '', ...extra,
+})
 
 const tr = (
   id: string,
@@ -107,6 +122,12 @@ export function sampleProject(): Project {
         sh('sh1', 'Arrival down the corridor', 0, 25, 'wide', 'tracking', 'none', 'Fluorescent hum swells; footsteps echo.', 'Long one-point-perspective hall, door ajar at the end.'),
         sh('sh2', 'Hand on the doorknob', 25, 10, 'extreme-close-up', 'static', 'none', 'Hum drops out for a beat.', 'Her trembling hand; the knob is warm.'),
         sh('sh3', 'Reflection that is not hers', 60, 12, 'medium', 'handheld', 'identity-discontinuity', 'Faint lullaby under the TV static.', 'Mirror shows Elena a half-second late.'),
+      ],
+      audioCues: [
+        au('au1', 'Fluorescent hum bed', 0, 50, 'ambience', 'nonspatial', 'diegetic', { level: 4, fadeIn: 3, fadeOut: 1, loop: true, asset: 'SND_Hall_Hum', notes: 'Low, constant; the room tone the player trusts.' }),
+        au('au2', 'Hum cuts out', 50, 6, 'silence', 'nonspatial', 'ambiguous', { notes: 'Intentional silence before the door creak.' }),
+        au('au3', 'Whisper behind the player', 56, 8, 'whisper', 'behind', 'ambiguous', { level: 3, fadeIn: 1, notes: 'Too close to be real; no visible source.', prompt: 'A child whispering a counting rhyme, very close, dry room' }),
+        au('au4', 'Door stinger', 64, 3, 'stinger', 'front', 'diegetic', { level: 8, notes: 'Follows the silence.' }),
       ],
     }),
     sc('s_living', 'Living Room', 'reality', 380, 80, {

@@ -358,3 +358,27 @@ kbd { background: var(--panel-2); border: 1px solid var(--border); border-radius
   .dir-arrow { transform: rotate(90deg); justify-self: center; }
   .dir-blocks { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* Audio planner */
+.audio-timeline-scroll { flex-shrink: 0; overflow-x: auto; max-width: 100%; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-2); }
+.audio-timeline { position: relative; min-width: 520px; padding: 6px 10px 8px; }
+.audio-axis { position: relative; height: 16px; font-size: 11px; color: var(--muted, #9aa0b4); font-variant-numeric: tabular-nums; }
+.audio-axis span { position: absolute; transform: translateX(-50%); }
+.audio-axis span:first-child { transform: none; }
+.audio-axis span:last-child { transform: translateX(-100%); }
+.audio-lanes { position: relative; margin-top: 4px; }
+.audio-scene-end { position: absolute; top: 0; bottom: 0; width: 0; border-left: 1px dashed #ff4d6a; }
+.audio-bar { position: absolute; height: 24px; min-width: 6px; padding: 0 4px; border: 1px solid transparent; border-radius: 5px; color: #fff; font-size: 11px; line-height: 22px; text-align: left; cursor: pointer; overflow: hidden; background: var(--accent-2); }
+.audio-bar:focus-visible { outline: 2px solid #fff; outline-offset: 1px; }
+.audio-bar.over { border-color: #ff4d6a; }
+.audio-bar.type-ambience, .badge.audio-type.type-ambience { background: #2f6f73; }
+.audio-bar.type-music, .badge.audio-type.type-music { background: #5b4bb0; }
+.audio-bar.type-sfx, .badge.audio-type.type-sfx { background: #8a5a22; }
+.audio-bar.type-voice, .badge.audio-type.type-voice { background: #2f6aa8; }
+.audio-bar.type-whisper, .badge.audio-type.type-whisper { background: #8a3f7a; }
+.audio-bar.type-stinger, .badge.audio-type.type-stinger { background: #a8323f; }
+.audio-bar.type-silence { background: repeating-linear-gradient(45deg, transparent 0 5px, rgba(255, 255, 255, 0.18) 5px 7px); border: 1px dashed #9aa0b4; color: #cfd3e0; }
+.badge.audio-type.type-silence { background: transparent; border: 1px dashed #9aa0b4; }
+.badge.audio-type { color: #fff; }
+.audio-silence-note { margin: 0; }
+.audio-card.type-silence { border-style: dashed; }

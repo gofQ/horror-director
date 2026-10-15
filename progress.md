@@ -4,15 +4,16 @@ Current development status and engineering handoff. User-facing version history 
 product documentation in [README.md](README.md) / [README.tr.md](README.tr.md); permanent rules in [CLAUDE.md](CLAUDE.md).
 
 ## Status
-- Latest milestone: **v0.6B — psychological transition designer** (export schema is now version 3; v1/v2/bare files and stored `v: 1`/`v: 2` records are still read; `package.json` version unchanged).
+- Latest milestone: **v0.6C — audio & atmosphere planner** (export schema is now version 4; v1–v3/bare files and stored `v: 1`–`v: 3` records are still read; `package.json` version unchanged).
 - Implemented and in use: scene graph with Auto Arrange and edge routing, timeline, characters, analysis, multi-project library with
-  safe migration, undo/redo, strict import, TR/EN i18n, story path simulator, pacing analysis, A/B route comparison, per-scene cinematic shot planner, per-transition psychological direction designer.
-- Latest verified run (v0.6B, Cloud Session): `npm run typecheck` clean; `npm test` 21 files / 333 tests passing; `npm run build` passes;
-  `npm run test:e2e` (Chromium, `PW_CHROMIUM_PATH=/opt/pw-browsers/chromium`) 51 tests, all passing, also with `--repeat-each=2` (102/102).
+  safe migration, undo/redo, strict import, TR/EN i18n, story path simulator, pacing analysis, A/B route comparison, per-scene cinematic shot planner, per-transition psychological direction designer, per-scene audio planner.
+- Latest verified run (v0.6C, Cloud Session): `npm run typecheck` clean; `npm test` 24 files / 384 tests passing; `npm run build` passes;
+  `npm run test:e2e` (Chromium, `PW_CHROMIUM_PATH=/opt/pw-browsers/chromium`) 60 tests, all passing (also 120/120 with `--repeat-each=2` before the final CSS fix and one added assertion; the final 1× run passed 60/60).
 
 ## Module map
-- `src/lib/schema.ts`, `io.ts`, `validate.ts` — schema (version 3: `scene.shots` since 2, optional `transition.direction` since 3; older files and bare projects import with `shots: []` and no directions; shot-link integrity errors in `validateProject`), export/import, strict validation (structured diagnostics in `diagnostics.ts`).
+- `src/lib/schema.ts`, `io.ts`, `validate.ts` — schema (version 4: `scene.shots` since 2, optional `transition.direction` since 3, `scene.audioCues` since 4; older files and bare projects import with empty shots/audioCues and no directions; shot-link integrity and duplicate-cue-id errors in `validateProject`), export/import, strict validation (structured diagnostics in `diagnostics.ts`).
 - `src/lib/shots.ts` — pure shot helpers (`analyzeShots` overlap/overrun/order warnings, `sortedByTime`, `nextStart`); `src/components/ShotPlannerDialog.tsx` — planner UI opened from the scene Inspector (incl. the delete-with-links confirmation); `src/components/TransitionDesignerDialog.tsx` — transition direction UI opened from the transition Inspector; shot and direction actions live in `src/store/useStore.ts` (`shotReferences` in `shots.ts`).
+- `src/lib/audio.ts` — pure audio cue helpers (`analyzeAudioCues` overrun/fade warnings, `assignLanes` display layers, `nextCueStart`); `src/components/AudioPlannerDialog.tsx` — planner UI opened from the scene Inspector; cue actions in `src/store/useStore.ts` (`addAudioCue`, `updateAudioCue` refuses invalid values, `duplicate/move/deleteAudioCue`).
 - `src/lib/library.ts`, `persist.ts`, `src/store/library.ts` — multi-project storage, migration, safe storage with verified writes.
 - `src/store/useStore.ts` — project editing store, undo/redo history, `arrangeScenes`.
 - `src/lib/layout.ts`, `edgePath.ts` — Auto Arrange and edge routing (pure).
@@ -29,8 +30,9 @@ product documentation in [README.md](README.md) / [README.tr.md](README.tr.md); 
 - Pinned Route A is a copy of choices bound to a project id; it is never pruned silently — invalidation (graph edits, lowered step cap) is shown as an
   explicit warning and marks the comparison incomplete. All simulator state resets on active-project change.
 - Shots are planning notes only: independent of triggers/transitions, authored timing is never changed implicitly (warnings only); reordering changes sequence, not timing.
-- Stored records are `{ v: 3, project }`; `v: 1`/`v: 2` records stay readable; old records/legacy key are normalized in memory only and never rewritten at boot. Do not write older record versions again.
+- Stored records are `{ v: 4, project }`; `v: 1`–`v: 3` records stay readable; old records/legacy key are normalized in memory only and never rewritten at boot. Do not write older record versions again.
 - Transition direction is planning data only (never evaluated); shot links must belong to the transition's source/target scene (validated on import; store refuses invalid links; `deleteShot` refuses while linked unless `clearReferences`, which removes shot and links in one undo step). `updateTransition` cannot change endpoints.
+- Audio cues are planning notes only: never played or evaluated, independent of triggers/ambience/shot sound notes/transition audio continuity, excluded from pacing and simulation. Overlaps are normal layers (display lanes are derived, never stored); silence mutes nothing; authored order and timing are never changed implicitly (warnings only).
 - Library metadata never enters project JSON; the legacy storage key is never modified or deleted.
 - Intensity is authored design intent: no fear score, no tension curve, no "best route" ranking anywhere.
 
@@ -40,8 +42,9 @@ product documentation in [README.md](README.md) / [README.tr.md](README.tr.md); 
 - Comparison supports exactly one pinned route against the live route (no multi-route matrix); time shifts of shared events are shown, not explained.
 - The aligned comparison timeline hides nothing but gets dense for very long routes (no zoom); scene bands are not drawn in it.
 - Shots: simple list only (no storyboard images, camera timeline editor or Unreal import). The list shows authored (array) order; "out of time order" is a warning and "Sort by time" an explicit action. Duplicate/new shots start where the previous one ends.
+- Audio planner: no playback/waveform/spatial rendering, no asset browser or generation; the timeline axis stretches to include cues that overrun the scene; the planner is a list plus timeline (no drag-to-resize). Cue lanes are derived for display only.
 - Records are schema-validated, not integrity-validated, on load: a stored link to a missing shot is flagged in the designer and can be cleared, but loads (imports reject it).
-- Downgrade: a build older than v0.6B shows `v: 3` records as damaged (data preserved, never overwritten); exported schema-2 files cannot be imported by older builds ("newer schema").
+- Downgrade: a build older than v0.6C shows `v: 4` records as damaged (data preserved, never overwritten); exported schema-2 files cannot be imported by older builds ("newer schema").
 - A schema-level error (e.g. invalid shot value) stops validation before integrity checks, so duplicate-id errors only appear once schema errors are fixed.
 - Multiple browser tabs are not merged (detection and blocking only); localStorage quota is shared by all projects and backups.
 - Undo history is session-only and cleared on project switch; deleted projects have no trash.
@@ -50,4 +53,4 @@ product documentation in [README.md](README.md) / [README.tr.md](README.tr.md); 
 
 ## Ideas for next steps
 Multi-route comparison or route enumeration, saved routes per project (opt-in, would need a storage decision), zoom for long timelines,
-Unreal DataTable/CSV export or importer plugin, audio cue library, scene thumbnails.
+Unreal DataTable/CSV export or importer plugin, audio cue library / asset browser, audio playback preview, ElevenLabs-style generation (would need a network/API decision), scene thumbnails.
