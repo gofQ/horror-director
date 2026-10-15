@@ -13,7 +13,7 @@ Every future feature or fix milestone must add an entry here (see `CLAUDE.md`).
 
 ## v0.7A — Blueprint-inspired narrative graph editor
 
-Pull request: PR_LINK_PLACEHOLDER
+Pull request: [#12](https://github.com/gofQ/horror-director/pull/12)
 
 ### Added
 - **Blueprint-style Scene Graph**: category headers (reality/dream/nightmare/memory/ending stay recognizable), compact metadata, typed In/Out execution pins, directional wires with hover/selection feedback, a **connection preview coloured by validity** (checked before you drop) and rejected-drop explanations. Pan, zoom, minimap, selection, drag, Delete and Undo/Redo keep working.
