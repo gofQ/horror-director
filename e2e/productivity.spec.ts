@@ -206,6 +206,7 @@ test.describe('multi-selection and batch actions', () => {
     await page.mouse.move(start.x, start.y)
     await page.mouse.down()
     await page.mouse.move(start.x + 60, start.y + 110, { steps: 12 })
+    await page.waitForTimeout(150) // let the drag handler process the last pointer move before releasing (slow CI)
     await page.mouse.up()
     await expect.poll(async () => (await positions(page))[ids[2]].x - before[ids[2]].x).toBeGreaterThan(40) // the committed move is rendered asynchronously
     const moved = await positions(page)
