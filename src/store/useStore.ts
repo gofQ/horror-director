@@ -1,10 +1,10 @@
 import { create } from 'zustand'
-import { persist, createJSONStorage } from 'zustand/middleware'
 import { emptyProject, newCharacter, newScene, newTransition, newTrigger, type DefaultNames } from '../lib/factory'
 import { getLang } from '../i18n/store'
 import { translate } from '../i18n'
 import { uid } from '../lib/id'
-import { createSafeStorage, hydrate, preserveUnreadable, STORAGE_KEY } from '../lib/persist'
+import { loadLibrary, type LibraryIndex, type LoadNotice, type LoadedLibrary } from '../lib/library'
+import { browserBackend, useSaveStatus } from '../lib/persist'
 import type {
   Character,
   CharacterState,
@@ -22,7 +22,7 @@ export type Selection = { type: 'scene' | 'edge'; id: string } | null
 export const HISTORY_LIMIT = 50
 
 /** Names for newly created items follow the current UI language; existing items are never renamed. */
-function defaultNames(): DefaultNames {
+export function defaultNames(): DefaultNames {
   const l = getLang()
   return {
     project: translate(l, 'default.project'),
@@ -46,11 +46,19 @@ interface State {
   past: Project[]
   future: Project[]
   /** Set when stored data existed but could not be read at startup. */
-  loadNotice: { backedUp: boolean; raw: string | null } | null
+  /** Library metadata (active id + project list). Never part of a project or its export. */
+  library: LibraryIndex
+  /** Listed projects whose stored record is unreadable (raw kept untouched in storage). */
+  damaged: Record<string, { raw: string | null }>
+  notices: LoadNotice[]
+  /** Another tab changed this library; library operations are blocked until reload. */
+  externalChange: boolean
 
   undo: () => void
   redo: () => void
-  dismissNotice: () => void
+  dismissNotice: (index: number) => void
+  /** Replaces the active project with another one from the library (history is not carried over). */
+  swapActive: (p: { project: Project; library: LibraryIndex; damaged?: State['damaged'] }) => void
   setView: (v: View) => void
   select: (s: Selection) => void
   focusScene: (id: string) => void
@@ -129,58 +137,34 @@ const mapScene = (p: Project, id: string, fn: (s: Scene) => Scene): Project => (
 })
 const keysOf = (o: object) => Object.keys(o).sort().join(',')
 
-const storage = createSafeStorage(() => localStorage)
-if (typeof window !== 'undefined') {
-  window.addEventListener('pagehide', storage.flush)
-  window.addEventListener('beforeunload', storage.flush)
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'hidden') storage.flush()
-  })
-}
-export const flushSave = storage.flush
+/** Boot-time load: migrates legacy data when needed and picks the remembered active project. */
+export const bootDeps = () => ({
+  now: Date.now,
+  newId: () => uid('p'),
+  sample: sampleProject,
+  empty: () => emptyProject(defaultNames()),
+})
+const boot: LoadedLibrary = loadLibrary(browserBackend(), bootDeps())
+export const bootResult = boot
+if (boot.bootError) useSaveStatus.setState({ status: { state: 'error', reason: boot.bootError } })
 
-// Stored text that is not even valid JSON never reaches `merge`; catch it here.
-let corruptRaw: string | null = null
-const guardedStorage: typeof storage = {
-  ...storage,
-  getItem: (name) => {
-    const raw = storage.getItem(name)
-    if (typeof raw === 'string') {
-      try {
-        JSON.parse(raw)
-      } catch {
-        corruptRaw = raw
-        return null
-      }
-    }
-    return raw
-  },
-}
-
-function unreadableNotice(raw: string | null): NonNullable<State['loadNotice']> {
-  let key: string | null = null
-  try {
-    key = preserveUnreadable(raw, localStorage)
-  } catch {
-    /* storage unavailable */
-  }
-  return { backedUp: key !== null, raw }
-}
-
+const startScene = (p: Project) => p.startSceneId ?? p.scenes[0]?.id ?? null
 
 export const useStore = create<State>()(
-  persist(
-    (rawSet, get) => {
+  (rawSet, get) => {
       const set = withHistory(rawSet, get)
       return {
-        project: sampleProject(),
+        project: boot.project,
         selection: null,
         view: 'graph',
-        timelineSceneId: 's_hall',
+        timelineSceneId: startScene(boot.project),
         selectedTriggerId: null,
         past: [],
         future: [],
-        loadNotice: null,
+        library: boot.index,
+        damaged: boot.damaged,
+        notices: boot.notices,
+        externalChange: false,
 
         undo: () => {
           const s = get()
@@ -206,7 +190,20 @@ export const useStore = create<State>()(
             ...reconcile(next, s),
           })
         },
-        dismissNotice: () => rawSet({ loadNotice: null }),
+        dismissNotice: (i) => rawSet({ notices: get().notices.filter((_, k) => k !== i) }),
+        swapActive: ({ project, library, damaged }) => {
+          lastKey = null // never coalesce across projects
+          rawSet({
+            project,
+            library,
+            ...(damaged ? { damaged } : {}),
+            selection: null,
+            selectedTriggerId: null,
+            timelineSceneId: startScene(project),
+            past: [], // undo/redo never crosses project boundaries
+            future: [],
+          })
+        },
 
         setView: (view) => rawSet({ view }),
         select: (selection) => rawSet({ selection }),
@@ -414,26 +411,4 @@ export const useStore = create<State>()(
           })),
       }
     },
-    {
-      name: STORAGE_KEY,
-      storage: createJSONStorage(() => guardedStorage),
-      merge: (persisted, current) => {
-        if (corruptRaw !== null) return { ...current, loadNotice: unreadableNotice(corruptRaw) }
-        const h = hydrate(persisted)
-        if (h.unreadable) {
-          // Never let the default project silently overwrite data we could not read.
-          let raw: string | null = null
-          try {
-            raw = localStorage.getItem(STORAGE_KEY)
-          } catch {
-            /* ignore */
-          }
-          return { ...current, loadNotice: unreadableNotice(raw) }
-        }
-        if (!h.project) return current
-        return { ...current, project: h.project, timelineSceneId: h.timelineSceneId }
-      },
-      partialize: (s) => ({ project: s.project, timelineSceneId: s.timelineSceneId }),
-    },
-  ),
 )

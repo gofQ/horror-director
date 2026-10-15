@@ -5,6 +5,11 @@ import { useStore } from '../store/useStore'
 import { AnalysisView } from '../components/AnalysisView'
 import { ImportDialog } from '../components/ImportDialog'
 import { diag } from '../lib/diagnostics'
+import { LibraryDialog } from '../components/LibraryDialog'
+import { addAndOpen, bootLibrary } from '../store/library'
+import { memoryBackend } from '../test/memoryBackend'
+import { emptyProject } from '../lib/factory'
+import { recordKey } from '../lib/library'
 import { sampleProject } from '../lib/sample'
 
 const noop = () => {}
@@ -18,6 +23,8 @@ afterEach(() => vi.unstubAllGlobals())
 
 const render = (lang: 'tr' | 'en', node: React.ReactElement) => {
   useLang.setState({ lang })
+  // zustand's server snapshot is the *initial* state object; sync it so renders reflect the live store.
+  Object.assign(useStore.getInitialState(), useStore.getState())
   return renderToStaticMarkup(node)
 }
 
@@ -57,6 +64,8 @@ describe('rendered components follow the language', () => {
   it('ImportDialog: confirmation with warnings', () => {
     const state = {
       kind: 'confirm' as const,
+      mode: 'replace' as const,
+      error: null,
       fileName: 'x.json',
       project: { ...sampleProject(), name: 'Çığlık' },
       warnings: [diag('diag.noStart')],
@@ -70,5 +79,33 @@ describe('rendered components follow the language', () => {
     const en = render('en', <ImportDialog {...props} />)
     expect(en).toContain('Replace current project?')
     expect(en).toContain('“Çığlık” — 8 scenes, 10 transitions, 3 characters')
+  })
+
+  it('LibraryDialog: list, active badge, damaged entry, dates and actions per language', () => {
+    const b = memoryBackend()
+    bootLibrary(b)
+    const first = useStore.getState().library.activeId!
+    addAndOpen({ ...emptyProject(), name: 'Çığlık Odası' })
+    const second = useStore.getState().library.activeId!
+    b.data.set(recordKey(first), '{broken')
+    bootLibrary(b) // first is now damaged; second is active
+    expect(useStore.getState().library.activeId).toBe(second)
+    const props = { onClose: noop, onPickImport: noop, onBackup: noop }
+    const tr = render('tr', <LibraryDialog {...props} />)
+    expect(tr).toContain('Proje kütüphanesi')
+    expect(tr).toContain('Yeni proje')
+    expect(tr).toContain('Yeni proje olarak içe aktar')
+    expect(tr).toContain('Etkin projeyi değiştir…')
+    expect(tr).toContain('Çığlık Odası')
+    expect(tr).toContain('Etkin')
+    expect(tr).toContain('Bu proje okunamadı. Kayıtlı verisine dokunulmadı.')
+    expect(tr).toContain('Ham veriyi indir')
+    expect(tr).toContain('Güncellendi:')
+    const en = render('en', <LibraryDialog {...props} />)
+    expect(en).toContain('Project library')
+    expect(en).toContain('Import as new project')
+    expect(en).toContain('This project could not be read. Its stored data was left untouched.')
+    expect(en).toContain('Updated ')
+    expect(en).not.toContain('Proje kütüphanesi')
   })
 })

@@ -19,6 +19,28 @@ projeler tarayıcınızın `localStorage` alanında saklanır.
 - **İçe / dışa aktarma**: şema doğrulamalı (zod), sürümlü JSON biçimi (`schemaVersion: 1`).
 - **Türkçe / İngilizce arayüz** (aşağıya bakın).
 
+## Proje kütüphanesi (v0.4A)
+
+Üst çubuktaki **Projeler** düğmesi kütüphaneyi açar: proje oluşturma, açma, yeniden adlandırma, çoğaltma ve silme; örnek
+ekleme; bir JSON dosyasını **yeni proje olarak içe aktarma**; ya da (açıkça ve onayla) etkin projeyi bir dosyayla
+değiştirme. Etkin proje sayfa yenilense de hatırlanır. **Yedekle** her zaman *etkin* projeyi değişmeyen şema v1 biçiminde
+indirir; kütüphane verisi (kimlikler, zaman damgaları, etkin proje) proje JSON'una asla yazılmaz.
+
+- **Depolama:** `horror-director:library:v1` (dizin) ve proje başına `horror-director:proj:<id>` kaydı; hepsi `localStorage`
+  içinde. Kimlikler dahilidir ve proje adından bağımsızdır.
+- **v0.1–v0.3'ten geçiş:** ilk açılışta eski tek proje (`horror-director:project:v1`) doğrulanır, `legacy` kimliğiyle
+  kütüphaneye kopyalanır, geri okunup karşılaştırılır ve ancak sonra dizine eklenir. Özgün anahtar **hiç değiştirilmez ve
+  silinmez** (eski sürüme dönüş için bayat bir kopya olarak kalır); geçiş tekrar çalışmaz, yarıda kesilme veya yazma hatası
+  çoğaltma olmadan güvenle yeniden denenir. Okunamayan eski veri taşınmaz; `horror-director:unreadable:<zaman>` altında
+  saklanır ve indirilebilir.
+- **Geçiş korumalıdır:** proje değiştirmeden önce bekleyen düzenlemeler kaydedilir; kayıt başarısız olursa mevcut projede
+  kalırsınız ve yedek indirebilir ya da yeniden deneyebilirsiniz. Geri al/yinele geçmişi etkin projeye aittir ve her
+  geçişte temizlenir.
+- **Hasarlı veri:** okunamayan dizin saklanır ve kayıtlı proje kayıtlarından yeniden oluşturulur; okunamayan proje "hasarlı"
+  olarak listelenir (ham veri korunur, indirilebilir) ve asla üzerine yazılmaz.
+- **Bilinen sınır — birden çok sekme:** aynı kütüphaneyi düzenleyen iki sekme birleştirilmez (son yazan kazanır). Horror
+  Director yalnızca başka sekmedeki değişikliği algılar, uyarı gösterir ve sayfayı yenileyene kadar kütüphane işlemlerini engeller.
+
 ## Dil
 
 Arayüz tamamen **Türkçe** ve **İngilizce** olarak sunulur. İlk ziyarette tarayıcı dili kullanılır (`tr*` → Türkçe, diğerleri →

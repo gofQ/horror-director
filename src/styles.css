@@ -215,3 +215,21 @@ kbd { background: var(--panel-2); border: 1px solid var(--border); border-radius
 .lang-switch button + button { border-left: 1px solid var(--border); }
 .lang-switch button:hover { color: var(--text); }
 .lang-switch button.active { background: var(--accent); color: #fff; }
+
+/* v0.4A: project library */
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+.banner.info { background: var(--panel); border-color: var(--border); color: var(--text); }
+.modal.library { width: min(720px, 100%); }
+.library-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.library-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.library-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg-2); }
+.library-row.active { border-color: var(--accent); }
+.library-main { flex: 1 1 220px; min-width: 0; }
+.library-name { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; overflow-wrap: anywhere; }
+.library-damaged { color: #ff8a9b; font-size: 12.5px; margin-top: 2px; }
+.library-row-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.library-rename { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.library-rename .input { flex: 1 1 180px; width: auto; }
+.library-confirm { display: flex; flex-direction: column; gap: 8px; flex: 1 1 100%; color: #ffb3bf; }
+.library-error { flex-wrap: wrap; }
+.library-error span:first-of-type { flex: 1 1 200px; }

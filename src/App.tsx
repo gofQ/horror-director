@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import { Download, FilePlus2, Sparkles, Upload, Eye, Workflow, Activity, Users, ShieldCheck, Undo2, Redo2, Save } from 'lucide-react'
-import { flushSave, useStore, type View } from './store/useStore'
+import { Download, FolderOpen, Eye, Workflow, Activity, Users, ShieldCheck, Undo2, Redo2, Save } from 'lucide-react'
+import { useStore, type View } from './store/useStore'
+import { addAndOpen, flushNow } from './store/library'
+import { LibraryDialog } from './components/LibraryDialog'
+import type { LoadNotice } from './lib/library'
 import { useSaveStatus, type SaveStatus } from './lib/persist'
 import { useLang, useT } from './i18n/store'
 import { LANGS, type Lang } from './i18n'
@@ -12,6 +15,7 @@ import { TimelineView } from './components/TimelineView'
 import { CharactersView } from './components/CharactersView'
 import { AnalysisView } from './components/AnalysisView'
 import { exportFileName, parseProject, serializeProject } from './lib/io'
+import type { Project } from './lib/schema'
 import { validateProject } from './lib/validate'
 
 const TABS = [
@@ -70,16 +74,17 @@ export function App() {
   const selection = useStore((s) => s.selection)
   const select = useStore((s) => s.select)
   const loadProject = useStore((s) => s.loadProject)
-  const resetProject = useStore((s) => s.resetProject)
-  const loadSample = useStore((s) => s.loadSample)
   const canUndo = useStore((s) => s.past.length > 0)
   const canRedo = useStore((s) => s.future.length > 0)
   const undo = useStore((s) => s.undo)
   const redo = useStore((s) => s.redo)
-  const loadNotice = useStore((s) => s.loadNotice)
+  const notices = useStore((s) => s.notices)
+  const externalChange = useStore((s) => s.externalChange)
   const dismissNotice = useStore((s) => s.dismissNotice)
   const saveStatus = useSaveStatus((s) => s.status)
   const [importState, setImportState] = useState<ImportState | null>(null)
+  const [libraryOpen, setLibraryOpen] = useState(false)
+  const importMode = useRef<'new' | 'replace'>('new')
   const fileRef = useRef<HTMLInputElement>(null)
   const [msg, setMsg] = useState<{ text: string; error: boolean } | null>(null)
 
@@ -89,7 +94,7 @@ export function App() {
   }
 
   const doExport = () => {
-    flushSave()
+    flushNow()
     const check = validateProject(project)
     downloadText(exportFileName(project), serializeProject(project))
     if (check.errors.length)
@@ -101,7 +106,7 @@ export function App() {
     const res = parseProject(await file.text())
     setImportState(
       res.ok
-        ? { kind: 'confirm', fileName: file.name, project: res.project, warnings: res.warnings }
+        ? { kind: 'confirm', mode: importMode.current, fileName: file.name, project: res.project, warnings: res.warnings, error: null }
         : { kind: 'rejected', fileName: file.name, errors: res.errors },
     )
   }
@@ -127,8 +132,42 @@ export function App() {
     return () => window.removeEventListener('keydown', onKey)
   })
 
-  const confirmThen = (fn: () => void, message: string) => {
-    if (window.confirm(message)) fn()
+  const pickFile = (mode: 'new' | 'replace') => {
+    importMode.current = mode
+    setLibraryOpen(false)
+    fileRef.current?.click()
+  }
+
+  const confirmImport = (p: Project) => {
+    if (importState?.kind !== 'confirm') return
+    if (importState.mode === 'replace') {
+      loadProject(p) // explicit, confirmed, undoable replacement of the active project
+      setImportState(null)
+      flash(t('toast.imported', { name: p.name }))
+      return
+    }
+    const r = addAndOpen(p)
+    if (r.ok) {
+      setImportState(null)
+      flash(t('toast.imported', { name: p.name }))
+    } else setImportState({ ...importState, error: r.error })
+  }
+
+  const noticeText = (n: LoadNotice): string => {
+    switch (n.kind) {
+      case 'unreadable':
+        return n.backedUp ? t('banner.unreadableBackedUp') : t('banner.unreadableNotBackedUp')
+      case 'migrated':
+        return t('banner.migrated')
+      case 'migrationFailed':
+        return t('banner.migrationFailed', {
+          reason: n.reason === 'verify' ? t('lib.err.verifyFailed') : t(`save.reason.${n.reason}`),
+        })
+      case 'indexRebuilt':
+        return t('banner.indexRebuilt', { n: n.n })
+      case 'activeDamaged':
+        return t('banner.activeDamaged')
+    }
   }
 
   return (
@@ -157,14 +196,8 @@ export function App() {
           </button>
           <SaveBadge status={saveStatus} />
           <LanguageSwitch />
-          <button className="btn" onClick={() => confirmThen(resetProject, t('confirm.new'))} title={t('tip.new')}>
-            <FilePlus2 size={15} /> <span>{t('btn.new')}</span>
-          </button>
-          <button className="btn" onClick={() => confirmThen(loadSample, t('confirm.sample'))} title={t('tip.sample')}>
-            <Sparkles size={15} /> <span>{t('btn.sample')}</span>
-          </button>
-          <button className="btn" onClick={() => fileRef.current?.click()} title={t('tip.import')}>
-            <Upload size={15} /> <span>{t('btn.import')}</span>
+          <button className="btn" onClick={() => setLibraryOpen(true)} title={t('lib.openTip')} aria-haspopup="dialog">
+            <FolderOpen size={15} /> <span>{t('lib.open')}</span>
           </button>
           <button className="btn primary" onClick={doExport} title={t('tip.backup')} aria-label={t('aria.backup')}>
             <Download size={15} /> <span>{t('btn.backup')}</span>
@@ -183,16 +216,24 @@ export function App() {
         </div>
       </header>
 
-      {loadNotice && (
-        <div className="banner error" role="alert">
-          <span>{loadNotice.backedUp ? t('banner.unreadableBackedUp') : t('banner.unreadableNotBackedUp')}</span>
-          {loadNotice.raw && (
-            <button className="btn small" onClick={() => downloadText('horror-director-unreadable.json', loadNotice.raw!)}>
+      {notices.map((n, i) => (
+        <div key={i} className={`banner ${n.kind === 'migrated' ? 'info' : 'error'}`} role={n.kind === 'migrated' ? 'status' : 'alert'}>
+          <span>{noticeText(n)}</span>
+          {n.kind === 'unreadable' && n.raw && (
+            <button className="btn small" onClick={() => downloadText('horror-director-unreadable.json', n.raw!)}>
               {t('btn.downloadRaw')}
             </button>
           )}
-          <button className="btn small" onClick={dismissNotice}>
+          <button className="btn small" onClick={() => dismissNotice(i)}>
             {t('btn.dismiss')}
+          </button>
+        </div>
+      ))}
+      {externalChange && (
+        <div className="banner error" role="alert">
+          <span>{t('banner.externalChange')}</span>
+          <button className="btn small" onClick={() => window.location.reload()}>
+            {t('btn.reload')}
           </button>
         </div>
       )}
@@ -204,17 +245,16 @@ export function App() {
           </button>
         </div>
       )}
+      {libraryOpen && (
+        <LibraryDialog onClose={() => setLibraryOpen(false)} onPickImport={pickFile} onBackup={doExport} />
+      )}
       {importState && (
         <ImportDialog
           state={importState}
           current={project}
           onCancel={() => setImportState(null)}
           onBackupCurrent={doExport}
-          onConfirm={(p) => {
-            loadProject(p)
-            setImportState(null)
-            flash(t('toast.imported', { name: p.name }))
-          }}
+          onConfirm={confirmImport}
         />
       )}
       {msg && (

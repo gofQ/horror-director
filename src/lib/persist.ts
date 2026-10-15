@@ -1,5 +1,4 @@
 import { create } from 'zustand'
-import type { StateStorage } from 'zustand/middleware'
 import { projectSchema, type Project } from './schema'
 
 export const STORAGE_KEY = 'horror-director:project:v1'
@@ -25,42 +24,78 @@ export interface Backend {
   getItem(key: string): string | null
   setItem(key: string, value: string): void
   removeItem(key: string): void
+  /** All stored keys (used to rebuild a damaged library index). */
+  keys(): string[]
 }
 
-function describe(e: unknown): SaveErrorReason {
+/** The browser's localStorage as a Backend, or null when unavailable (tests, blocked storage). */
+export function browserBackend(): Backend | null {
+  try {
+    const ls = globalThis.localStorage
+    if (!ls) return null
+    return {
+      getItem: (k) => ls.getItem(k),
+      setItem: (k, v) => ls.setItem(k, v),
+      removeItem: (k) => ls.removeItem(k),
+      keys: () => Array.from({ length: ls.length }, (_, i) => ls.key(i)).filter((k): k is string => k !== null),
+    }
+  } catch {
+    return null
+  }
+}
+
+export function describe(e: unknown): SaveErrorReason {
   const name = (e as { name?: string })?.name ?? ''
   return /quota/i.test(name) || (e as { code?: number })?.code === 22 ? 'full' : 'unavailable'
 }
 
+export interface SafeStorage {
+  getItem: (name: string) => string | null
+  setItem: (name: string, value: string) => void
+  removeItem: (name: string) => void
+  /** Writes everything pending now. Returns true only if nothing is left pending afterwards. */
+  flush: () => boolean
+  hasPending: () => boolean
+  /** Drops a pending write (e.g. for a project that was just deleted). */
+  discard: (name: string) => void
+}
+
 /**
- * localStorage wrapper that coalesces rapid writes, reports status, and keeps unsaved data
- * pending (so the next change or flush retries) when a write fails.
+ * Storage wrapper that coalesces rapid writes per key, reports save status, and keeps unsaved
+ * data pending (so the next change or flush retries) when a write fails. `lastKey` (the library
+ * index) is always written after the other keys so a record never trails its index.
  */
 export function createSafeStorage(
   backend: () => Backend,
-  opts: { delay?: number; now?: () => number } = {},
-): StateStorage & { flush: () => void } {
+  opts: { delay?: number; now?: () => number; lastKey?: string } = {},
+): SafeStorage {
   const delay = opts.delay ?? 300
   const now = opts.now ?? Date.now
   let timer: ReturnType<typeof setTimeout> | undefined
-  let pending: [string, string] | null = null
+  const pending = new Map<string, string>()
 
-  const flush = () => {
+  const flush = (): boolean => {
     clearTimeout(timer)
-    if (!pending) return
-    const [k, v] = pending
-    try {
-      backend().setItem(k, v)
-      pending = null
-      setStatus({ state: 'saved', at: now() })
-    } catch (e) {
-      // keep `pending` so a later flush retries
-      setStatus({ state: 'error', reason: describe(e) })
+    if (pending.size === 0) return true
+    const entries = [...pending].sort(([a], [b]) => Number(a === opts.lastKey) - Number(b === opts.lastKey))
+    for (const [k, v] of entries) {
+      try {
+        backend().setItem(k, v)
+        if (pending.get(k) === v) pending.delete(k)
+      } catch (e) {
+        // keep the entry pending so a later flush retries; stop so ordering is preserved
+        setStatus({ state: 'error', reason: describe(e) })
+        return false
+      }
     }
+    setStatus({ state: 'saved', at: now() })
+    return pending.size === 0
   }
 
   return {
     flush,
+    hasPending: () => pending.size > 0,
+    discard: (name) => void pending.delete(name),
     getItem: (name) => {
       try {
         return backend().getItem(name)
@@ -69,12 +104,13 @@ export function createSafeStorage(
       }
     },
     setItem: (name, value) => {
-      pending = [name, value]
+      pending.set(name, value)
       setStatus({ state: 'pending' })
       clearTimeout(timer)
       timer = setTimeout(flush, delay)
     },
     removeItem: (name) => {
+      pending.delete(name)
       try {
         backend().removeItem(name)
       } catch {

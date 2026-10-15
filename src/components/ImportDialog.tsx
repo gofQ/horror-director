@@ -1,12 +1,22 @@
 import { useEffect, useRef } from 'react'
 import { AlertTriangle, XCircle } from 'lucide-react'
 import { useT } from '../i18n/store'
+import type { TFunction } from '../i18n'
 import { formatDiagnostic, type Diagnostic } from '../lib/diagnostics'
+import type { LibError } from '../lib/library'
 import type { Project } from '../lib/schema'
 
 export type ImportState =
   | { kind: 'rejected'; fileName: string; errors: Diagnostic[] }
-  | { kind: 'confirm'; fileName: string; project: Project; warnings: Diagnostic[] }
+  | {
+      kind: 'confirm'
+      /** `replace`: confirmed replacement of the active project; `new`: add to the library as a new project. */
+      mode: 'replace' | 'new'
+      fileName: string
+      project: Project
+      warnings: Diagnostic[]
+      error: LibError | null
+    }
 
 interface Props {
   state: ImportState
@@ -14,6 +24,11 @@ interface Props {
   onCancel: () => void
   onConfirm: (p: Project) => void
   onBackupCurrent: () => void
+}
+
+export function libErrorText(t: TFunction, e: LibError): string {
+  if (e.code === 'saveFailed') return t('lib.err.saveFailed', { reason: t(`save.reason.${e.reason ?? 'unavailable'}`) })
+  return t(`lib.err.${e.code}`)
 }
 
 export function ImportDialog({ state, current, onCancel, onConfirm, onBackupCurrent }: Props) {
@@ -38,7 +53,9 @@ export function ImportDialog({ state, current, onCancel, onConfirm, onBackupCurr
   return (
     <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onCancel()}>
       <div ref={ref} className="modal" role="dialog" aria-modal="true" aria-labelledby="import-title">
-        <h3 id="import-title">{rejected ? t('dlg.blocked') : t('dlg.replaceTitle')}</h3>
+        <h3 id="import-title">
+          {rejected ? t('dlg.blocked') : state.mode === 'new' ? t('dlg.addTitle') : t('dlg.replaceTitle')}
+        </h3>
         <p className="muted">{t('dlg.file', { name: state.fileName })}</p>
         {rejected ? (
           <>
@@ -61,11 +78,20 @@ export function ImportDialog({ state, current, onCancel, onConfirm, onBackupCurr
         ) : (
           <>
             <p>
-              <strong>{t('dlg.current')}</strong> {describe(current)}
-              <br />
+              {state.mode === 'replace' && (
+                <>
+                  <strong>{t('dlg.current')}</strong> {describe(current)}
+                  <br />
+                </>
+              )}
               <strong>{t('dlg.import')}</strong> {describe(state.project)}
             </p>
-            <p className="muted">{t('dlg.undoNote')}</p>
+            <p className="muted">{state.mode === 'new' ? t('dlg.addNote') : t('dlg.undoNote')}</p>
+            {state.error && (
+              <p className="issue error" role="alert">
+                {libErrorText(t, state.error)}
+              </p>
+            )}
             {state.warnings.length > 0 && (
               <>
                 <div className="section-title">
@@ -88,7 +114,7 @@ export function ImportDialog({ state, current, onCancel, onConfirm, onBackupCurr
                 {t('btn.cancel')}
               </button>
               <button className="btn primary" onClick={() => onConfirm(state.project)}>
-                {t('dlg.replace')}
+                {state.mode === 'new' ? t('dlg.add') : t('dlg.replace')}
               </button>
             </div>
           </>
