@@ -1,4 +1,4 @@
-import type { Scene, Shot } from './schema'
+import type { Project, Scene, Shot } from './schema'
 
 /**
  * Pure helpers for the shot planner. Shots are planning notes only: nothing here changes authored
@@ -62,3 +62,19 @@ export const sortedByTime = (shots: readonly Shot[]): Shot[] =>
 /** Default start for a new shot: right after the latest-ending shot (0 for an empty list). */
 export const nextStart = (shots: readonly Shot[]): number =>
   Math.round(Math.max(0, ...shots.map((s) => s.start + s.duration)) * 100) / 100
+
+export interface ShotReference {
+  transitionId: string
+  /** Which end of the transition links the shot (a self-loop can link the same shot in both roles). */
+  role: 'source' | 'target'
+}
+
+/** Transition directions that link `shotId` of scene `sceneId` (source shot of an outgoing, target shot of an incoming transition). */
+export function shotReferences(project: Pick<Project, 'transitions'>, sceneId: string, shotId: string): ShotReference[] {
+  const out: ShotReference[] = []
+  for (const t of project.transitions) {
+    if (t.source === sceneId && t.direction?.sourceShotId === shotId) out.push({ transitionId: t.id, role: 'source' })
+    if (t.target === sceneId && t.direction?.targetShotId === shotId) out.push({ transitionId: t.id, role: 'target' })
+  }
+  return out
+}

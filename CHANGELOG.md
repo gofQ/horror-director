@@ -3,12 +3,29 @@
 Version history of Horror Director, newest first. This file is the canonical user-facing history; the READMEs describe
 the current product only and `progress.md` tracks engineering status.
 
-The labels below (v0.1 … v0.5C) are **development milestones**, not published releases: the project has no tagged
-releases and `package.json` stays at `0.1.0`. Each milestone was developed on its own branch and merged through a pull
-request into the integration branch (`claude/optimistic-tesla-r2v8g6`). The JSON schema was `schemaVersion: 1`
-until v0.6A, which introduced `schemaVersion: 2` (schema-1 files are still imported).
+The labels below (MVP/v0.1 through v0.6B) are **development milestones**, not published releases: the project has no
+tagged releases and `package.json` stays at `0.1.0`. Each milestone after the MVP was developed on its own branch and
+merged through a pull request into the integration branch (`claude/optimistic-tesla-r2v8g6`). The JSON schema was
+`schemaVersion: 1` until v0.6A introduced `schemaVersion: 2` (scene shots) and v0.6B introduced `schemaVersion: 3`
+(transition direction); files of every earlier version, and bare project files, are still imported.
 
 Every future feature or fix milestone must add an entry here (see `CLAUDE.md`).
+
+## v0.6B — Psychological transition designer
+
+Pull request: [#9](https://github.com/gofQ/horror-director/pull/9)
+
+### Added
+- **Transition direction**: an optional, structured design per transition — psychological technique (the shot techniques plus *reality reveal*), what the player believes is happening, what is actually happening, the reveal/contradiction, visual (match-cut) continuity, audio continuity, Unreal implementation notes and optional links to a shot of the source scene and a shot of the destination scene. It is director-authored planning data: never evaluated or executed, and independent of the transition's style, condition and duration.
+- **Design transition** dialog (TR/EN) from the selected transition's Inspector: edit every field, choose source/destination shots, see a compact *before → transition → after* preview built from existing shot metadata with the illusion, reality and reveal called out, start/clear a design, Undo/Redo inside the dialog. Works for self-loops (both links choose from the same scene), keyboard-operable and responsive.
+- **Reference integrity**: shot links must belong to the transition's source/destination scene. Deleting a linked shot is blocked until you explicitly confirm; the confirmation lists the affected transitions, and the deletion plus the cleared links are one undo step. A stored link that no longer resolves is flagged and can be cleared.
+- Sample project demonstrates directions on two transitions.
+
+### Changed
+- **JSON schema 3**: exports are written as `schemaVersion: 3`; transitions without a direction export without a `direction` key. Schema 1, schema 2 and bare project files are still imported (missing `shots` become empty, directions stay absent; schema-1/bare files get an informational notice). Dangling or mismatched shot links, invalid values and unknown fields (also inside a direction) are blocking import errors.
+- Library project records are now written as `{ v: 3, project }`. Records with `v: 1` or `v: 2` are still read, normalized in memory only and not rewritten until the project is edited; the legacy single-project key is never modified. An older build reading a `v: 3` record treats it as damaged and preserves it.
+- Transition endpoints (`source`/`target`) can no longer be changed through the store update API, so shot links cannot be orphaned.
+- `package.json` version metadata is unchanged.
 
 ## v0.6A — Cinematic shot planner
 

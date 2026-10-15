@@ -3,7 +3,7 @@ import { ArrowDown, ArrowUp, Copy, Plus, Redo2, Trash2, Undo2, X, ArrowUpDown, T
 import { useStore } from '../store/useStore'
 import { useT } from '../i18n/store'
 import { SHOT_FRAMINGS, SHOT_MOVEMENTS, SHOT_TECHNIQUES } from '../lib/schema'
-import { analyzeShots } from '../lib/shots'
+import { analyzeShots, shotReferences } from '../lib/shots'
 import { formatClock } from '../lib/simulate'
 import { Field, NumberInput, Select, TextArea, TextInput } from './fields'
 
@@ -17,8 +17,11 @@ export function ShotPlannerDialog({ sceneId, onClose }: { sceneId: string; onClo
   const canUndo = useStore((s) => s.past.length > 0)
   const canRedo = useStore((s) => s.future.length > 0)
   const { addShot, updateShot, deleteShot, duplicateShot, moveShot, sortShotsByTime, undo, redo } = useStore.getState()
+  const transitions = useStore((s) => s.project.transitions)
+  const scenes = useStore((s) => s.project.scenes)
   const ref = useRef<HTMLDivElement>(null)
   const [focusId, setFocusId] = useState<string | null>(null)
+  const [confirmId, setConfirmId] = useState<string | null>(null)
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
@@ -37,6 +40,11 @@ export function ShotPlannerDialog({ sceneId, onClose }: { sceneId: string; onClo
   if (!scene) return null
   const a = analyzeShots(scene)
   const shots = scene.shots
+  const transitionName = (id: string) => {
+    const tr = transitions.find((x) => x.id === id)
+    const title = (sid?: string) => scenes.find((x) => x.id === sid)?.title || t('scene.untitled')
+    return tr ? `${title(tr.source)} → ${title(tr.target)}${tr.label ? ` (${tr.label})` : ''}` : id
+  }
   const numberOf = (id: string) => shots.findIndex((s) => s.id === id) + 1
   const num = (n: number) => formatNumber(Math.round(n * 100) / 100)
   const aria = (action: string, title: string) => t('shot.actionAria', { action, title })
@@ -90,6 +98,7 @@ export function ShotPlannerDialog({ sceneId, onClose }: { sceneId: string; onClo
               const p = (v: number) => Math.min(100, Math.max(0, (v / scene.duration) * 100))
               const label = t('shot.n', { n: i + 1 })
               const over = info.exceeds ? info.end - scene.duration : 0
+              const refs = shotReferences({ transitions }, sceneId, s.id)
               return (
                 <li key={s.id} className={`shot-card${info.overlaps.length || info.exceeds || info.outOfOrder ? ' warn' : ''}`} data-testid="shot" data-shot-id={s.id}>
                   <div className="shot-card-head">
@@ -116,7 +125,7 @@ export function ShotPlannerDialog({ sceneId, onClose }: { sceneId: string; onClo
                       >
                         <Copy size={14} />
                       </button>
-                      <button className="btn icon small danger" data-testid="shot-delete" onClick={() => deleteShot(sceneId, s.id)} title={t('shot.delete')} aria-label={aria(t('shot.delete'), s.title || label)}>
+                      <button className="btn icon small danger" data-testid="shot-delete" onClick={() => (refs.length > 0 ? setConfirmId(s.id) : deleteShot(sceneId, s.id))} title={t('shot.delete')} aria-label={aria(t('shot.delete'), s.title || label)}>
                         <Trash2 size={14} />
                       </button>
                     </span>
@@ -125,6 +134,38 @@ export function ShotPlannerDialog({ sceneId, onClose }: { sceneId: string; onClo
                   <div className="shot-bar" role="img" aria-label={t('shot.barAria')}>
                     <i style={{ left: `${p(s.start)}%`, width: `${Math.max(0.8, p(info.end) - p(s.start))}%` }} className={info.exceeds ? 'over' : ''} />
                   </div>
+
+                  {refs.length > 0 && (
+                    <div className="shot-chips">
+                      <span className="badge" data-testid="shot-refs-chip">{t('shot.refs.chip', { n: new Set(refs.map((r) => r.transitionId)).size })}</span>
+                    </div>
+                  )}
+                  {confirmId === s.id && refs.length > 0 && (
+                    <div className="shot-refs" role="alertdialog" aria-label={t('shot.refs.title', { shot: s.title || label })} data-testid="shot-refs-confirm">
+                      <strong>{t('shot.refs.title', { shot: s.title || label })}</strong>
+                      <ul>
+                        {refs.map((r, k) => (
+                          <li key={k}>{t('shot.refs.item', { name: transitionName(r.transitionId), role: t(`shot.refs.role.${r.role}`) })}</li>
+                        ))}
+                      </ul>
+                      <p className="muted">{t('shot.refs.body')}</p>
+                      <div className="modal-actions">
+                        <button className="btn" data-testid="shot-refs-cancel" onClick={() => setConfirmId(null)}>
+                          {t('btn.cancel')}
+                        </button>
+                        <button
+                          className="btn danger"
+                          data-testid="shot-refs-delete"
+                          onClick={() => {
+                            deleteShot(sceneId, s.id, { clearReferences: true })
+                            setConfirmId(null)
+                          }}
+                        >
+                          {t('shot.refs.confirm')}
+                        </button>
+                      </div>
+                    </div>
+                  )}
 
                   {(info.overlaps.length > 0 || info.exceeds || info.outOfOrder) && (
                     <div className="shot-chips" data-testid="shot-chips">

@@ -50,6 +50,20 @@ export function validateProject(p: Project): ValidationResult {
   const dupPairs = duplicates(pairs).length
   if (dupPairs > 0) warnings.push(diag('diag.multiTransitions', { n: dupPairs }))
 
+  const sceneById = new Map(p.scenes.map((s) => [s.id, s]))
+  for (const t of p.transitions) {
+    const d = t.direction
+    const src = sceneById.get(t.source)
+    const dst = sceneById.get(t.target)
+    if (!d || !src || !dst) continue
+    const name = t.label ? `${q(t.label)} (${t.id})` : q(t.id)
+    const elsewhere = (id: string) => p.scenes.some((s) => s.shots.some((x) => x.id === id))
+    if (d.sourceShotId !== null && !src.shots.some((x) => x.id === d.sourceShotId))
+      errors.push(diag(elsewhere(d.sourceShotId) ? 'diag.dirSourceMismatch' : 'diag.dirSourceDangling', { name, id: d.sourceShotId, scene: src.title }))
+    if (d.targetShotId !== null && !dst.shots.some((x) => x.id === d.targetShotId))
+      errors.push(diag(elsewhere(d.targetShotId) ? 'diag.dirTargetMismatch' : 'diag.dirTargetDangling', { name, id: d.targetShotId, scene: dst.title }))
+  }
+
   const chars = new Map(p.characters.map((c) => [c.id, c]))
   for (const s of p.scenes) {
     for (const [cid, stid] of Object.entries(s.characterStates)) {

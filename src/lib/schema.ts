@@ -1,7 +1,7 @@
 import { z } from 'zod'
 
-/** 2 adds `scene.shots`; schema-1 files and bare projects are still imported (shots default to `[]`). */
-export const SCHEMA_VERSION = 2
+/** 2 added `scene.shots`; 3 adds the optional `transition.direction`. Older files and bare projects are still imported. */
+export const SCHEMA_VERSION = 3
 export const FORMAT_ID = 'horror-director'
 
 export const SCENE_KINDS = ['reality', 'dream', 'nightmare', 'memory', 'ending'] as const
@@ -17,6 +17,8 @@ export const TRIGGER_KINDS = [
 export const SHOT_FRAMINGS = ['wide', 'medium', 'close-up', 'extreme-close-up', 'pov'] as const
 export const SHOT_MOVEMENTS = ['static', 'pan', 'tilt', 'tracking', 'handheld'] as const
 export const SHOT_TECHNIQUES = ['none', 'match-cut', 'impossible-space', 'identity-discontinuity', 'false-awakening'] as const
+/** Psychological techniques for transition direction: the shot techniques plus the reality reveal. */
+export const DIRECTION_TECHNIQUES = [...SHOT_TECHNIQUES, 'reality-reveal'] as const
 export const CHARACTER_ROLES = ['player', 'entity', 'npc'] as const
 
 export type SceneKind = (typeof SCENE_KINDS)[number]
@@ -25,6 +27,7 @@ export type TriggerKind = (typeof TRIGGER_KINDS)[number]
 export type ShotFraming = (typeof SHOT_FRAMINGS)[number]
 export type ShotMovement = (typeof SHOT_MOVEMENTS)[number]
 export type ShotTechnique = (typeof SHOT_TECHNIQUES)[number]
+export type DirectionTechnique = (typeof DIRECTION_TECHNIQUES)[number]
 export type CharacterRole = (typeof CHARACTER_ROLES)[number]
 
 const id = z.string().min(1)
@@ -76,6 +79,25 @@ export const sceneSchema = z.object({
   characterStates: z.record(z.string(), z.string()).default({}),
 })
 
+/**
+ * Director-authored planning notes for a transition (never executed or evaluated). Shot links must
+ * belong to the transition's source / target scene (checked by `validateProject`).
+ */
+export const transitionDirectionSchema = z.object({
+  technique: z.enum(DIRECTION_TECHNIQUES).default('none'),
+  /** What the player believes is happening (the illusion). */
+  playerBelief: z.string().default(''),
+  /** What is actually happening. */
+  reality: z.string().default(''),
+  visualContinuity: z.string().default(''),
+  audioContinuity: z.string().default(''),
+  /** The reveal moment / contradiction. */
+  reveal: z.string().default(''),
+  unrealNotes: z.string().default(''),
+  sourceShotId: z.string().min(1).nullable().default(null),
+  targetShotId: z.string().min(1).nullable().default(null),
+})
+
 export const transitionSchema = z.object({
   id,
   source: id,
@@ -84,6 +106,8 @@ export const transitionSchema = z.object({
   style: z.enum(TRANSITION_STYLES).default('cut'),
   condition: z.string().default(''),
   duration: z.number().min(0).default(1),
+  /** Optional psychological direction; absent for transitions that have not been designed. */
+  direction: transitionDirectionSchema.optional(),
 })
 
 export const characterStateSchema = z.object({
@@ -120,6 +144,7 @@ export const exportSchema = z.object({
   project: projectSchema,
 })
 
+export type TransitionDirection = z.infer<typeof transitionDirectionSchema>
 export type Shot = z.infer<typeof shotSchema>
 export type Trigger = z.infer<typeof triggerSchema>
 export type Scene = z.infer<typeof sceneSchema>

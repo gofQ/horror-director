@@ -25,14 +25,15 @@ const v1File = (p: Project) => {
   const e = JSON.parse(serializeProject(p)) as { schemaVersion: number; project: { scenes: Record<string, unknown>[] } }
   e.schemaVersion = 1
   for (const s of e.project.scenes) delete s.shots
+  for (const t of (e.project as unknown as { transitions: Record<string, unknown>[] }).transitions) delete t.direction
   return e
 }
 
-describe('schema 2 export', () => {
-  it('writes schemaVersion 2 and the shots of every scene', () => {
-    expect(SCHEMA_VERSION).toBe(2)
+describe('schema 3 export', () => {
+  it('writes schemaVersion 3 and the shots of every scene', () => {
+    expect(SCHEMA_VERSION).toBe(3)
     const e = buildExport(withShots(), when)
-    expect(e.schemaVersion).toBe(2)
+    expect(e.schemaVersion).toBe(3)
     expect(e.project.scenes.every((s) => Array.isArray(s.shots))).toBe(true)
     expect(e.project.scenes[1].shots).toHaveLength(2)
   })
@@ -44,7 +45,7 @@ describe('schema 2 export', () => {
     expect(r.ok).toBe(true)
     if (!r.ok) return
     expect(r.project).toEqual(p)
-    expect(r.schemaVersion).toBe(2)
+    expect(r.schemaVersion).toBe(3)
     expect(r.warnings.some((w) => w.code === 'diag.migratedV1')).toBe(false)
     const strip = (s: string) => s.replace(/"exportedAt": "[^"]+"/, '')
     expect(strip(serializeProject(r.project))).toBe(strip(first))
@@ -61,17 +62,20 @@ describe('schema 2 export', () => {
 describe('schema 1 and legacy files', () => {
   it('imports a schema-1 export: shots default to [], older fields untouched, flagged as migrated', () => {
     const original = clone()
-    for (const s of original.scenes) s.shots = []
     const r = parseProject(text(v1File(sampleProject())))
     expect(r.ok).toBe(true)
     if (!r.ok) return
-    expect(r.project).toEqual({ ...original, scenes: original.scenes.map((s) => ({ ...s, shots: [] })) })
+    expect(r.project).toEqual({
+      ...original,
+      scenes: original.scenes.map((s) => ({ ...s, shots: [] })),
+      transitions: original.transitions.map(({ direction, ...rest }) => (void direction, rest)),
+    })
     expect(r.schemaVersion).toBe(1)
     expect(r.warnings.map((w) => w.code)).toContain('diag.migratedV1')
     expect(r.project.scenes.every((s) => s.shots.length === 0)).toBe(true)
   })
 
-  it('imports a bare legacy project without shots and exports it as schema 2 without losing fields', () => {
+  it('imports a bare legacy project without shots and exports it as schema 3 without losing fields', () => {
     const bare = v1File(sampleProject()).project
     const r = parseProject(text(bare))
     expect(r.ok).toBe(true)
@@ -79,7 +83,7 @@ describe('schema 1 and legacy files', () => {
     expect(r.schemaVersion).toBeNull()
     expect(r.warnings.map((w) => w.code)).toContain('diag.migratedV1')
     const out = JSON.parse(serializeProject(r.project)) as { schemaVersion: number; project: { scenes: Record<string, unknown>[] } }
-    expect(out.schemaVersion).toBe(2)
+    expect(out.schemaVersion).toBe(3)
     const stripShots = (scenes: Record<string, unknown>[]) => scenes.map(({ shots, ...rest }) => (void shots, rest))
     expect(stripShots(out.project.scenes)).toEqual(stripShots(bare.scenes))
     expect(out.project.scenes.every((s) => Array.isArray(s.shots) && (s.shots as unknown[]).length === 0)).toBe(true)
@@ -120,10 +124,10 @@ describe('malformed schema 2 files are rejected without repair', () => {
   it('shots must be an array', () => {
     expect(reject(edit((_s, scene) => (scene.shots = 'nope')))).toMatch(/shots/)
   })
-  it('schema versions newer than 2', () => {
+  it('schema versions newer than 3', () => {
     const e = JSON.parse(serializeProject(clone())) as Record<string, unknown>
-    e.schemaVersion = 3
-    expect(reject(e)).toMatch(/schema version 3/)
+    e.schemaVersion = 4
+    expect(reject(e)).toMatch(/schema version 4/)
   })
   it('overlapping and late shots import with warnings only', () => {
     const p = withShots()
