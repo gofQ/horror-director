@@ -119,3 +119,29 @@ Unreal importer plugin / DataTable CSV export, audio cue library, scene thumbnai
 - Migration validates the legacy data against the schema only (not full import-level integrity checks), so a schema-valid project with dangling references migrates as-is.
 - Library list shows name and last-updated time only (no scene counts/thumbnails); no per-row export (only the active project's Backup).
 - Per-project UI state (selected view, timeline scene) is not remembered per project.
+
+## V0.4B — Graph usability & E2E tests
+
+### Delivered
+- **Auto Arrange** (`src/lib/layout.ts`, toolbar button `Auto Arrange` / `Otomatik Düzenle`, localized): deterministic left-to-right layered layout written in-house (no new runtime dependency). Pure function of graph structure + scene order (positions are never an input ⇒ idempotent). Handles branching/merging (longest-path layers, barycenter ordering), cycles (DFS back edges excluded from layering), self-loops and duplicate/dangling transitions (ignored for layout), disconnected components (stacked vertically, start component first) and multiple endings (aligned in the last column). Spacing leaves room for self-loop arcs above and back-edge arcs below.
+- **One undoable operation**: `arrangeScenes()` in the store changes only `scene.position`, uses a single `set` without a coalesce key (exactly one history entry, exact undo/redo), and does nothing (no history entry) when positions are already arranged. It is never invoked on load, reload, boot or project switch. Manual drag editing is unchanged and never merges with the arrange step. After arranging, the viewport is fitted with room for edge arcs (viewport only; not stored).
+- **Edge routing** (`src/lib/edgePath.ts`, pure and unit-tested): forward curves unchanged; backward edges on the same row arc *below* the nodes; backward edges between different rows use S-curves; reciprocal pairs get separate lanes (rank from ids) so paths and labels never coincide; self-loops arc above. Labels sit at the true curve midpoint, are ellipsized with a tooltip, clickable to select the edge, and raised when selected. Dream/reality colors, dashed crossings, transition styles, selection glow, Delete key and arrow markers are preserved. No schema change; duplicate ordered pairs still rejected.
+- **Playwright E2E suite** (`e2e/`, `npm run test:e2e`, `@playwright/test` dev dependency): 8 tests — startup/render, add + connect via real handle drags (duplicate rejected), Auto Arrange (left-to-right, no overlaps, one-step undo/redo exact, idempotent, survives reload, manual drag survives reload and project round trip), reciprocal edges + self-loop (distinct non-overlapping labels, selectable, direction shown, keyboard delete), project switching without data loss + active project after reload, scene persistence, TR/EN switching without reload + persistence, Turkish first-visit detection. Stable selectors (`data-testid`, React Flow `data-id`), DOM-geometry assertions, no screenshot comparisons. `typecheck` also type-checks `e2e/` (`e2e/tsconfig.json`).
+- Real UX issue found by the E2E run and fixed: fit-to-view ignored edge arcs, so self-loop labels fell outside the viewport after arranging.
+
+### Changed files
+- New: `src/lib/layout.ts`, `src/lib/edgePath.ts`, `src/lib/layout.test.ts`, `src/lib/edgePath.test.ts`, `src/store/arrange.test.ts`, `e2e/{editor.spec.ts,helpers.ts,tsconfig.json}`, `playwright.config.ts`.
+- Modified: `src/components/GraphView.tsx`, `src/store/useStore.ts`, `src/App.tsx`, `src/components/LibraryDialog.tsx` (test ids), `src/i18n/{en,tr}.ts`, `src/styles.css`, `package.json`/lockfile, `.gitignore`, `README.md`, `README.tr.md`.
+
+### Test results (all executed in this Cloud Session)
+- `npm run typecheck` clean; `npm test`: 12 files, **177 tests** (+28: 15 layout, 6 edge-path, 7 arrange/undo-redo/persistence); `npm run build` passes.
+- `npm run test:e2e` (Chromium via `PW_CHROMIUM_PATH=/opt/pw-browsers/chromium`): **8/8 passed**, and 24/24 with `--repeat-each=3` (no flakiness observed).
+- Manual screenshot review of the sample project before/after Auto Arrange and of reciprocal + self-loop edges.
+
+### Known limitations
+- The layout ignores existing manual positions and any user grouping by design (it re-lays out everything); there is no "arrange selection" or incremental mode.
+- Layering favors readability, not minimal crossings (barycenter heuristic, 4 sweeps); very dense graphs can still have crossing edges and long edges.
+- Edge routing is heuristic (same-row arcs, S-curves, ±lane offsets); labels of unrelated edges can still overlap in dense layouts.
+- Fit-to-view after arranging reserves fixed margins for arcs; the viewport is not restored on undo.
+- E2E covers Chromium only and runs against the production build; there are no touch-gesture or mobile-viewport E2E tests, and no screenshot/visual-regression tests.
+- `@playwright/test` requires a Chromium binary (`npx playwright install chromium` or `PW_CHROMIUM_PATH`).

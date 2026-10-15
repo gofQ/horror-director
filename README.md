@@ -20,6 +20,29 @@ everything as JSON for later Unreal Engine import. No backend, no paid APIs — 
 - Undo/redo (50 steps, Ctrl/Cmd+Z), strict import validation, save-status indicator and one-click JSON backup (Ctrl/Cmd+S).
 - Auto-save to `localStorage`, responsive dark UI (inspector becomes a bottom sheet on small screens).
 
+## Graph usability (v0.4B)
+
+- **Auto Arrange** (graph toolbar): lays scenes out left to right in layers following the story flow — branching,
+  merging, cycles, self-loops, disconnected groups (stacked vertically) and multiple endings (one final column) are
+  handled. It only changes **scene positions** (ids, transitions, triggers, characters and text are untouched), runs
+  **only when you press the button** (never on load, reload or project switch), is **one undo/redo step** that restores
+  exact positions, and is deterministic/idempotent (pressing it again changes nothing). Manual dragging still works.
+  The viewport then fits the result (the viewport is not stored in the project).
+- **Edge routing:** A→B and B→A are drawn on separate paths with separate labels; backward edges arc underneath or
+  S-curve instead of cutting through scenes; self-loops arc above their scene. Edge labels are clickable (they select
+  the edge) and show the full text as a tooltip. No schema change; duplicate ordered pairs are still rejected.
+
+## Tests
+
+```bash
+npm test            # unit tests (vitest)
+npm run test:e2e    # Playwright browser tests (builds and serves the app itself)
+```
+E2E needs a Chromium: run `npx playwright install chromium` once, or point `PW_CHROMIUM_PATH` at an existing binary
+(Cloud Sessions: `PW_CHROMIUM_PATH=/opt/pw-browsers/chromium npm run test:e2e`). The suite covers startup, adding and
+connecting scenes, Auto Arrange + undo/redo, reciprocal edges and self-loops, project switching, reload persistence and
+TR/EN switching, using test ids and DOM geometry (no screenshot comparisons).
+
 ## Project library (v0.4A)
 
 The **Projects** button in the top bar opens the library: create, open, rename, duplicate and delete projects, add the

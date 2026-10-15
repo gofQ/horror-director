@@ -15,6 +15,7 @@ import type {
   Trigger,
 } from '../lib/schema'
 import { sampleProject } from '../lib/sample'
+import { computeLayout } from '../lib/layout'
 
 export type View = 'graph' | 'timeline' | 'characters' | 'analysis'
 export type Selection = { type: 'scene' | 'edge'; id: string } | null
@@ -73,6 +74,8 @@ interface State {
   deleteScene: (id: string) => void
   deleteScenes: (ids: string[]) => void
   setStart: (id: string) => void
+  /** Auto-arranges scene positions (positions only). One undo step; returns false when nothing moved. */
+  arrangeScenes: () => boolean
 
   addTransition: (source: string, target: string) => string | null
   updateTransition: (id: string, patch: Partial<Transition>) => void
@@ -267,6 +270,22 @@ export const useStore = create<State>()(
             // React Flow reports a Delete keypress as several events; fold them into one step.
             { key: 'delete', ms: 300 },
           ),
+        arrangeScenes: () => {
+          const pos = computeLayout(get().project)
+          const moved = get().project.scenes.some((sc) => {
+            const p = pos[sc.id]
+            return p && (p.x !== sc.position.x || p.y !== sc.position.y)
+          })
+          if (!moved) return false
+          // no coalesce key: exactly one history entry holding the previous project
+          set((s) => ({
+            project: {
+              ...s.project,
+              scenes: s.project.scenes.map((sc) => (pos[sc.id] ? { ...sc, position: pos[sc.id] } : sc)),
+            },
+          }))
+          return true
+        },
         setStart: (id) => set((s) => ({ project: { ...s.project, startSceneId: id } })),
 
         addTransition: (source, target) => {

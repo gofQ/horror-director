@@ -50,12 +50,12 @@ export function LibraryDialog({ onClose, onPickImport, onBackup }: Props) {
 
   return (
     <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div ref={ref} className="modal library" role="dialog" aria-modal="true" aria-labelledby="library-title">
+      <div ref={ref} className="modal library" data-testid="library-dialog" role="dialog" aria-modal="true" aria-labelledby="library-title">
         <h3 id="library-title">{t('lib.title')}</h3>
         <p className="muted">{t('lib.intro')}</p>
 
         <div className="library-actions">
-          <button className="btn primary" onClick={() => create()} disabled={externalChange}>
+          <button className="btn primary" data-testid="library-new" onClick={() => create()} disabled={externalChange}>
             <FolderPlus size={15} /> {t('lib.new')}
           </button>
           <button className="btn" onClick={() => create(sampleProject())} disabled={externalChange}>
@@ -102,7 +102,7 @@ export function LibraryDialog({ onClose, onPickImport, onBackup }: Props) {
             const isActive = m.id === library.activeId
             const bad = damaged[m.id]
             return (
-              <li key={m.id} className={`library-row${isActive ? ' active' : ''}`}>
+              <li key={m.id} data-testid="library-row" data-active={isActive} className={`library-row${isActive ? ' active' : ''}`}>
                 <div className="library-main">
                   {renaming?.id === m.id ? (
                     <form
@@ -178,6 +178,7 @@ export function LibraryDialog({ onClose, onPickImport, onBackup }: Props) {
                         {!isActive && (
                           <button
                             className="btn small primary"
+                            data-testid="library-open"
                             disabled={externalChange}
                             onClick={() => finish(openProject(m.id), t('lib.status.opened', { name: m.name }), true)}
                           >

@@ -38,7 +38,7 @@ function SaveBadge({ status }: { status: SaveStatus }) {
           ? t('save.savedAt', { time: formatTime(status.at) })
           : t('save.saved')
   return (
-    <span className={`save-badge ${status.state}`} role="status" aria-live="polite" title={t('save.tip')}>
+    <span className={`save-badge ${status.state}`} data-testid="save-badge" role="status" aria-live="polite" title={t('save.tip')}>
       <Save size={13} /> {text}
     </span>
   )
@@ -53,6 +53,7 @@ function LanguageSwitch() {
         <button
           key={l}
           lang={l}
+          data-testid={`lang-${l}`}
           className={l === lang ? 'active' : ''}
           aria-pressed={l === lang}
           title={LANG_NAMES[l]}
@@ -188,15 +189,15 @@ export function App() {
           <span className="project-name" title={project.name}>
             {project.name}
           </span>
-          <button className="btn icon" onClick={undo} disabled={!canUndo} title={t('tip.undo')} aria-label={t('btn.undo')}>
+          <button className="btn icon" data-testid="undo-btn" onClick={undo} disabled={!canUndo} title={t('tip.undo')} aria-label={t('btn.undo')}>
             <Undo2 size={15} />
           </button>
-          <button className="btn icon" onClick={redo} disabled={!canRedo} title={t('tip.redo')} aria-label={t('btn.redo')}>
+          <button className="btn icon" data-testid="redo-btn" onClick={redo} disabled={!canRedo} title={t('tip.redo')} aria-label={t('btn.redo')}>
             <Redo2 size={15} />
           </button>
           <SaveBadge status={saveStatus} />
           <LanguageSwitch />
-          <button className="btn" onClick={() => setLibraryOpen(true)} title={t('lib.openTip')} aria-haspopup="dialog">
+          <button className="btn" data-testid="projects-btn" onClick={() => setLibraryOpen(true)} title={t('lib.openTip')} aria-haspopup="dialog">
             <FolderOpen size={15} /> <span>{t('lib.open')}</span>
           </button>
           <button className="btn primary" onClick={doExport} title={t('tip.backup')} aria-label={t('aria.backup')}>

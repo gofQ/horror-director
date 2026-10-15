@@ -5,6 +5,7 @@ import {
   BaseEdge,
   Controls,
   EdgeLabelRenderer,
+  getViewportForBounds,
   Handle,
   MarkerType,
   MiniMap,
@@ -19,14 +20,16 @@ import {
   type NodeChange,
   type EdgeChange,
   type NodeProps,
-  getBezierPath,
 } from '@xyflow/react'
-import { Flag, Repeat, Zap } from 'lucide-react'
+import { Flag, Network, Repeat, Zap } from 'lucide-react'
+import { useState } from 'react'
 import { useStore } from '../store/useStore'
 import { SCENE_KINDS, crossingOf, type Scene, type SceneKind, type TransitionStyle } from '../lib/schema'
 import { KIND_COLOR } from '../lib/theme'
 import { useT } from '../i18n/store'
 import { analyze } from '../lib/graph'
+import { edgeGeometry } from '../lib/edgePath'
+import { NODE_H, NODE_W } from '../lib/layout'
 
 type SceneNodeData = {
   scene: Scene
@@ -82,29 +85,40 @@ function SceneNode({ data, selected }: NodeProps<SceneFlowNode>) {
   )
 }
 
-type TransitionData = { label: string; style: string; crossing: string; selfLoop: boolean; color: string }
+type TransitionData = {
+  label: string
+  style: string
+  crossing: string
+  selfLoop: boolean
+  color: string
+  /** The opposite ordered pair also exists. */
+  reciprocal: boolean
+  /** Stable 0/1 tie-break (from ids) so a reciprocal pair routes on different lanes. */
+  rank: 0 | 1
+}
 type TransitionFlowEdge = Edge<TransitionData, 'transition'>
 
 function TransitionEdge(props: EdgeProps<TransitionFlowEdge>) {
-  const { id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, data, selected } = props
+  const { id, sourceX, sourceY, targetX, targetY, data, selected } = props
   const d = data!
   const { t } = useT()
-  let path: string
-  let lx: number
-  let ly: number
-  if (d.selfLoop) {
-    path = `M ${sourceX},${sourceY} C ${sourceX + 90},${sourceY - 150} ${targetX - 90},${targetY - 150} ${targetX},${targetY}`
-    lx = (sourceX + targetX) / 2
-    ly = sourceY - 112
-  } else {
-    ;[path, lx, ly] = getBezierPath({ sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition })
-  }
+  const select = useStore((s) => s.select)
+  const geo = edgeGeometry({
+    sx: sourceX,
+    sy: sourceY,
+    tx: targetX,
+    ty: targetY,
+    self: d.selfLoop,
+    reciprocal: d.reciprocal,
+    rank: d.rank,
+  })
   const crossing = d.crossing !== 'same-layer'
+  const text = d.label || t(`style.${d.style as TransitionStyle}`)
   return (
     <>
       <BaseEdge
         id={id}
-        path={path}
+        path={geo.d}
         markerEnd={`url(#arrow-${id})`}
         interactionWidth={22}
         style={{
@@ -121,12 +135,16 @@ function TransitionEdge(props: EdgeProps<TransitionFlowEdge>) {
       </defs>
       <EdgeLabelRenderer>
         <div
-          className={`edge-label${selected ? ' selected' : ''}`}
-          style={{ transform: `translate(-50%, -50%) translate(${lx}px, ${ly}px)`, borderColor: d.color }}
+          className={`edge-label nodrag nopan${selected ? ' selected' : ''}`}
+          data-testid="edge-label"
+          data-edge-id={id}
+          title={text}
+          style={{ transform: `translate(-50%, -50%) translate(${geo.labelX}px, ${geo.labelY}px)`, borderColor: d.color }}
+          onClick={() => select({ type: 'edge', id })}
         >
           {d.crossing === 'reality->dream' && <span title={t('crossing.down')}>↓ </span>}
           {d.crossing === 'dream->reality' && <span title={t('crossing.up')}>↑ </span>}
-          {d.label || t(`style.${d.style as TransitionStyle}`)}
+          {text}
         </div>
       </EdgeLabelRenderer>
     </>
@@ -147,6 +165,9 @@ function Canvas() {
   const addScene = useStore((s) => s.addScene)
   const rf = useReactFlow()
   const { t } = useT()
+  const arrangeScenes = useStore((s) => s.arrangeScenes)
+  const sceneCount = useStore((s) => s.project.scenes.length)
+  const [arrangeMsg, setArrangeMsg] = useState('')
 
   const analysis = useMemo(() => analyze(project), [project])
 
@@ -173,6 +194,7 @@ function Canvas() {
 
   const edges: TransitionFlowEdge[] = useMemo(() => {
     const kind = new Map(project.scenes.map((s) => [s.id, s.kind]))
+    const pairs = new Set(project.transitions.map((t) => `${t.source}\u0000${t.target}`))
     return project.transitions.map((t) => {
       const a = kind.get(t.source) ?? 'reality'
       const b = kind.get(t.target) ?? 'reality'
@@ -192,6 +214,8 @@ function Canvas() {
           crossing,
           selfLoop: t.source === t.target,
           color,
+          reciprocal: t.source !== t.target && pairs.has(`${t.target}\u0000${t.source}`),
+          rank: (t.source < t.target ? 0 : 1) as 0 | 1,
         },
       }
     })
@@ -219,6 +243,34 @@ function Canvas() {
     [addTransition],
   )
 
+  /** Fits the arranged graph incl. the room self-loop arcs (above) and back-edge arcs (below) need. */
+  const fitArranged = () => {
+    const scenes = useStore.getState().project.scenes
+    if (scenes.length === 0) return
+    const xs = scenes.map((sc) => sc.position.x)
+    const ys = scenes.map((sc) => sc.position.y)
+    const minX = Math.min(...xs)
+    const minY = Math.min(...ys)
+    const bounds = {
+      x: minX - 60,
+      y: minY - 170,
+      width: Math.max(...xs) + NODE_W - minX + 120,
+      height: Math.max(...ys) + NODE_H - minY + 170 + 200,
+    }
+    const el = document.querySelector('.react-flow')
+    const w = el?.clientWidth ?? 900
+    const h = el?.clientHeight ?? 600
+    const vp = getViewportForBounds(bounds, w, h, 0.2, 1, 0.04)
+    void rf.setViewport(vp, { duration: 300 })
+  }
+
+  const autoArrange = () => {
+    const moved = arrangeScenes()
+    setArrangeMsg(moved ? t('graph.arranged') : t('graph.alreadyArranged'))
+    // viewport only: positions live in the project and are never read back from the viewport
+    if (moved) setTimeout(fitArranged, 50)
+  }
+
   const addAtCenter = (kind: SceneKind) => {
     const el = document.querySelector('.react-flow')
     const r = el?.getBoundingClientRect()
@@ -238,12 +290,26 @@ function Canvas() {
             key={k}
             className="btn small"
             style={{ ['--kind' as string]: KIND_COLOR[k] }}
+            data-testid={`add-${k}`}
             onClick={() => addAtCenter(k)}
             title={t(`kind.${k}.hint`)}
           >
             <span className="kind-dot" /> {t(`kind.${k}`)}
           </button>
         ))}
+        <span className="palette-sep" aria-hidden="true" />
+        <button
+          className="btn small"
+          data-testid="auto-arrange"
+          onClick={autoArrange}
+          disabled={sceneCount < 2}
+          title={t('graph.autoArrangeTip')}
+        >
+          <Network size={14} /> {t('graph.autoArrange')}
+        </button>
+        <span className="sr-only" role="status" aria-live="polite">
+          {arrangeMsg}
+        </span>
       </div>
       <ReactFlow
         nodes={nodes}
