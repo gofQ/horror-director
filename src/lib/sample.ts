@@ -1,4 +1,4 @@
-import type { Character, Project, Scene, SceneKind, Transition, Trigger } from './schema'
+import type { Character, Project, Scene, SceneKind, Shot, Transition, Trigger } from './schema'
 
 const sc = (
   id: string,
@@ -18,9 +18,22 @@ const sc = (
   duration: 120,
   loop: { enabled: false, maxIterations: 0, exitCondition: '' },
   triggers: [],
+  shots: [],
   characterStates: {},
   ...extra,
 })
+
+const sh = (
+  id: string,
+  title: string,
+  start: number,
+  duration: number,
+  framing: Shot['framing'],
+  movement: Shot['movement'],
+  technique: Shot['technique'],
+  soundNotes = '',
+  visualNotes = '',
+): Shot => ({ id, title, start, duration, framing, movement, technique, soundNotes, visualNotes })
 
 const tr = (
   id: string,
@@ -89,6 +102,11 @@ export function sampleProject(): Project {
       triggers: [
         tg('t1', 'Lights flicker', 'environment', 20, 3, 'Hall lights stutter once.'),
         tg('t2', 'Door creak', 'audio', 55, 4, 'Apartment door swings open on its own.'),
+      ],
+      shots: [
+        sh('sh1', 'Arrival down the corridor', 0, 25, 'wide', 'tracking', 'none', 'Fluorescent hum swells; footsteps echo.', 'Long one-point-perspective hall, door ajar at the end.'),
+        sh('sh2', 'Hand on the doorknob', 25, 10, 'extreme-close-up', 'static', 'none', 'Hum drops out for a beat.', 'Her trembling hand; the knob is warm.'),
+        sh('sh3', 'Reflection that is not hers', 60, 12, 'medium', 'handheld', 'identity-discontinuity', 'Faint lullaby under the TV static.', 'Mirror shows Elena a half-second late.'),
       ],
     }),
     sc('s_living', 'Living Room', 'reality', 380, 80, {

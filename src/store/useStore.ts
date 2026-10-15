@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { emptyProject, newCharacter, newScene, newTransition, newTrigger, type DefaultNames } from '../lib/factory'
+import { emptyProject, newCharacter, newScene, newShot, newTransition, newTrigger, type DefaultNames } from '../lib/factory'
 import { getLang } from '../i18n/store'
 import { translate } from '../i18n'
 import { uid } from '../lib/id'
@@ -12,10 +12,12 @@ import type {
   Scene,
   SceneKind,
   Transition,
+  Shot,
   Trigger,
 } from '../lib/schema'
 import { sampleProject } from '../lib/sample'
 import { computeLayout } from '../lib/layout'
+import { nextStart, sortedByTime } from '../lib/shots'
 
 export type View = 'graph' | 'timeline' | 'characters' | 'analysis' | 'simulator'
 export type Selection = { type: 'scene' | 'edge'; id: string } | null
@@ -31,6 +33,7 @@ export function defaultNames(): DefaultNames {
     scene: translate(l, 'default.scene'),
     ending: translate(l, 'default.ending'),
     trigger: translate(l, 'default.trigger'),
+    shot: translate(l, 'default.shot'),
     character: translate(l, 'default.character'),
     state: translate(l, 'default.state'),
     stateIdle: translate(l, 'default.stateIdle'),
@@ -86,6 +89,16 @@ interface State {
   addTrigger: (sceneId: string, time: number) => string
   updateTrigger: (sceneId: string, id: string, patch: Partial<Trigger>) => void
   deleteTrigger: (sceneId: string, id: string) => void
+  /** Cinematic shots (planning notes; independent of triggers/transitions). Authored timing is never changed implicitly. */
+  addShot: (sceneId: string) => string
+  updateShot: (sceneId: string, id: string, patch: Partial<Omit<Shot, 'id'>>) => void
+  deleteShot: (sceneId: string, id: string) => void
+  /** Inserts a copy right after the original, starting where the original ends. */
+  duplicateShot: (sceneId: string, id: string, copyTitle: string) => string | null
+  /** Moves a shot one place in the authored order (timing untouched). */
+  moveShot: (sceneId: string, id: string, dir: -1 | 1) => void
+  /** Reorders by start time (stable); one undo step, no history entry when already sorted. */
+  sortShotsByTime: (sceneId: string) => void
 
   addCharacter: () => string
   updateCharacter: (id: string, patch: Partial<Character>) => void
@@ -349,6 +362,56 @@ export const useStore = create<State>()(
             })),
             selectedTriggerId: s.selectedTriggerId === id ? null : s.selectedTriggerId,
           })),
+
+        addShot: (sceneId) => {
+          const scene = get().project.scenes.find((x) => x.id === sceneId)
+          const shot = newShot(nextStart(scene?.shots ?? []), defaultNames())
+          set((s) => ({ project: mapScene(s.project, sceneId, (sc) => ({ ...sc, shots: [...sc.shots, shot] })) }))
+          return shot.id
+        },
+        updateShot: (sceneId, id, patch) =>
+          set(
+            (s) => ({
+              project: mapScene(s.project, sceneId, (sc) => ({
+                ...sc,
+                shots: sc.shots.map((x) => (x.id === id ? { ...x, ...patch } : x)),
+              })),
+            }),
+            { key: `shot:${id}:${keysOf(patch)}` },
+          ),
+        deleteShot: (sceneId, id) =>
+          set((s) => ({ project: mapScene(s.project, sceneId, (sc) => ({ ...sc, shots: sc.shots.filter((x) => x.id !== id) })) })),
+        duplicateShot: (sceneId, id, copyTitle) => {
+          const src = get().project.scenes.find((x) => x.id === sceneId)?.shots.find((x) => x.id === id)
+          if (!src) return null
+          const copy: Shot = { ...src, id: uid('shot'), title: copyTitle, start: Math.round((src.start + src.duration) * 100) / 100 }
+          set((s) => ({
+            project: mapScene(s.project, sceneId, (sc) => {
+              const i = sc.shots.findIndex((x) => x.id === id)
+              return { ...sc, shots: [...sc.shots.slice(0, i + 1), copy, ...sc.shots.slice(i + 1)] }
+            }),
+          }))
+          return copy.id
+        },
+        moveShot: (sceneId, id, dir) => {
+          const shots = get().project.scenes.find((x) => x.id === sceneId)?.shots ?? []
+          const i = shots.findIndex((x) => x.id === id)
+          const j = i + dir
+          if (i < 0 || j < 0 || j >= shots.length) return
+          set((s) => ({
+            project: mapScene(s.project, sceneId, (sc) => {
+              const next = [...sc.shots]
+              ;[next[i], next[j]] = [next[j], next[i]]
+              return { ...sc, shots: next }
+            }),
+          }))
+        },
+        sortShotsByTime: (sceneId) => {
+          const shots = get().project.scenes.find((x) => x.id === sceneId)?.shots ?? []
+          const sorted = sortedByTime(shots)
+          if (sorted.every((x, i) => x === shots[i])) return
+          set((s) => ({ project: mapScene(s.project, sceneId, (sc) => ({ ...sc, shots: sortedByTime(sc.shots) })) }))
+        },
 
         addCharacter: () => {
           const c = newCharacter(defaultNames())

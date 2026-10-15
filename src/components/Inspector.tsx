@@ -1,8 +1,10 @@
-import { Flag, Trash2, X } from 'lucide-react'
+import { useState } from 'react'
+import { Clapperboard, Flag, Trash2, X } from 'lucide-react'
 import { useStore } from '../store/useStore'
 import { useT } from '../i18n/store'
 import { SCENE_KINDS, TRANSITION_STYLES, crossingOf } from '../lib/schema'
 import { Field, NumberInput, Select, TextArea, TextInput } from './fields'
+import { ShotPlannerDialog } from './ShotPlannerDialog'
 
 function SceneInspector({ id }: { id: string }) {
   const { t } = useT()
@@ -14,6 +16,7 @@ function SceneInspector({ id }: { id: string }) {
   const setView = useStore((s) => s.setView)
   const setTimelineScene = useStore((s) => s.setTimelineScene)
   const setCharState = useStore((s) => s.setSceneCharacterState)
+  const [shotsOpen, setShotsOpen] = useState(false)
   if (!scene) return null
   const isStart = project.startSceneId === id
 
@@ -109,6 +112,12 @@ function SceneInspector({ id }: { id: string }) {
       >
         {t('btn.editTimeline')}
       </button>
+
+      <div className="section-title">{t('shot.open', { n: scene.shots.length })}</div>
+      <button className="btn" data-testid="open-shots" onClick={() => setShotsOpen(true)} title={t('shot.openTip')}>
+        <Clapperboard size={14} /> {t('shot.open', { n: scene.shots.length })}
+      </button>
+      {shotsOpen && <ShotPlannerDialog sceneId={id} onClose={() => setShotsOpen(false)} />}
     </>
   )
 }

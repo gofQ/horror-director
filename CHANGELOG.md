@@ -5,10 +5,24 @@ the current product only and `progress.md` tracks engineering status.
 
 The labels below (v0.1 … v0.5C) are **development milestones**, not published releases: the project has no tagged
 releases and `package.json` stays at `0.1.0`. Each milestone was developed on its own branch and merged through a pull
-request into the integration branch (`claude/optimistic-tesla-r2v8g6`). The JSON schema stays at `schemaVersion: 1`
-throughout.
+request into the integration branch (`claude/optimistic-tesla-r2v8g6`). The JSON schema was `schemaVersion: 1`
+until v0.6A, which introduced `schemaVersion: 2` (schema-1 files are still imported).
 
 Every future feature or fix milestone must add an entry here (see `CLAUDE.md`).
+
+## v0.6A — Cinematic shot planner
+
+Pull request: _link added when the pull request is opened_.
+
+### Added
+- **Cinematic shots** per scene: ordered planning notes with a stable id, title, start and duration (seconds relative to the scene), framing (wide, medium, close-up, extreme close-up, POV), camera movement (static, pan, tilt, tracking, handheld), psychological technique (none, match cut, impossible space, identity discontinuity, false awakening), sound cue notes and visual/action notes. They are independent of triggers and transitions and are not engine commands.
+- **Shot planner** (TR/EN) opened from the scene Inspector: add, edit, duplicate, move up/down, delete and "Sort by time"; timing relative to the scene duration with a position bar; warnings for overlapping shots, shots ending after the scene and shots out of time order. Authored timing is never changed automatically. Keyboard-operable, Undo/Redo inside the dialog, mobile layout.
+- Sample project demonstrates shots in the first scene.
+
+### Changed
+- **JSON schema 2**: exports are written as `schemaVersion: 2` and include `scene.shots`. Schema-1 exports and bare legacy project files are still imported (missing `shots` become empty lists, with an informational notice). Duplicate shot ids, invalid values and unknown fields (also inside shots) remain blocking import errors; overlapping or late shots are warnings only.
+- Library project records are now written as `{ v: 2, project }`. Records written by earlier builds (`v: 1`) are still read, normalized in memory only and never rewritten until the project is edited; the legacy single-project key is never modified. An older build reading a `v: 2` record treats it as damaged and preserves it instead of dropping shots.
+- `package.json` version metadata is unchanged.
 
 ## v0.5C — Route comparison and documentation cleanup
 

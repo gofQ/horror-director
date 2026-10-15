@@ -27,6 +27,9 @@ documentation: [README.tr.md](README.tr.md).
   triggers at their authored intensity and route statistics.
 - **Pacing analysis:** neutral, deterministic observations about the simulated route (see below).
 - **Route comparison:** pin a route as Route A, build Route B and compare them side by side (see below).
+- **Shot planner:** ordered cinematic shot notes per scene (framing, camera movement, psychological technique, sound
+  and visual notes, start/duration relative to the scene) opened from the scene Inspector. Planning notes only — they
+  are independent of triggers and transitions, warn about overlaps and overruns, and never change your timing.
 - **Project library:** several projects, open/create/rename/duplicate/delete, import as new, remembered active project.
 - **Safety:** undo/redo (50 steps), strict import validation, save-status indicator, JSON backup, recovery of unreadable data.
 - **English and Turkish** interface, responsive dark UI (the inspector becomes a bottom sheet on small screens).
@@ -81,7 +84,12 @@ npm run preview    # serve the production build
    visits compare correctly. Both routes use the same limits and thresholds and are re-simulated against the current
    project; if graph edits invalidate Route A you get an explicit warning and the comparison is marked incomplete.
    **Replace Route A** or **Clear comparison** at any time. There is deliberately no "best route" ranking.
-7. Use **Backup** regularly — browser storage can be cleared.
+7. **Plan shots:** select a scene and open **Shot planner** in the Inspector. Add shots, set start/duration (seconds
+   from the scene start), framing, camera movement, a psychological/reality technique and sound/visual notes; duplicate,
+   move up/down or delete them. Warnings flag overlapping shots, shots that end after the scene and shots whose start
+   precedes the previous shot; nothing is changed automatically. **Sort by time** reorders the list (timing untouched).
+   The list shows the authored order, which is also the export order. Undo/Redo covers every change.
+8. Use **Backup** regularly — browser storage can be cleared.
 
 Simulation, pacing and comparison state is separate from the project: it never changes project data, autosave, the
 library or undo history, it is not exported, and it resets when you switch projects.
@@ -91,9 +99,14 @@ library or undo history, it is not exported, and it resets when you switch proje
 - **Storage** (browser `localStorage`): `horror-director:library:v1` (index), `horror-director:proj:<id>` (one record per
   project), `horror-director:lang` (language). Ids are internal and independent of names. Library data (ids,
   timestamps, active project) is never written into project JSON.
-- **Backup** downloads the *active* project in the schema-v1 export format. Importing validates strictly (duplicate ids,
-  dangling references, unrecognised fields, newer schema versions are errors shown before anything is replaced). A file
+- **Backup** downloads the *active* project in the schema-2 export format. Importing validates strictly (duplicate ids,
+  dangling references, invalid values, unrecognised fields, newer schema versions are errors shown before anything is replaced). A file
   can be imported as a new project or, with confirmation, replace the active project.
+- **Older files and data:** schema-1 exports and bare project files are still imported; they have no shots, so shot
+  lists start empty (an informational notice says so) and the next backup is schema 2 with all other fields unchanged.
+  Stored projects from earlier versions are read the same way and are only rewritten when you edit them. Project
+  records are stored as `{ v: 2, project }` (earlier `v: 1` records are still read); an older build that cannot read
+  shots shows such a record as damaged and preserves it rather than dropping data. Downgrading is not supported.
 - **Migration:** the single-project storage of early versions is validated, copied into the library under the id
   `legacy`, verified and only then indexed. The original key (`horror-director:project:v1`) is never modified or deleted.
 - **Safe switching and recovery:** pending edits are saved before switching; unreadable stored data is preserved
@@ -104,13 +117,17 @@ library or undo history, it is not exported, and it resets when you switch proje
 ```jsonc
 {
   "format": "horror-director",
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "exportedAt": "ISO-8601",
   "project": {
     "name": "", "description": "", "startSceneId": "scene id | null",
     "scenes": [{ "id", "title", "kind": "reality|dream|nightmare|memory|ending", "position": {"x","y"},
                  "unrealLevel": "/Game/Maps/…", "ambience", "duration", "loop": {"enabled","maxIterations","exitCondition"},
                  "triggers": [{ "id","name","kind","time","intensity","description","condition","once" }],
+                 "shots": [{ "id","title","start","duration","framing": "wide|medium|close-up|extreme-close-up|pov",
+                             "movement": "static|pan|tilt|tracking|handheld",
+                             "technique": "none|match-cut|impossible-space|identity-discontinuity|false-awakening",
+                             "soundNotes","visualNotes" }],
                  "characterStates": { "<characterId>": "<stateId>" } }],
     "transitions": [{ "id","source","target","label","style","condition","duration" }],
     "characters": [{ "id","name","role","color","description","states":[{ "id","name","behavior","aggression" }] }]
@@ -155,6 +172,8 @@ Chromium and uses test ids and DOM geometry rather than screenshot comparisons.
 - Only the current route (and one pinned route) is analyzed or compared; routes are session-only and not saved or exported.
 - Multiple browser tabs are not merged; there is no cloud sync. Browser storage can be cleared, so keep backups.
 - Auto Arrange uses a readability heuristic, not minimal crossings; very dense graphs can still have overlapping labels.
+- Shots are planning notes in a simple list: no storyboard images, camera timeline editor or engine/Unreal import yet. The list
+  keeps authored order; sorting by time is an explicit action.
 - Undo/redo history is session-only and cleared when switching projects.
 - No Unreal-side importer yet; the JSON format is documented above. The production bundle is not code-split.
 - Turkish strings have not been reviewed by a native game-industry editor; E2E covers Chromium only.
