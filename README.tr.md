@@ -19,6 +19,10 @@ korku ritmini planlamak isteyen bağımsız geliştiriciler ve küçük ekipler.
 - **Döngüler:** kendine döngüler, sahne başına döngü ayarları (en çok yineleme, çıkış koşulu) ve otomatik döngü tespiti.
 - **Korku zaman çizelgesi:** sahne başına tetikleyici izi; sürüklenebilir işaretçiler, yoğunluk (0–10), tetikleyici
   türleri (jumpscare, ses, görsel, YZ, çevre, anlatı), koşullar ve bir kez tetikleme seçeneği.
+- **Sinematik sekans:** Zaman çizelgesi sekmesindeki salt okunur **Sekans** modu; bir sahnenin çekimlerini, ses ipuçlarını ve
+  tetikleyicilerini ortak bir zaman ekseninde (Kamera, Ses ve Korku olayları izleri) sahne sonu sınırı, katmanlı ses, zaman
+  imleci, ayrıntılar, zaman sıralı liste ve yakınlaştırmayla gösterir. Mevcut veriden türetilir (hiçbir şey saklanmaz),
+  simülasyon değil yazılmış planlama zamanlamasını gösterir ve değişiklikler için mevcut düzenleyicileri açar.
 - **Karakterler:** saldırganlık düzeyli davranış durumları ve sahne × karakter matrisi.
 - **Analiz:** yapısal kontroller (başlangıç yok, ulaşılamayan sahneler, çıkmaz sokaklar, çıkışsız kapalı döngüler,
   kaçılamayan rüyalar, sahne süresini aşan tetikleyiciler, eski referanslar) ve proje istatistikleri.
@@ -62,6 +66,11 @@ npm run preview    # üretim derlemesini sun
    içeren "The Hollow Apartment" demo projesini yükler (İngilizce yazılmıştır).
 2. **Korku anlarını planlayın.** **Zaman çizelgesi**nde, belirli bir zaman ve yoğunlukta tetikleyici eklemek için izi
    çift tıklayın; zamanını değiştirmek için işaretçileri sürükleyin.
+   Sahnenin çekimlerini, ses ipuçlarını ve tetikleyicilerini birlikte görmek için Zaman çizelgesini **Sekans**a geçirin:
+   bir sahne seçin, bir öğeyi seçin (tıklayın ya da Tab ve Enter) ve ayrıntılarını görün, zaman imleci o ana gelir; uzun
+   sahneler için Sığdır / yakınlaştırmayı kullanın; ayrıntılardaki düğmeyle öğeyi Çekim planlayıcıda, Ses planlayıcıda ya da
+   tetikleyici düzenleyicide açın. Sahne sonunu aşan öğeler yazdığınız yerde kalır (eksen uzar ve not gösterilir); koşullu
+   tetikleyiciler oyunda hiç çalışmayabileceği için koşullu olarak işaretlenir. Katmanlı ses ve sessizlik normaldir, hata değildir.
 3. **Karakterleri izleyin** (**Karakterler**) ve yapıyı **Analiz**de kontrol edin.
 4. **Rota simüle edin** (**Simülatör**): bulunduğunuz sahneden geçişleri seçin. Geçiş koşulları *asla
    değerlendirilmez*; o geçişi seçerek yaptığınız varsayımlar olarak gösterilir.
@@ -179,6 +188,8 @@ derlemesine karşı Chromium'da çalışır; ekran görüntüsü karşılaştır
 - Otomatik Düzenle en az kesişimi değil okunabilirliği hedefleyen bir sezgisel yöntemdir; çok yoğun graflarda etiketler yine üst üste binebilir.
 - Çekim planları basit bir liste halinde planlama notlarıdır: storyboard görseli, kamera zaman çizelgesi düzenleyicisi ya da
   motor/Unreal içe aktarımı henüz yoktur. Liste yazılış sırasını korur; zamana göre sıralama açık bir eylemdir.
+- Sekans görünümü türetilmiş bir özettir: çalma, dalga biçimi ya da simülasyon yoktur, öğeleri kendisi düzenleyemez, seçim, yakınlık
+  ve imleci yalnızca oturum boyunca tutar ve koşullu tetikleyicileri değerlendirmek yerine koşullu olarak işaretler.
 - Ses ipuçları planlama notlarıdır: çalma, dalga biçimi, 3B uzamsallaştırma, yapay zekâ üretimi ya da motor/Unreal çalışma
   zamanı komutu ve varlık kütüphanesi yoktur. İpuçları tetikleyicilerden bağımsızdır ve ritim istatistiklerini etkilemez.
 - Geçiş yönlendirmeleri planlama notlarıdır: üretilmiş görsel, animasyon ya da 3D önizleme yoktur ve Unreal'de çalıştırılmaz.

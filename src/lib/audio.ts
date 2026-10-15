@@ -39,7 +39,7 @@ export function analyzeAudioCues(scene: Pick<Scene, 'audioCues' | 'duration'>): 
  * Display lane per cue (greedy, in authored order): overlapping cues simply use more lanes.
  * Touching ends do not overlap. Never changes the authored order or timing.
  */
-export function assignLanes(cues: readonly AudioCue[]): { lanes: Record<string, number>; count: number } {
+export function assignLanes(cues: readonly Pick<AudioCue, 'id' | 'start' | 'duration'>[]): { lanes: Record<string, number>; count: number } {
   const laneEnds: number[] = []
   const lanes: Record<string, number> = {}
   for (const c of cues) {

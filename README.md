@@ -19,6 +19,10 @@ documentation: [README.tr.md](README.tr.md).
 - **Loops:** self-loops, per-scene loop settings (max iterations, exit condition) and automatic cycle detection.
 - **Horror timeline:** per-scene trigger track with draggable markers, intensity (0–10), trigger types (jumpscare,
   audio, visual, AI, environment, narrative), conditions and a fire-once flag.
+- **Cinematic sequence:** a read-only **Sequence** mode inside the Timeline tab that lays a scene's shots, audio cues and
+  triggers on one shared time axis (Camera, Audio and Horror events tracks) with a scene-end boundary, layered audio,
+  a time cursor, details, a time-ordered list and zoom. It is derived from existing data (nothing is stored), shows
+  authored planning timing rather than a simulation, and opens the existing editors for changes.
 - **Characters:** behaviour states with aggression levels and a scene × character matrix.
 - **Analysis:** structural checks (no start, unreachable scenes, dead ends, closed loops without exit, inescapable
   dreams, triggers past scene duration, stale references) plus project statistics.
@@ -61,6 +65,11 @@ npm run preview    # serve the production build
    Set the start scene in the scene inspector. **Sample** loads "The Hollow Apartment", a demo with dream layers, a loop
    and two endings.
 2. **Plan scares.** In **Timeline**, double-click the track to add a trigger at that time and intensity; drag markers to retime.
+   Switch the Timeline to **Sequence** to see the scene's shots, audio cues and triggers together: pick a scene, select an
+   item (click, or Tab and Enter) to see its details and place the time cursor, use Fit / zoom for long scenes, and use the
+   button in the details to open the item in the Shot planner, the Audio planner or the trigger editor. Items beyond the
+   scene end stay where you authored them (the axis is extended and a note is shown); triggers with a condition are marked
+   as conditional because they may never fire in play. Layered audio and silence are normal, not errors.
 3. **Track characters** in **Characters** and check the structure in **Analysis**.
 4. **Simulate a route** in **Simulator:** pick transitions from the current scene. Transition conditions are *never
    evaluated*; they are shown as assumptions you make by choosing that transition.
@@ -206,6 +215,8 @@ Chromium and uses test ids and DOM geometry rather than screenshot comparisons.
 - Auto Arrange uses a readability heuristic, not minimal crossings; very dense graphs can still have overlapping labels.
 - Shots are planning notes in a simple list: no storyboard images, camera timeline editor or engine/Unreal import yet. The list
   keeps authored order; sorting by time is an explicit action.
+- The Sequence view is a derived overview: it has no playback, waveform or simulation, cannot edit items itself, keeps its
+  selection, zoom and cursor only for the session, and shows triggers with a condition as conditional rather than evaluating them.
 - Audio cues are planning notes: no playback, waveform, 3D spatialization, AI generation or engine/Unreal runtime
   instructions, and no asset library. Cues are independent of triggers and do not affect pacing statistics.
 - Transition directions are planning notes: no generated images, animation or 3D preview, and no Unreal execution. Stored
