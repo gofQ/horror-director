@@ -88,3 +88,34 @@ Unreal importer plugin / DataTable CSV export, audio cue library, scene thumbnai
 - Turkish strings are professionally phrased but have not been reviewed by a native game-industry editor; "Jumpscare" and "Glitch" are kept as genre terms.
 - Desktop top bar wraps to two rows below ~1500px in both languages.
 - v0.2 limitations (session-only history, multi-tab last-write-wins, etc.) are unchanged.
+
+## V0.4A — Multi-project library
+
+### Delivered
+- **Library UI** (`Projects` button → `LibraryDialog`): create, open/switch, rename (inline, validated, ≤120 chars), duplicate, delete (inline confirmation with "download backup first"), add sample, **import JSON as a new project**, explicit confirmed **replace active project**, damaged-entry handling (download raw / remove), save-failure callout with backup + retry. Active project is remembered across reloads. Top bar keeps Undo/Redo, save badge, TR/EN, and **Backup** (active project).
+- **Storage** (`src/lib/library.ts`): index `horror-director:library:v1` + one record `horror-director:proj:<id>` per project (random ids independent of names). Records hold the schema-v1 project unchanged; **no library metadata in project JSON or exports** (tested: export key sets, byte-identical exports before/after migration). New records are written, read back and verified before the index (commit point) references them; in-memory state is swapped only after storage succeeded.
+- **Migration v0.1–v0.3 → library**: legacy `horror-director:project:v1` is schema-validated, copied under the deterministic id `legacy`, verified, then indexed (`migratedFrom`). Idempotent (valid index ⇒ never re-migrates; crash between record and index ⇒ same record rewritten, no duplicates), never modifies/deletes the legacy key, preserves unreadable legacy data (`horror-director:unreadable:*`), and on quota/verify failure writes no index, removes the partial record, keeps the project open from memory with a banner and retries next boot.
+- **Recovery**: unreadable index is preserved then rebuilt from valid records; unreadable/missing records are listed as damaged and never overwritten (raw preserved even when removed from the library); damaged active project falls back to the first healthy one; if nothing is readable a fresh project is added beside damaged entries.
+- **Editing-session protection**: switching/creating/importing flushes pending saves first and aborts (state unchanged) if that fails; autosave writes only the active record + index; deleting a non-active project works even while the active one cannot save (frees space); undo/redo history and coalescing are cleared on every switch (isolation tested); selection, trigger selection and timeline reset to the new project's start scene. v0.2 undoable replacement of the active project stays.
+- **Multi-tab detection (not resolution)**: a `storage` event on the index or active record shows a banner and blocks library operations until reload.
+- **Infrastructure**: `createSafeStorage` now tracks multiple pending keys (record before index), `flush()` returns whether everything was written, plus `hasPending`/`discard`; `Backend` gained `keys()`; zustand `persist` removed from the editor store (autosave subscription in `src/store/library.ts`).
+- **i18n**: all new UI, banners, and library errors localized (TR/EN, parity tests cover them); library errors are codes mapped to `lib.err.*`.
+
+### Changed files
+- New: `src/lib/library.ts`, `src/store/library.ts`, `src/components/LibraryDialog.tsx`, `src/test/memoryBackend.ts`, `src/lib/library.test.ts`, `src/store/library.test.ts`.
+- Modified: `src/lib/persist.ts`, `src/store/useStore.ts`, `src/App.tsx`, `src/components/ImportDialog.tsx`, `src/i18n/{en,tr}.ts`, `src/styles.css`, `src/lib/persist.test.ts`, `src/i18n/render.test.tsx`, `README.md`, `README.tr.md`.
+- Deviation from plan: records use the prefix `horror-director:proj:` (not `…:project:`) so they can never collide with the legacy key `horror-director:project:v1`.
+
+### Test results
+- `npm run typecheck`, `npm test` (9 files, 149 tests: 20 library/migration/corruption, 35 store-level CRUD/switching/undo-isolation/import-export/failed-write/multi-tab, plus all v0.2/v0.3 suites unchanged in intent) and `npm run build` pass.
+- Chromium smoke test (Playwright), en-US and tr-TR: seeded v0.3 legacy data migrated with the legacy key byte-identical after create/rename/duplicate/delete/import/reload; import-as-new accepted and rejected (strict validation); reload restored the active project; undo disabled after switching; simulated quota failure blocked switching with backup/retry and recovered; second-tab banner + disabled actions; library dialog at 390px width without horizontal overflow; no console errors.
+
+### Known limitations / risks
+- **Multiple tabs are not merged** (last write wins per key); only detection + blocking of library operations is implemented. A stale tab can still overwrite its own active record or index before it notices.
+- Undo/redo history is not retained when switching projects (by design) or across reloads.
+- The legacy key is kept as a stale copy (never cleaned up in 4A); downgrading to ≤v0.3 would show that old copy.
+- No trash/undo for deleted projects (back up first); damaged projects are kept as raw backup under `horror-director:unreadable:*` when removed.
+- localStorage quota is shared by all projects and backups; very large libraries can hit it (errors are surfaced, nothing is partially written).
+- Migration validates the legacy data against the schema only (not full import-level integrity checks), so a schema-valid project with dangling references migrates as-is.
+- Library list shows name and last-updated time only (no scene counts/thumbnails); no per-row export (only the active project's Backup).
+- Per-project UI state (selected view, timeline scene) is not remembered per project.

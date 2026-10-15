@@ -20,6 +20,27 @@ everything as JSON for later Unreal Engine import. No backend, no paid APIs — 
 - Undo/redo (50 steps, Ctrl/Cmd+Z), strict import validation, save-status indicator and one-click JSON backup (Ctrl/Cmd+S).
 - Auto-save to `localStorage`, responsive dark UI (inspector becomes a bottom sheet on small screens).
 
+## Project library (v0.4A)
+
+The **Projects** button in the top bar opens the library: create, open, rename, duplicate and delete projects, add the
+sample, **import a JSON file as a new project**, or (explicitly, with confirmation) replace the active project from a file.
+The active project is remembered across reloads. **Backup** always downloads the *active* project in the unchanged
+schema-v1 export format — library data (ids, timestamps, active project) is never written into project JSON.
+
+- **Storage:** `horror-director:library:v1` (index), `horror-director:proj:<id>` (one record per project), all in
+  `localStorage`. Ids are internal and independent of names.
+- **Migration from v0.1–v0.3:** on first start the old single project (`horror-director:project:v1`) is validated,
+  copied into the library under the id `legacy`, read back and compared, and only then listed in the index. The original
+  key is **never modified or deleted** (it stays as a stale rollback copy), the migration never re-runs, and a crash or
+  failed write retries cleanly without duplicates. Unreadable legacy data is preserved (`horror-director:unreadable:<time>`)
+  and offered for download instead of being migrated.
+- **Switching is protected:** pending edits are saved first; if saving fails you stay on the current project and can
+  download a backup or retry. Undo/redo history belongs to the active project and is cleared on every switch.
+- **Damaged data:** an unreadable index is preserved and rebuilt from the stored project records; an unreadable project is
+  listed as damaged (raw data kept, downloadable) and is never overwritten.
+- **Known limit — multiple tabs:** two tabs editing the same library are *not* merged (last write wins). Horror Director
+  only detects a change from another tab, shows a banner and blocks library operations until you reload.
+
 ## Language / Dil
 
 The interface is fully available in **English** and **Türkçe**. The language is chosen on first visit from the browser

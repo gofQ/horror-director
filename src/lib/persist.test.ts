@@ -13,6 +13,7 @@ function memory(): Backend & { data: Map<string, string>; failWrites: boolean } 
       data.set(k, v)
     },
     removeItem: (k: string) => void data.delete(k),
+    keys: () => [...data.keys()],
   }
   return b
 }
