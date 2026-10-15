@@ -7,6 +7,7 @@ import { TRIGGER_COLOR } from '../lib/theme'
 import type { Scene } from '../lib/schema'
 import { AudioPlannerDialog } from './AudioPlannerDialog'
 import { ShotPlannerDialog } from './ShotPlannerDialog'
+import { ContextMenu, isEditableTarget, useContextMenu } from './ContextMenu'
 
 const ZOOMS = [1, 2, 4, 8]
 const LANE_H = 28
@@ -32,6 +33,7 @@ export function SequenceView({ scene, onEditTrigger }: { scene: Scene; onEditTri
   const [cursor, setCursor] = useState<number | null>(null)
   const [zoom, setZoom] = useState(1)
   const [editor, setEditor] = useState<{ kind: 'shot' | 'audio'; id: string } | null>(null)
+  const { menu, open: openMenu, close: closeMenu } = useContextMenu()
 
   // Derived every render: a deleted or renamed-away item can never leave a stale selection.
   const sel = seq.items.find((i) => i.key === selKey) ?? null
@@ -42,6 +44,32 @@ export function SequenceView({ scene, onEditTrigger }: { scene: Scene; onEditTri
     setSelKey(i.key)
     setCursor(i.start)
   }
+  /** Context menu for an item: select it or open the existing editor (the view itself stays read-only). */
+  const openItemMenu = (i: SequenceItem, x: number, y: number) => {
+    select(i)
+    openMenu({
+      x,
+      y,
+      ariaLabel: t('ctx.itemMenu'),
+      items: [
+        { id: 'select', label: t('ctx.select'), onSelect: () => select(i) },
+        { id: 'edit', label: t(`seq.edit.${i.kind}`), onSelect: () => (i.kind === 'trigger' ? onEditTrigger(i.id) : setEditor({ kind: i.kind, id: i.id })) },
+      ],
+    })
+  }
+  const itemMenuProps = (i: SequenceItem) => ({
+    onContextMenu: (e: React.MouseEvent) => {
+      if (isEditableTarget(e.target)) return
+      e.preventDefault()
+      openItemMenu(i, e.clientX, e.clientY)
+    },
+    onKeyDown: (e: React.KeyboardEvent) => {
+      if (!((e.shiftKey && e.key === 'F10') || e.key === 'ContextMenu')) return
+      e.preventDefault()
+      const r = e.currentTarget.getBoundingClientRect()
+      openItemMenu(i, r.left + Math.min(r.width / 2, 40), r.bottom)
+    },
+  })
   const kindLabel = (k: SequenceKind) => t(`seq.kind.${k}`)
   const timeText = (i: SequenceItem) =>
     i.kind === 'trigger' ? t('seq.row.at', { time: clock(i.start) }) : t('seq.row.time', { start: clock(i.start), end: clock(i.end) })
@@ -126,6 +154,7 @@ export function SequenceView({ scene, onEditTrigger }: { scene: Scene; onEditTri
                       'aria-label': ariaOf(i),
                       title: i.title,
                       onClick: () => select(i),
+                      ...itemMenuProps(i),
                     }
                     const sel_ = i.key === sel?.key ? ' selected' : ''
                     if (i.kind === 'trigger') {
@@ -195,6 +224,7 @@ export function SequenceView({ scene, onEditTrigger }: { scene: Scene; onEditTri
               data-key={i.key}
               aria-pressed={i.key === sel?.key}
               onClick={() => select(i)}
+              {...itemMenuProps(i)}
             >
               <span className="trigger-time">{timeText(i)}</span>
               <span className={`badge seq-kind seq-kind-${i.kind}`}>{kindLabel(i.kind)}</span>
@@ -272,6 +302,7 @@ export function SequenceView({ scene, onEditTrigger }: { scene: Scene; onEditTri
         </div>
       </div>
 
+      {menu && <ContextMenu state={menu} onClose={closeMenu} />}
       {editor?.kind === 'shot' && <ShotPlannerDialog sceneId={scene.id} focusId={editor.id} onClose={() => setEditor(null)} />}
       {editor?.kind === 'audio' && <AudioPlannerDialog sceneId={scene.id} focusId={editor.id} onClose={() => setEditor(null)} />}
     </div>

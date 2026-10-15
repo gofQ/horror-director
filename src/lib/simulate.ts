@@ -1,5 +1,5 @@
 import { diag, type Diagnostic } from './diagnostics'
-import { crossingOf, type CrossingType, type Project, type SceneKind, type TransitionStyle, type TriggerKind } from './schema'
+import { crossingOf, type BranchPort, type CrossingType, type Project, type SceneKind, type Transition, type TransitionStyle, type TriggerKind } from './schema'
 
 /**
  * Read-only story path simulation.
@@ -7,6 +7,10 @@ import { crossingOf, type CrossingType, type Project, type SceneKind, type Trans
  * The route is just the list of chosen transition ids; `simulateRoute` replays it from the start
  * scene every time, so edits to the graph automatically revalidate it. Nothing here evaluates
  * free-text conditions (they are surfaced as assumptions) and nothing mutates the project.
+ *
+ * IF (branch) nodes: every link is an explicit choice, so a branch hop is two choices — the link into the
+ * branch (the route is then *pending* at the branch) and the TRUE or FALSE output the user picks. The branch
+ * takes zero time, creates no visit and no trigger occurrence, and its condition is shown as an assumption.
  *
  * Loop semantics: `loop.maxIterations` counts *additional repeat visits after the first* (4 ⇒ at
  * most 5 visits) and only applies to scenes with `loop.enabled`. 0 means "unlimited", bounded by the
@@ -52,7 +56,21 @@ export interface SimOption {
   targetId: string
   targetTitle: string
   targetKind: SceneKind
+  /** `branch` options lead to an IF node (zero time, no visit); `scene` options enter a scene. */
+  targetType: 'scene' | 'branch'
+  /** Output pin of the branch node this option leaves (only for options taken while pending at a branch). */
+  port?: BranchPort
+  /** Branch whose output this option is (assumption text, never evaluated). */
+  fromBranch?: { nodeId: string; title: string; condition: string }
   blocked: BlockReason | null
+}
+
+/** One IF node passed on a hop: the user assumed `port` for `condition` (never evaluated). */
+export interface BranchPass {
+  nodeId: string
+  title: string
+  condition: string
+  port: BranchPort
 }
 
 export interface SimStep {
@@ -63,7 +81,21 @@ export interface SimStep {
   /** 1-based visit number of this scene within the route. */
   visit: number
   /** Transition taken to enter this scene (null for the start scene). */
-  via: { transitionId: string; label: string; style: TransitionStyle; duration: number; condition: string; crossing: CrossingType } | null
+  via: {
+    /** Id of the last link (the one entering this scene), unique per route choice. */
+    transitionId: string
+    label: string
+    style: TransitionStyle
+    /** Sum of the durations of all links of the hop (an IF node itself takes no time). */
+    duration: number
+    /** Link conditions and IF assumptions (raw user text); non-empty exactly when the hop rests on an assumption. */
+    condition: string
+    /** Only the link conditions (without IF assumptions). */
+    linkCondition: string
+    crossing: CrossingType
+    linkIds: string[]
+    branches: BranchPass[]
+  } | null
   start: number
   end: number
   duration: number
@@ -110,6 +142,8 @@ export interface SimResult {
   steps: SimStep[]
   current: SimStep | null
   options: SimOption[]
+  /** Set while the route waits at an IF node for an explicit TRUE/FALSE choice. */
+  pending: { nodeId: string; title: string; condition: string } | null
   /** The leading part of the requested choices that is still valid. */
   validChoices: string[]
   /** Choices dropped because graph edits made them invalid. */
@@ -141,6 +175,7 @@ const none = (status: SimStatus, invalidated = 0): SimResult => ({
   steps: [],
   current: null,
   options: [],
+  pending: null,
   validChoices: [],
   invalidated,
   events: [],
@@ -178,33 +213,60 @@ export function simulateRoute(project: Project, choices: readonly string[], opti
   enter(start.id, null, 0)
   const validChoices: string[] = []
   let invalidated = 0
+  // Position between scenes: pending at an IF node, with the links walked since the last scene.
+  const branches = new Map(project.logicNodes.map((n) => [n.id, n]))
+  let pendingNode: (typeof project.logicNodes)[number] | null = null
+  let pathLinks: Transition[] = []
+  let pathBranches: BranchPass[] = []
+  const assumption = (n: { title: string; condition: string; id: string }) => n.condition.trim() || n.title.trim() || n.id
+
   for (let i = 0; i < choices.length; i++) {
     if (validChoices.length >= opt.stepCap) break // truncated by the step cap (not a graph invalidation)
     const here = steps[steps.length - 1]
     const tr = project.transitions.find((t) => t.id === choices[i])
+    const fromId = pendingNode ? pendingNode.id : here.sceneId
+    const toScene = tr ? scenes.has(tr.target) : false
+    const toBranch = tr ? branches.has(tr.target) : false
     if (
       !tr ||
-      tr.source !== here.sceneId ||
-      !scenes.has(tr.target) ||
-      here.kind === 'ending' ||
-      blockedBy(tr.target)
+      tr.source !== fromId ||
+      (!toScene && !toBranch) ||
+      (!pendingNode && here.kind === 'ending') ||
+      (toScene && blockedBy(tr.target))
     ) {
       invalidated = choices.length - i
       break
     }
-    const target = scenes.get(tr.target)!
-    enter(
-      tr.target,
-      {
-        transitionId: tr.id,
-        label: tr.label,
-        style: tr.style,
-        duration: tr.duration,
-        condition: tr.condition,
-        crossing: crossingOf(scenes.get(tr.source)!.kind, target.kind),
-      },
-      here.end + tr.duration,
-    )
+    if (pendingNode && tr.sourcePort) pathBranches = [...pathBranches, { nodeId: pendingNode.id, title: pendingNode.title, condition: pendingNode.condition, port: tr.sourcePort }]
+    const links = [...pathLinks, tr]
+    if (toBranch) {
+      pendingNode = branches.get(tr.target)!
+      pathLinks = links
+    } else {
+      const target = scenes.get(tr.target)!
+      const conditions = [
+        ...links.map((l) => l.condition.trim()),
+        ...pathBranches.map((b) => assumption({ id: b.nodeId, title: b.title, condition: b.condition })),
+      ].filter(Boolean)
+      enter(
+        tr.target,
+        {
+          transitionId: tr.id,
+          label: links.length === 1 ? tr.label : (links.map((l) => l.label).find((l) => l.trim() !== '') ?? ''),
+          style: links[0].style,
+          duration: links.reduce((a, l) => a + l.duration, 0),
+          condition: conditions.join(' · '),
+          linkCondition: links.map((l) => l.condition.trim()).filter(Boolean).join(' · '),
+          crossing: crossingOf(here.kind, target.kind),
+          linkIds: links.map((l) => l.id),
+          branches: pathBranches,
+        },
+        here.end + links.reduce((a, l) => a + l.duration, 0),
+      )
+      pendingNode = null
+      pathLinks = []
+      pathBranches = []
+    }
     validChoices.push(tr.id)
   }
 
@@ -213,14 +275,17 @@ export function simulateRoute(project: Project, choices: readonly string[], opti
   const warnings: Diagnostic[] = []
   if (invalidated > 0) warnings.push(diag('diag.sim.invalidated', { n: invalidated }))
 
-  // Options at the current scene (ending scenes are terminal; their outgoing transitions are ignored).
+  // Options at the current position: the scene's outgoing links, or the pending IF node's TRUE/FALSE outputs
+  // (ending scenes are terminal; their outgoing transitions are ignored).
   let simOptions: SimOption[] = []
   let missingTargets = 0
-  if (current.kind !== 'ending') {
+  const fromId = pendingNode ? pendingNode.id : current.sceneId
+  if (pendingNode || current.kind !== 'ending') {
     for (const t of project.transitions) {
-      if (t.source !== current.sceneId) continue
+      if (t.source !== fromId) continue
       const target = scenes.get(t.target)
-      if (!target) {
+      const branch = branches.get(t.target)
+      if (!target && !branch) {
         missingTargets++
         continue
       }
@@ -230,18 +295,22 @@ export function simulateRoute(project: Project, choices: readonly string[], opti
         style: t.style,
         duration: t.duration,
         condition: t.condition,
-        crossing: crossingOf(current.kind, target.kind),
+        crossing: target ? crossingOf(current.kind, target.kind) : 'same-layer',
         targetId: t.target,
-        targetTitle: target.title,
-        targetKind: target.kind,
-        blocked: capReached ? 'stepLimit' : blockedBy(t.target),
+        targetTitle: target ? target.title : branch!.title,
+        targetKind: target ? target.kind : current.kind,
+        targetType: target ? 'scene' : 'branch',
+        ...(pendingNode && t.sourcePort ? { port: t.sourcePort } : {}),
+        ...(pendingNode ? { fromBranch: { nodeId: pendingNode.id, title: pendingNode.title, condition: pendingNode.condition } } : {}),
+        blocked: capReached ? 'stepLimit' : target ? blockedBy(t.target) : null,
       })
     }
   }
+  if (pendingNode) simOptions.sort((a, b) => Number(b.port === 'true') - Number(a.port === 'true'))
   if (missingTargets > 0) warnings.push(diag('diag.sim.missingTarget', { n: missingTargets }))
 
   let status: SimStatus
-  if (current.kind === 'ending') status = 'ending'
+  if (!pendingNode && current.kind === 'ending') status = 'ending'
   else if (simOptions.length === 0) status = 'deadEnd'
   else if (capReached) status = 'stepLimit'
   else if (simOptions.every((o) => o.blocked)) status = 'loopLimit'
@@ -326,6 +395,7 @@ export function simulateRoute(project: Project, choices: readonly string[], opti
     steps,
     current,
     options: simOptions,
+    pending: pendingNode ? { nodeId: pendingNode.id, title: pendingNode.title, condition: pendingNode.condition } : null,
     validChoices,
     invalidated,
     events,

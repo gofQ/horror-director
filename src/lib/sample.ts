@@ -235,6 +235,9 @@ export function sampleProject(): Project {
     startSceneId: 's_hall',
     scenes,
     transitions,
+    logicNodes: [],
+    comments: [],
+    sceneTypes: [],
     characters,
   }
 }

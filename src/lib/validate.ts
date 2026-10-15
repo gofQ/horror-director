@@ -2,6 +2,7 @@ import { diag, type Diagnostic } from './diagnostics'
 import type { Project } from './schema'
 import { analyzeAudioCues } from './audio'
 import { analyzeShots } from './shots'
+import { logicCycles } from './graphRules'
 
 export interface ValidationResult {
   /** Blocking problems: the project is internally inconsistent. */
@@ -39,7 +40,22 @@ export function validateProject(p: Project): ValidationResult {
   for (const s of p.scenes)
     for (const id of duplicates(s.audioCues.map((x) => x.id))) errors.push(diag('diag.dupAudioCue', { id, scene: s.title }))
 
+  for (const id of duplicates(p.logicNodes.map((n) => n.id))) errors.push(diag('diag.dupNode', { id }))
+  for (const id of duplicates(p.comments.map((c) => c.id))) errors.push(diag('diag.dupNode', { id }))
+  for (const id of duplicates(p.sceneTypes.map((x) => x.id))) errors.push(diag('diag.dupSceneType', { id }))
+  // Scenes, branch nodes and comments share one id space (transitions reference scenes and branches).
   const sceneIds = new Set(p.scenes.map((s) => s.id))
+  const branchIds = new Set(p.logicNodes.map((n) => n.id))
+  const commentIds = new Set(p.comments.map((c) => c.id))
+  for (const id of branchIds) if (sceneIds.has(id) || commentIds.has(id)) errors.push(diag('diag.dupNode', { id }))
+  for (const id of commentIds) if (sceneIds.has(id)) errors.push(diag('diag.dupNode', { id }))
+  const typeById = new Map(p.sceneTypes.map((x) => [x.id, x]))
+  for (const s of p.scenes) {
+    if (s.typeId === undefined) continue
+    const ty = typeById.get(s.typeId)
+    if (!ty) errors.push(diag('diag.sceneTypeMissing', { scene: s.title, id: s.typeId }))
+    else if (ty.baseKind !== s.kind) errors.push(diag('diag.sceneTypeKind', { scene: s.title, type: ty.name, kind: ty.baseKind }))
+  }
   if (p.startSceneId !== null && !sceneIds.has(p.startSceneId))
     errors.push(diag('diag.badStart', { id: p.startSceneId }))
   if (p.startSceneId === null && p.scenes.length > 0)
@@ -47,10 +63,34 @@ export function validateProject(p: Project): ValidationResult {
 
   for (const t of p.transitions) {
     const name = t.label ? `${q(t.label)} (${t.id})` : q(t.id)
-    if (!sceneIds.has(t.source)) errors.push(diag('diag.transitionMissingSource', { name, id: t.source }))
-    if (!sceneIds.has(t.target)) errors.push(diag('diag.transitionMissingTarget', { name, id: t.target }))
+    const known = (id: string) => sceneIds.has(id) || branchIds.has(id)
+    if (commentIds.has(t.source) || commentIds.has(t.target)) errors.push(diag('diag.linkComment', { name }))
+    else {
+      if (!known(t.source)) errors.push(diag('diag.transitionMissingSource', { name, id: t.source }))
+      if (!known(t.target)) errors.push(diag('diag.transitionMissingTarget', { name, id: t.target }))
+    }
+    if (branchIds.has(t.source) && t.sourcePort === undefined) errors.push(diag('diag.portMissing', { name }))
+    if (!branchIds.has(t.source) && t.sourcePort !== undefined) errors.push(diag('diag.portUnexpected', { name }))
+    if (branchIds.has(t.source) && t.source === t.target) errors.push(diag('diag.logicSelf', { name }))
+    if (t.direction && (branchIds.has(t.source) || branchIds.has(t.target))) errors.push(diag('diag.dirOnLogicLink', { name }))
   }
-  const pairs = p.transitions.map((t) => `${t.source}\u0000${t.target}`)
+  const seenOut = new Set<string>()
+  const seenLink = new Set<string>()
+  for (const t of p.transitions) {
+    const name = t.label ? `${q(t.label)} (${t.id})` : q(t.id)
+    if (branchIds.has(t.source) && t.sourcePort) {
+      const pin = `${t.source}\u0000${t.sourcePort}`
+      if (seenOut.has(pin)) errors.push(diag('diag.portTaken', { name, node: t.source, port: t.sourcePort.toUpperCase() }))
+      seenOut.add(pin)
+    }
+    if (branchIds.has(t.source) || branchIds.has(t.target)) {
+      const key = `${t.source}\u0000${t.sourcePort ?? ''}\u0000${t.target}`
+      if (seenLink.has(key)) errors.push(diag('diag.logicDuplicate', { name }))
+      seenLink.add(key)
+    }
+  }
+  for (const id of logicCycles(p)) errors.push(diag('diag.logicCycle', { id }))
+  const pairs = p.transitions.filter((t) => sceneIds.has(t.source) && sceneIds.has(t.target)).map((t) => `${t.source}\u0000${t.target}`)
   const dupPairs = duplicates(pairs).length
   if (dupPairs > 0) warnings.push(diag('diag.multiTransitions', { n: dupPairs }))
 
@@ -66,6 +106,15 @@ export function validateProject(p: Project): ValidationResult {
       errors.push(diag(elsewhere(d.sourceShotId) ? 'diag.dirSourceMismatch' : 'diag.dirSourceDangling', { name, id: d.sourceShotId, scene: src.title }))
     if (d.targetShotId !== null && !dst.shots.some((x) => x.id === d.targetShotId))
       errors.push(diag(elsewhere(d.targetShotId) ? 'diag.dirTargetMismatch' : 'diag.dirTargetDangling', { name, id: d.targetShotId, scene: dst.title }))
+  }
+
+  for (const n of p.logicNodes) {
+    const label = n.title || n.id
+    if (!n.condition.trim()) warnings.push(diag('diag.branchNoCondition', { node: label }))
+    for (const port of ['true', 'false'] as const)
+      if (!p.transitions.some((t) => t.source === n.id && t.sourcePort === port))
+        warnings.push(diag('diag.branchOpenOutput', { node: label, port: port.toUpperCase() }))
+    if (!p.transitions.some((t) => t.target === n.id)) warnings.push(diag('diag.branchNoInput', { node: label }))
   }
 
   const chars = new Map(p.characters.map((c) => [c.id, c]))

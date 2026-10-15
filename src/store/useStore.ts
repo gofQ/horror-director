@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { emptyProject, newAudioCue, newCharacter, newScene, newShot, newTransition, newTrigger, type DefaultNames } from '../lib/factory'
+import { emptyProject, newAudioCue, newCharacter, newComment, newLogicNode, newSceneType, newScene, newShot, newTransition, newTrigger, type DefaultNames } from '../lib/factory'
 import { getLang } from '../i18n/store'
 import { translate } from '../i18n'
 import { uid } from '../lib/id'
@@ -7,7 +7,11 @@ import { loadLibrary, type LibraryIndex, type LoadNotice, type LoadedLibrary } f
 import { browserBackend, useSaveStatus } from '../lib/persist'
 import type {
   AudioCue,
+  BranchPort,
   Character,
+  GraphComment,
+  LogicNode,
+  SceneType,
   CharacterState,
   Project,
   Scene,
@@ -22,9 +26,13 @@ import { computeLayout } from '../lib/layout'
 import { nextCueStart } from '../lib/audio'
 import { nextStart, shotReferences, sortedByTime } from '../lib/shots'
 import { transitionDirectionSchema } from '../lib/schema'
+import { canConnect, linkDuration } from '../lib/graphRules'
 
 export type View = 'graph' | 'timeline' | 'characters' | 'analysis' | 'simulator'
-export type Selection = { type: 'scene' | 'edge'; id: string } | null
+export type Selection = { type: 'scene' | 'edge' | 'node' | 'comment'; id: string } | null
+
+/** What `addNodeFromPin` creates at the drop position. */
+export type NewNodeSpec = { type: 'scene'; kind: SceneKind; typeId?: string } | { type: 'branch' }
 
 export const HISTORY_LIMIT = 50
 
@@ -39,6 +47,9 @@ export function defaultNames(): DefaultNames {
     trigger: translate(l, 'default.trigger'),
     shot: translate(l, 'default.shot'),
     audioCue: translate(l, 'default.audioCue'),
+    branch: translate(l, 'default.branch'),
+    comment: translate(l, 'default.comment'),
+    sceneType: translate(l, 'default.sceneType'),
     character: translate(l, 'default.character'),
     state: translate(l, 'default.state'),
     stateIdle: translate(l, 'default.stateIdle'),
@@ -51,6 +62,10 @@ interface State {
   view: View
   timelineSceneId: string | null
   selectedTriggerId: string | null
+  /** Timeline tab mode (session only). */
+  timelineMode: 'triggers' | 'sequence'
+  /** Id of a node whose Inspector field should take focus once (e.g. "Edit condition"). */
+  inspectorFocus: string | null
   /** Undo/redo snapshots (session only, not persisted). */
   past: Project[]
   future: Project[]
@@ -76,18 +91,41 @@ interface State {
   loadSample: () => void
   updateProject: (patch: Partial<Pick<Project, 'name' | 'description'>>) => void
 
-  addScene: (kind: SceneKind, position: { x: number; y: number }) => string
+  /** With `typeId` the scene takes the type's base kind and default description/duration. */
+  addScene: (kind: SceneKind, position: { x: number; y: number }, typeId?: string) => string
   updateScene: (id: string, patch: Partial<Scene>) => void
   moveScene: (id: string, position: { x: number; y: number }) => void
+  /** Moves a scene, IF node or comment. */
+  moveNode: (id: string, position: { x: number; y: number }) => void
   deleteScene: (id: string) => void
+  /** Deletes scenes, IF nodes and comments with all their connections in one undo step (other scene data is untouched). */
   deleteScenes: (ids: string[]) => void
+  /** Copies a scene's content with fresh ids (no connections), offset to the right-bottom; returns the new id. */
+  duplicateScene: (id: string, copySuffix: string) => string | null
+  duplicateNode: (id: string) => string | null
+  addLogicNode: (position: { x: number; y: number }) => string
+  updateLogicNode: (id: string, patch: Partial<Omit<LogicNode, 'id' | 'type'>>) => void
+  addComment: (position: { x: number; y: number }) => string
+  updateComment: (id: string, patch: Partial<Omit<GraphComment, 'id'>>) => void
+  /** Creates a node at `position` and connects `fromId` (output pin `fromPort`) to it in ONE undo step; null (nothing changes) when the connection is invalid. */
+  addNodeFromPin: (spec: { fromId: string; fromPort?: BranchPort; position: { x: number; y: number }; node: NewNodeSpec }) => { nodeId: string; transitionId: string } | null
+  /** Puts a new IF node between a connection's endpoints (the original connection id is kept and ends at the IF). Refused (null) when the connection carries a transition design. */
+  insertBranchOnTransition: (transitionId: string) => string | null
+  addSceneType: (baseKind?: SceneKind) => string
+  /** `baseKind` can only change while no scene uses the type; returns false (nothing changes) otherwise. */
+  updateSceneType: (id: string, patch: Partial<Omit<SceneType, 'id'>>) => boolean
+  /** Refuses ('inUse', nothing changes) while scenes use the type unless `detach`; then the scenes keep their kind and only lose `typeId` (one undo step). */
+  deleteSceneType: (id: string, opts?: { detach?: boolean }) => 'deleted' | 'inUse' | 'missing'
+  /** `null` makes the scene a plain scene of its current kind. Applying a type sets the scene's kind to the type's base kind. */
+  applySceneType: (sceneId: string, typeId: string | null, plainKind?: SceneKind) => boolean
   setStart: (id: string) => void
   /** Auto-arranges scene positions (positions only). One undo step; returns false when nothing moved. */
   arrangeScenes: () => boolean
 
-  addTransition: (source: string, target: string) => string | null
-  /** Endpoints are fixed after creation (shot links in a direction depend on them). */
-  updateTransition: (id: string, patch: Partial<Omit<Transition, 'source' | 'target'>>) => void
+  /** Connects two nodes (scene or IF node; `sourcePort` is required when `source` is an IF node). Returns null when `canConnect` refuses. */
+  addTransition: (source: string, target: string, sourcePort?: BranchPort) => string | null
+  /** Endpoints and output pin are fixed after creation (shot links in a direction depend on them). */
+  updateTransition: (id: string, patch: Partial<Omit<Transition, 'source' | 'target' | 'sourcePort'>>) => void
   /** Creates the direction when absent and merges the patch. Refuses (false) shot links outside the transition's source/target scene. */
   updateDirection: (transitionId: string, patch: Partial<TransitionDirection>) => boolean
   /** Removes the direction of a transition (explicit, undoable). */
@@ -95,6 +133,8 @@ interface State {
   deleteTransition: (id: string) => void
 
   setTimelineScene: (id: string | null) => void
+  setTimelineMode: (m: 'triggers' | 'sequence') => void
+  requestInspectorFocus: (id: string | null) => void
   selectTrigger: (id: string | null) => void
   addTrigger: (sceneId: string, time: number) => string
   updateTrigger: (sceneId: string, id: string, patch: Partial<Trigger>) => void
@@ -156,8 +196,12 @@ function withHistory(rawSet: (p: Partial<State>) => void, get: () => State): Set
 function reconcile(project: Project, s: State): Partial<State> {
   const scenes = new Set(project.scenes.map((x) => x.id))
   const edges = new Set(project.transitions.map((x) => x.id))
+  const nodes = new Set(project.logicNodes.map((x) => x.id))
+  const comments = new Set(project.comments.map((x) => x.id))
   const sel = s.selection
-  const selOk = !sel || (sel.type === 'scene' ? scenes.has(sel.id) : edges.has(sel.id))
+  const selOk =
+    !sel ||
+    (sel.type === 'scene' ? scenes.has(sel.id) : sel.type === 'node' ? nodes.has(sel.id) : sel.type === 'comment' ? comments.has(sel.id) : edges.has(sel.id))
   const tl =
     s.timelineSceneId && scenes.has(s.timelineSceneId) ? s.timelineSceneId : (project.scenes[0]?.id ?? null)
   const trgOk = project.scenes.some((x) => x.triggers.some((t) => t.id === s.selectedTriggerId))
@@ -195,6 +239,8 @@ export const useStore = create<State>()(
         selection: null,
         view: 'graph',
         timelineSceneId: startScene(boot.project),
+        timelineMode: 'triggers',
+        inspectorFocus: null,
         selectedTriggerId: null,
         past: [],
         future: [],
@@ -257,8 +303,15 @@ export const useStore = create<State>()(
         updateProject: (patch) =>
           set((s) => ({ project: { ...s.project, ...patch } }), { key: `project:${keysOf(patch)}` }),
 
-        addScene: (kind, position) => {
-          const scene = newScene(kind, position, defaultNames())
+        addScene: (kind, position, typeId) => {
+          const ty = typeId ? get().project.sceneTypes.find((x) => x.id === typeId) : undefined
+          const scene = newScene(ty ? ty.baseKind : kind, position, defaultNames())
+          if (ty) {
+            scene.typeId = ty.id
+            scene.title = ty.name
+            if (ty.description) scene.description = ty.description
+            if (ty.duration) scene.duration = ty.duration
+          }
           set((s) => ({
             project: {
               ...s.project,
@@ -270,62 +323,249 @@ export const useStore = create<State>()(
           return scene.id
         },
         updateScene: (id, patch) =>
-          set((s) => ({ project: mapScene(s.project, id, (sc) => ({ ...sc, ...patch })) }), {
-            key: `scene:${id}:${keysOf(patch)}`,
-          }),
+          set(
+            (s) => ({
+              project: mapScene(s.project, id, (sc) => {
+                const next = { ...sc, ...patch }
+                // a scene whose kind no longer matches its type's base kind becomes a plain scene
+                const ty = next.typeId ? s.project.sceneTypes.find((x) => x.id === next.typeId) : undefined
+                if (next.typeId && (!ty || ty.baseKind !== next.kind)) delete next.typeId
+                return next
+              }),
+            }),
+            { key: `scene:${id}:${keysOf(patch)}` },
+          ),
         moveScene: (id, position) =>
           set((s) => ({ project: mapScene(s.project, id, (sc) => ({ ...sc, position })) }), {
             key: `move:${id}`,
           }),
+        moveNode: (id, position) =>
+          set(
+            (s) => {
+              const p = s.project
+              if (p.scenes.some((x) => x.id === id)) return { project: mapScene(p, id, (sc) => ({ ...sc, position })) }
+              if (p.logicNodes.some((x) => x.id === id)) return { project: { ...p, logicNodes: p.logicNodes.map((n) => (n.id === id ? { ...n, position } : n)) } }
+              if (p.comments.some((x) => x.id === id)) return { project: { ...p, comments: p.comments.map((c) => (c.id === id ? { ...c, position } : c)) } }
+              return {}
+            },
+            { key: `move:${id}` },
+          ),
         deleteScene: (id) => get().deleteScenes([id]),
         deleteScenes: (ids) =>
           set(
             (s) => {
-              const gone = new Set(ids.filter((id) => s.project.scenes.some((x) => x.id === id)))
+              const p = s.project
+              const gone = new Set(
+                ids.filter((id) => p.scenes.some((x) => x.id === id) || p.logicNodes.some((x) => x.id === id) || p.comments.some((x) => x.id === id)),
+              )
               if (gone.size === 0) return {}
-              const scenes = s.project.scenes.filter((x) => !gone.has(x.id))
+              const scenes = p.scenes.filter((x) => !gone.has(x.id))
               return {
                 project: {
-                  ...s.project,
+                  ...p,
                   scenes,
-                  transitions: s.project.transitions.filter((t) => !gone.has(t.source) && !gone.has(t.target)),
-                  startSceneId:
-                    s.project.startSceneId && gone.has(s.project.startSceneId)
-                      ? (scenes[0]?.id ?? null)
-                      : s.project.startSceneId,
+                  logicNodes: p.logicNodes.filter((x) => !gone.has(x.id)),
+                  comments: p.comments.filter((x) => !gone.has(x.id)),
+                  transitions: p.transitions.filter((t) => !gone.has(t.source) && !gone.has(t.target)),
+                  startSceneId: p.startSceneId && gone.has(p.startSceneId) ? (scenes[0]?.id ?? null) : p.startSceneId,
                 },
                 selection: s.selection && gone.has(s.selection.id) ? null : s.selection,
                 timelineSceneId:
-                  s.timelineSceneId && gone.has(s.timelineSceneId)
-                    ? (scenes[0]?.id ?? null)
-                    : s.timelineSceneId,
+                  s.timelineSceneId && gone.has(s.timelineSceneId) ? (scenes[0]?.id ?? null) : s.timelineSceneId,
               }
             },
             // React Flow reports a Delete keypress as several events; fold them into one step.
             { key: 'delete', ms: 300 },
           ),
+        duplicateScene: (id, copySuffix) => {
+          const src = get().project.scenes.find((x) => x.id === id)
+          if (!src) return null
+          const copy: Scene = {
+            ...structuredClone(src),
+            id: uid('scene'),
+            title: `${src.title} ${copySuffix}`.trim(),
+            position: { x: src.position.x + 40, y: src.position.y + 60 },
+            triggers: src.triggers.map((t) => ({ ...t, id: uid('trg') })),
+            shots: src.shots.map((x) => ({ ...x, id: uid('shot') })),
+            audioCues: src.audioCues.map((c) => ({ ...c, id: uid('cue') })),
+          }
+          set((s) => ({ project: { ...s.project, scenes: [...s.project.scenes, copy] }, selection: { type: 'scene', id: copy.id } }))
+          return copy.id
+        },
+        duplicateNode: (id) => {
+          const p = get().project
+          const n = p.logicNodes.find((x) => x.id === id)
+          const c = p.comments.find((x) => x.id === id)
+          if (n) {
+            const copy: LogicNode = { ...n, id: uid('if'), position: { x: n.position.x + 40, y: n.position.y + 60 } }
+            set((s) => ({ project: { ...s.project, logicNodes: [...s.project.logicNodes, copy] }, selection: { type: 'node', id: copy.id } }))
+            return copy.id
+          }
+          if (c) {
+            const copy: GraphComment = { ...c, id: uid('note'), position: { x: c.position.x + 40, y: c.position.y + 60 } }
+            set((s) => ({ project: { ...s.project, comments: [...s.project.comments, copy] }, selection: { type: 'comment', id: copy.id } }))
+            return copy.id
+          }
+          return null
+        },
+        addLogicNode: (position) => {
+          const n = newLogicNode(position, defaultNames())
+          set((s) => ({ project: { ...s.project, logicNodes: [...s.project.logicNodes, n] }, selection: { type: 'node', id: n.id } }))
+          return n.id
+        },
+        updateLogicNode: (id, patch) =>
+          set(
+            (s) => ({ project: { ...s.project, logicNodes: s.project.logicNodes.map((n) => (n.id === id ? { ...n, ...patch } : n)) } }),
+            { key: `node:${id}:${keysOf(patch)}` },
+          ),
+        addComment: (position) => {
+          const c = newComment(position, defaultNames())
+          set((s) => ({ project: { ...s.project, comments: [...s.project.comments, c] }, selection: { type: 'comment', id: c.id } }))
+          return c.id
+        },
+        updateComment: (id, patch) =>
+          set(
+            (s) => ({ project: { ...s.project, comments: s.project.comments.map((c) => (c.id === id ? { ...c, ...patch } : c)) } }),
+            { key: `comment:${id}:${keysOf(patch)}` },
+          ),
+        addNodeFromPin: ({ fromId, fromPort, position, node }) => {
+          const base = get().project
+          let newScenes = base.scenes
+          let newBranches = base.logicNodes
+          let nodeId: string
+          if (node.type === 'branch') {
+            const n = newLogicNode(position, defaultNames())
+            newBranches = [...base.logicNodes, n]
+            nodeId = n.id
+          } else {
+            const ty = node.typeId ? base.sceneTypes.find((x) => x.id === node.typeId) : undefined
+            const sc = newScene(ty ? ty.baseKind : node.kind, position, defaultNames())
+            if (ty) {
+              sc.typeId = ty.id
+              sc.title = ty.name
+              if (ty.description) sc.description = ty.description
+              if (ty.duration) sc.duration = ty.duration
+            }
+            newScenes = [...base.scenes, sc]
+            nodeId = sc.id
+          }
+          const draft: Project = { ...base, scenes: newScenes, logicNodes: newBranches }
+          if (!canConnect(draft, { source: fromId, sourcePort: fromPort, target: nodeId }).ok) return null
+          const t = newTransition(fromId, nodeId)
+          t.duration = linkDuration(draft, fromId)
+          if (fromPort) t.sourcePort = fromPort
+          set((s) => ({
+            project: {
+              ...s.project,
+              scenes: newScenes,
+              logicNodes: newBranches,
+              transitions: [...s.project.transitions, t],
+              startSceneId: s.project.startSceneId ?? (node.type === 'scene' ? nodeId : null),
+            },
+            selection: { type: node.type === 'scene' ? 'scene' : 'node', id: nodeId },
+          }))
+          return { nodeId, transitionId: t.id }
+        },
+        insertBranchOnTransition: (transitionId) => {
+          const p = get().project
+          const tr = p.transitions.find((t) => t.id === transitionId)
+          if (!tr || tr.direction) return null
+          const at = (id: string) => p.scenes.find((x) => x.id === id)?.position ?? p.logicNodes.find((x) => x.id === id)?.position
+          const a = at(tr.source)
+          const b = at(tr.target)
+          if (!a || !b) return null
+          const node = newLogicNode({ x: Math.round((a.x + b.x) / 2), y: Math.round((a.y + b.y) / 2) + 80 }, defaultNames())
+          const out = newTransition(node.id, tr.target)
+          out.duration = 0
+          out.sourcePort = 'true'
+          set((s) => ({
+            project: {
+              ...s.project,
+              logicNodes: [...s.project.logicNodes, node],
+              transitions: [
+                ...s.project.transitions.map((t) => (t.id === transitionId ? { ...t, target: node.id } : t)),
+                out,
+              ],
+            },
+            selection: { type: 'node', id: node.id },
+          }))
+          return node.id
+        },
+        addSceneType: (baseKind = 'reality') => {
+          const ty = newSceneType(baseKind, defaultNames())
+          set((s) => ({ project: { ...s.project, sceneTypes: [...s.project.sceneTypes, ty] } }))
+          return ty.id
+        },
+        updateSceneType: (id, patch) => {
+          const p = get().project
+          const ty = p.sceneTypes.find((x) => x.id === id)
+          if (!ty) return false
+          if (patch.baseKind !== undefined && patch.baseKind !== ty.baseKind && p.scenes.some((x) => x.typeId === id)) return false
+          if (patch.name !== undefined && !patch.name.trim()) return false
+          set(
+            (s) => ({ project: { ...s.project, sceneTypes: s.project.sceneTypes.map((x) => (x.id === id ? { ...x, ...patch } : x)) } }),
+            { key: `stype:${id}:${keysOf(patch)}` },
+          )
+          return true
+        },
+        deleteSceneType: (id, opts) => {
+          const p = get().project
+          if (!p.sceneTypes.some((x) => x.id === id)) return 'missing'
+          if (p.scenes.some((x) => x.typeId === id) && !opts?.detach) return 'inUse'
+          set((s) => ({
+            project: {
+              ...s.project,
+              sceneTypes: s.project.sceneTypes.filter((x) => x.id !== id),
+              scenes: s.project.scenes.map((sc) => {
+                if (sc.typeId !== id) return sc
+                const { typeId, ...rest } = sc
+                void typeId
+                return rest
+              }),
+            },
+          }))
+          return 'deleted'
+        },
+        applySceneType: (sceneId, typeId, plainKind) => {
+          const p = get().project
+          if (!p.scenes.some((x) => x.id === sceneId)) return false
+          const ty = typeId ? p.sceneTypes.find((x) => x.id === typeId) : undefined
+          if (typeId && !ty) return false
+          set((s) => ({
+            project: mapScene(s.project, sceneId, (sc) => {
+              const { typeId: old, ...rest } = sc
+              void old
+              return ty ? { ...rest, kind: ty.baseKind, typeId: ty.id } : plainKind ? { ...rest, kind: plainKind } : rest
+            }),
+          }))
+          return true
+        },
         arrangeScenes: () => {
           const pos = computeLayout(get().project)
-          const moved = get().project.scenes.some((sc) => {
-            const p = pos[sc.id]
-            return p && (p.x !== sc.position.x || p.y !== sc.position.y)
-          })
+          const differs = (n: { id: string; position: { x: number; y: number } }) => {
+            const p = pos[n.id]
+            return !!p && (p.x !== n.position.x || p.y !== n.position.y)
+          }
+          const moved = get().project.scenes.some(differs) || get().project.logicNodes.some(differs)
           if (!moved) return false
           // no coalesce key: exactly one history entry holding the previous project
           set((s) => ({
             project: {
               ...s.project,
               scenes: s.project.scenes.map((sc) => (pos[sc.id] ? { ...sc, position: pos[sc.id] } : sc)),
+              logicNodes: s.project.logicNodes.map((n) => (pos[n.id] ? { ...n, position: pos[n.id] } : n)),
             },
           }))
           return true
         },
         setStart: (id) => set((s) => ({ project: { ...s.project, startSceneId: id } })),
 
-        addTransition: (source, target) => {
-          const exists = get().project.transitions.some((t) => t.source === source && t.target === target)
-          if (exists) return null
+        addTransition: (source, target, sourcePort) => {
+          const p = get().project
+          if (!canConnect(p, { source, sourcePort, target }).ok) return null
           const t = newTransition(source, target)
+          t.duration = linkDuration(p, source)
+          if (sourcePort) t.sourcePort = sourcePort
           if (source === target) t.style = 'loopback'
           set((s) => ({
             project: { ...s.project, transitions: [...s.project.transitions, t] },
@@ -333,22 +573,27 @@ export const useStore = create<State>()(
           }))
           return t.id
         },
-        updateTransition: (id, patch) =>
+        updateTransition: (id, patch) => {
+          // endpoints and the output pin are fixed at runtime too (not only by the type)
+          const { source, target, sourcePort, ...safe } = patch as typeof patch & { source?: string; target?: string; sourcePort?: string }
+          void source, void target, void sourcePort
           set(
             (s) => ({
               project: {
                 ...s.project,
-                transitions: s.project.transitions.map((t) => (t.id === id ? { ...t, ...patch } : t)),
+                transitions: s.project.transitions.map((t) => (t.id === id ? { ...t, ...safe } : t)),
               },
             }),
-            { key: `tr:${id}:${keysOf(patch)}` },
-          ),
+            { key: `tr:${id}:${keysOf(safe)}` },
+          )
+        },
         updateDirection: (transitionId, patch) => {
           const project = get().project
           const tr = project.transitions.find((t) => t.id === transitionId)
           if (!tr) return false
           const src = project.scenes.find((x) => x.id === tr.source)
           const dst = project.scenes.find((x) => x.id === tr.target)
+          if (!src || !dst) return false // links touching an IF node carry no transition design
           if (patch.sourceShotId && !src?.shots.some((x) => x.id === patch.sourceShotId)) return false
           if (patch.targetShotId && !dst?.shots.some((x) => x.id === patch.targetShotId)) return false
           set(
@@ -392,6 +637,8 @@ export const useStore = create<State>()(
             { key: 'delete', ms: 300 },
           ),
 
+        setTimelineMode: (timelineMode) => rawSet({ timelineMode }),
+        requestInspectorFocus: (inspectorFocus) => rawSet({ inspectorFocus }),
         setTimelineScene: (id) => rawSet({ timelineSceneId: id, selectedTriggerId: null }),
         selectTrigger: (id) => rawSet({ selectedTriggerId: id }),
         addTrigger: (sceneId, time) => {

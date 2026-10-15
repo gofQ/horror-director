@@ -140,7 +140,7 @@ test.describe('persistence, backups and file compatibility', () => {
     await waitSaved(page)
 
     const exported = await backup(page)
-    expect(exported.schemaVersion).toBe(4)
+    expect(exported.schemaVersion).toBe(5)
     expect(exported.project.scenes.find((s) => s.id === 's_living')!.audioCues[0]).toMatchObject({ title: 'Persisted cue', loop: true, type: 'sfx' })
 
     await newProject(page)
@@ -155,7 +155,7 @@ test.describe('persistence, backups and file compatibility', () => {
     expect(await titles(page)).toEqual(['Persisted cue'])
   })
 
-  test('imports a schema-3 file and backs it up as schema 4 without losing fields', async ({ page }) => {
+  test('imports a schema-3 file and backs it up as schema 5 without losing fields', async ({ page }) => {
     await openApp(page)
     const original = await backup(page)
     const v3 = structuredClone(original)
@@ -165,13 +165,13 @@ test.describe('persistence, backups and file compatibility', () => {
     await page.getByRole('button', { name: 'Add project' }).click()
     await expect(nodes(page)).toHaveCount(8)
     const migrated = await backup(page)
-    expect(migrated.schemaVersion).toBe(4)
+    expect(migrated.schemaVersion).toBe(5)
     expect(migrated.project.scenes.every((s) => s.audioCues.length === 0)).toBe(true)
     const strip = (scenes: RawExport['project']['scenes']) => scenes.map(({ audioCues, ...rest }) => (void audioCues, rest))
     expect(strip(migrated.project.scenes)).toEqual(strip(original.project.scenes))
   })
 
-  test('a complete schema-4 backup round-trips through import', async ({ page }) => {
+  test('a complete schema-5 backup round-trips through import', async ({ page }) => {
     await openApp(page)
     const before = await backup(page)
     expect(before.project.scenes.find((s) => s.id === 's_hall')!.audioCues).toHaveLength(4)

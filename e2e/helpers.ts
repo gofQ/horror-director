@@ -72,10 +72,10 @@ export async function autoArrange(page: Page) {
   await settle(page)
 }
 
-/** Drags from the source handle of one scene to the target handle of another (real pointer events). */
-export async function connect(page: Page, from: string, to: string) {
-  const src = page.locator(`.react-flow__node[data-id="${from}"] .react-flow__handle.source`)
-  const dst = page.locator(`.react-flow__node[data-id="${to}"] .react-flow__handle.target`)
+/** Drags from an output pin (`out`, or an IF node's `true`/`false`) to the input pin of another node (real pointer events). */
+export async function connect(page: Page, from: string, to: string, fromPin = 'out') {
+  const src = page.locator(`.react-flow__handle[data-nodeid="${from}"][data-handleid="${fromPin}"]`)
+  const dst = page.locator(`.react-flow__handle[data-nodeid="${to}"][data-handleid="in"]`)
   const a = await src.boundingBox()
   const b = await dst.boundingBox()
   if (!a || !b) throw new Error('handles not visible')

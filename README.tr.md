@@ -14,6 +14,18 @@ korku ritmini planlamak isteyen bağımsız geliştiriciler ve küçük ekipler.
 - **Sahne grafiği:** sürükle-bırak sahneler (Gerçeklik / Rüya / Kâbus / Anı / Final), koşul ve süre içeren tipli
   geçişlerle (cut, fade, glitch, blackout, morph, loop-back) bağlanır. Rüya ⇄ gerçeklik geçişleri kesikli, renk kodlu
   kenarlarla çizilir. Karşılıklı kenarlar, geri kenarlar ve kendine döngüler yollar ve etiketler okunabilir kalacak şekilde yönlendirilir.
+- **Blueprint tarzı düzenleyici:** yazılı Giriş/Çıkış pinli sahne düğümleri, yönlü teller, üzerine gelme ve seçim geri
+  bildirimi, bırakmadan önce hedefin geçerli olup olmadığını gösteren bağlantı önizlemesi, mini harita, kaydırma/yakınlaştırma
+  ve Geri al/Yinele. **EĞER / Dal** düğümlerinin bir girişi ile düzenlenebilir, insan tarafından okunur bir koşullu DOĞRU /
+  YANLIŞ çıkışları vardır: gezinme, simülatör, analiz ve Otomatik Düzenle'ye katılırlar ama koşul bir hazırlık notudur ve
+  **asla değerlendirilmez**. **Yorumlar**, alanları düzenlemek için çalıştırılmayan çerçevelerdir. Bir çıkış pinini boş
+  tuvale sürüklemek, düğümü tek bir geri alınabilir adımda oluşturup bağlayan aranabilir bir düğüm seçici açar.
+- **Özel sahne türleri:** proje başına, yeniden kullanılabilir sahne türleri (ad, seçilmiş renk ve simge, temel tür,
+  varsayılan açıklama ve süre). Özel bir sahne, temel türü (gerçeklik, rüya, kâbus, anı, son) geçişleri, simülasyonu ve
+  analizi yönlendirmeye devam eden normal bir sahnedir.
+- **Bağlam menüleri:** grafik tuvalinde, sahnelerde, EĞER düğümlerinde, yorumlarda ve bağlantılarda; ayrıca Zaman
+  çizelgesi/Sekans öğelerinde ve proje satırlarında erişilebilir sağ tık menüleri (Shift+F10 / menü tuşu ve dokunmatikte
+  uzun basma ile de). Girdi alanlarında ve metin kutularında tarayıcının kendi sağ tık menüsü korunur.
 - **Otomatik Düzenle:** sahnelerin soldan sağa, belirleyici (deterministik) yerleşimi. Yalnızca düğmeye bastığınızda
   çalışır, yalnızca sahne konumlarını değiştirir ve tek bir geri al/yinele adımıdır.
 - **Döngüler:** kendine döngüler, sahne başına döngü ayarları (en çok yineleme, çıkış koşulu) ve otomatik döngü tespiti.
@@ -60,9 +72,15 @@ npm run preview    # üretim derlemesini sun
 
 ## Nasıl kullanılır
 
-1. **Grafiği kurun.** Grafiğin üzerindeki araç çubuğundan sahne ekleyin. Bağlamak için bir düğümün **sağ** tutamacından
-   başka bir düğümün **sol** tutamacına sürükleyin; bir düğümü kendine bağlayarak döngü yapın. Bir öğeyi seçip `Del`
-   ile silin. Başlangıç sahnesini sahne denetçisinden belirleyin. **Örnek**, rüya katmanları, bir döngü ve iki final
+1. **Grafiği kurun.** Grafiğin üzerindeki araç çubuğundan sahne ekleyin ya da tuvale sağ tıklayın (**Sahne ekle**, **Özel
+   sahne ekle**, **EĞER / Dal ekle**, **Yorum / Not ekle**, aranabilir liste için **Düğüm ekle…**). Bağlamak için bir düğümün
+   **sağ** pininden başka bir düğümün **sol** pinine sürükleyin; bir düğümü kendine bağlayarak döngü yapın. Bir pinden boş
+   tuvale sürüklerseniz seçeceğiniz yeni düğüm otomatik bağlanır. Bir bağlantıya sağ tıklayıp içine EĞER düğümü ekleyin.
+   **EĞER / Dal** düğümünün bir DOĞRU ve bir YANLIŞ çıkışı vardır (her birine bir bağlantı): koşulu kendi sözlerinizle yazın,
+   çıkışları sahnelere bağlayın ve Simülatörde kullanın; DOĞRU ya da YANLIŞ'ı kendiniz seçersiniz — seçim bir varsayım olarak
+   gösterilir, EĞER düğümü sahne süresi harcamaz ve fazladan ziyaret ya da tetikleyici eklemez. Yeniden kullanılabilir
+   **Sahne türleri**ni proje denetçisinde (hiçbir şey seçili değilken) tanımlayın. Bir öğeyi seçip `Del` ile silin
+   (bağlantıları tek bir geri alma adımında onunla gider). Başlangıç sahnesini sahne denetçisinden belirleyin. **Örnek**, rüya katmanları, bir döngü ve iki final
    içeren "The Hollow Apartment" demo projesini yükler (İngilizce yazılmıştır).
 2. **Korku anlarını planlayın.** **Zaman çizelgesi**nde, belirli bir zaman ve yoğunlukta tetikleyici eklemek için izi
    çift tıklayın; zamanını değiştirmek için işaretçileri sürükleyin.
@@ -134,14 +152,14 @@ geçmişini değiştirmez, dışa aktarılmaz ve proje değiştirdiğinizde sıf
 - **Depolama** (tarayıcı `localStorage`): `horror-director:library:v1` (dizin), `horror-director:proj:<id>` (proje başına
   bir kayıt), `horror-director:lang` (dil). Kimlikler dahilidir ve adlardan bağımsızdır. Kütüphane verisi (kimlikler,
   zaman damgaları, etkin proje) proje JSON'una asla yazılmaz.
-- **Yedek**, *etkin* projeyi şema 4 dışa aktarma biçiminde indirir. İçe aktarma katı doğrulama yapar (yinelenen
+- **Yedek**, *etkin* projeyi şema 5 dışa aktarma biçiminde indirir. İçe aktarma katı doğrulama yapar (yinelenen
   kimlikler, boşta kalan referanslar, geçersiz değerler, tanınmayan alanlar, daha yeni şema sürümleri hatadır ve hiçbir şey
   değiştirilmeden önce gösterilir). Bir dosya yeni proje olarak ya da onayla etkin projenin yerine aktarılabilir.
-- **Eski dosyalar ve veriler:** şema 1, şema 2 ve şema 3 dışa aktarmaları ile yalın proje dosyaları hâlâ içe aktarılır; eksik
-  çekim planları ve ses ipuçları boş liste olarak başlar, eksik geçiş yönlendirmeleri yok olarak kalır (şema 1/yalın dosyalar
-  için bilgilendirici bir not çıkar) ve sonraki yedek, diğer tüm alanlar değişmeden şema 4 olur. Önceki sürümlerden kalan kayıtlı projeler aynı
-  şekilde okunur ve yalnızca siz düzenleyince yeniden yazılır. Proje kayıtları `{ v: 4, project }` olarak saklanır (eski
-  `v: 1`–`v: 3` kayıtlar hâlâ okunur); yeni alanları okuyamayan eski bir sürüm böyle bir kaydı hasarlı gösterir ve veriyi
+- **Eski dosyalar ve veriler:** şema 1'den şema 4'e kadar dışa aktarmalar ile yalın proje dosyaları hâlâ içe aktarılır; eksik
+  çekim planları, ses ipuçları, EĞER düğümleri, yorumlar ve sahne türleri boş liste olarak başlar, eksik geçiş yönlendirmeleri yok olarak kalır (şema 1/yalın dosyalar
+  için bilgilendirici bir not çıkar) ve sonraki yedek, diğer tüm alanlar değişmeden şema 5 olur. Önceki sürümlerden kalan kayıtlı projeler aynı
+  şekilde okunur ve yalnızca siz düzenleyince yeniden yazılır. Proje kayıtları `{ v: 5, project }` olarak saklanır (eski
+  `v: 1`–`v: 4` kayıtlar hâlâ okunur); yeni alanları okuyamayan eski bir sürüm böyle bir kaydı hasarlı gösterir ve veriyi
   atmak yerine korur. Sürüm düşürme desteklenmez.
 - **Taşıma:** erken sürümlerin tek projelik depolaması doğrulanır, `legacy` kimliğiyle kütüphaneye kopyalanır, kontrol
   edilir ve ancak ondan sonra dizine eklenir. Özgün anahtar (`horror-director:project:v1`) asla değiştirilmez ya da silinmez.
@@ -150,7 +168,7 @@ geçmişini değiştirmez, dışa aktarılmaz ve proje değiştirdiğinizde sıf
 - **Birden çok sekme birleştirilmez** (son yazan kazanır); başka bir sekmeden gelen değişiklik algılanır, bir başlık
   gösterilir ve yeniden yükleyene kadar kütüphane işlemleri engellenir.
 
-JSON şeması `README.md` içinde belgelenmiştir ve dilden bağımsızdır (`format: "horror-director"`, `schemaVersion: 4`, sahnelerde `shots` ve `audioCues` dizileri, geçişlerde isteğe bağlı `direction` nesnesi;
+JSON şeması `README.md` içinde belgelenmiştir ve dilden bağımsızdır (`format: "horror-director"`, `schemaVersion: 5`, sahnelerde `shots` ve `audioCues` dizileri, projede `logicNodes`, `comments` ve `sceneTypes`, bağlantılarda isteğe bağlı `sourcePort`, geçişlerde isteğe bağlı `direction` nesnesi;
 `derived` bloğu içe aktarmada yok sayılır). Türkçe metin (ç, ğ, ı, İ, ö, ş, ü) UTF-8 olarak aynen korunur.
 
 ## Dil
@@ -188,6 +206,8 @@ derlemesine karşı Chromium'da çalışır; ekran görüntüsü karşılaştır
 - Otomatik Düzenle en az kesişimi değil okunabilirliği hedefleyen bir sezgisel yöntemdir; çok yoğun graflarda etiketler yine üst üste binebilir.
 - Çekim planları basit bir liste halinde planlama notlarıdır: storyboard görseli, kamera zaman çizelgesi düzenleyicisi ya da
   motor/Unreal içe aktarımı henüz yoktur. Liste yazılış sırasını korur; zamana göre sıralama açık bir eylemdir.
+- EĞER düğümleri planlama notlarıdır: koşullar serbest metindir ve asla değerlendirilmez; henüz değişken, VE/VEYA mantığı, olay,
+  gecikme, yönlendirme (reroute) düğümü ya da panodan yapıştırma yoktur. Bir EĞER düğümüne dokunan bağlantılar geçiş tasarımı taşıyamaz.
 - Sekans görünümü türetilmiş bir özettir: çalma, dalga biçimi ya da simülasyon yoktur, öğeleri kendisi düzenleyemez, seçim, yakınlık
   ve imleci yalnızca oturum boyunca tutar ve koşullu tetikleyicileri değerlendirmek yerine koşullu olarak işaretler.
 - Ses ipuçları planlama notlarıdır: çalma, dalga biçimi, 3B uzamsallaştırma, yapay zekâ üretimi ya da motor/Unreal çalışma

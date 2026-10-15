@@ -15,18 +15,18 @@ const reject = (e: unknown) => {
 }
 const rawCues = (e: Raw, scene = 's_hall') => e.project.scenes.find((s) => s.id === scene)!.audioCues as Record<string, unknown>[]
 
-describe('schema 4 export and round trip', () => {
-  it('writes schemaVersion 4 with every cue field and survives import byte-stably', () => {
-    expect(SCHEMA_VERSION).toBe(4)
+describe('schema 5 export and round trip', () => {
+  it('writes schemaVersion 5 with every cue field and survives import byte-stably', () => {
+    expect(SCHEMA_VERSION).toBe(5)
     const p = clone()
     const s = p.scenes.find((x) => x.id === 's_living')!
     s.audioCues.push({ ...newAudioCue(1), id: 'u1', title: 'Düşük “fısıltı” ✦', type: 'whisper', origin: 'ambiguous', direction: 'moving', level: 2.5, fadeIn: 0.5, fadeOut: 1.25, loop: true, asset: '/Game/Audio/Whisper_01', notes: 'left\nto right', prompt: 'a distant voice' })
     const text = serializeProject(p)
-    expect(exportOf(p).schemaVersion).toBe(4)
+    expect(exportOf(p).schemaVersion).toBe(5)
     const r = parseProject(text)
     expect(r.ok).toBe(true)
     if (!r.ok) return
-    expect(r.schemaVersion).toBe(4)
+    expect(r.schemaVersion).toBe(5)
     expect(r.project).toEqual(p)
     expect(JSON.parse(serializeProject(r.project)).project).toEqual(JSON.parse(text).project)
   })
@@ -60,7 +60,7 @@ describe('older files import into v4', () => {
     if (v >= 2) expect(r.project.scenes.map((s) => s.shots)).toEqual(base.scenes.map((s) => s.shots))
     if (v >= 3) expect(r.project.transitions).toEqual(base.transitions)
     expect(r.warnings.some((w) => w.code === 'diag.migratedV1')).toBe(v === 1)
-    expect(exportOf(r.project).schemaVersion).toBe(4)
+    expect(exportOf(r.project).schemaVersion).toBe(5)
   })
   it('a bare legacy project imports with empty audio cues', () => {
     const bare = exportOf(clone()).project
@@ -102,10 +102,10 @@ describe('malformed v4 data is rejected without repair', () => {
     expect(() => reject(mutate((_c, e) => (e.project.scenes[0].audioCues = null)))).not.toThrow()
     expect(() => reject(mutate((_c, e) => (e.project.scenes[0].audioCues = {})))).not.toThrow()
   })
-  it('schema versions newer than 4', () => {
+  it('schema versions newer than 5', () => {
     const e = exportOf(clone())
-    e.schemaVersion = 5
-    expect(reject(e)).toMatch(/schema version 5/)
+    e.schemaVersion = 6
+    expect(reject(e)).toMatch(/schema version 6/)
   })
 })
 
