@@ -11,13 +11,15 @@ import type {
   Project,
   Scene,
   SceneKind,
-  Transition,
   Shot,
+  Transition,
   Trigger,
+  TransitionDirection,
 } from '../lib/schema'
 import { sampleProject } from '../lib/sample'
 import { computeLayout } from '../lib/layout'
-import { nextStart, sortedByTime } from '../lib/shots'
+import { nextStart, shotReferences, sortedByTime } from '../lib/shots'
+import { transitionDirectionSchema } from '../lib/schema'
 
 export type View = 'graph' | 'timeline' | 'characters' | 'analysis' | 'simulator'
 export type Selection = { type: 'scene' | 'edge'; id: string } | null
@@ -81,7 +83,12 @@ interface State {
   arrangeScenes: () => boolean
 
   addTransition: (source: string, target: string) => string | null
-  updateTransition: (id: string, patch: Partial<Transition>) => void
+  /** Endpoints are fixed after creation (shot links in a direction depend on them). */
+  updateTransition: (id: string, patch: Partial<Omit<Transition, 'source' | 'target'>>) => void
+  /** Creates the direction when absent and merges the patch. Refuses (false) shot links outside the transition's source/target scene. */
+  updateDirection: (transitionId: string, patch: Partial<TransitionDirection>) => boolean
+  /** Removes the direction of a transition (explicit, undoable). */
+  clearDirection: (transitionId: string) => void
   deleteTransition: (id: string) => void
 
   setTimelineScene: (id: string | null) => void
@@ -92,7 +99,8 @@ interface State {
   /** Cinematic shots (planning notes; independent of triggers/transitions). Authored timing is never changed implicitly. */
   addShot: (sceneId: string) => string
   updateShot: (sceneId: string, id: string, patch: Partial<Omit<Shot, 'id'>>) => void
-  deleteShot: (sceneId: string, id: string) => void
+  /** Refuses (false, nothing changes) while transition directions link the shot, unless `clearReferences`; then shot and links go in one undo step. */
+  deleteShot: (sceneId: string, id: string, opts?: { clearReferences?: boolean }) => boolean
   /** Inserts a copy right after the original, starting where the original ends. */
   duplicateShot: (sceneId: string, id: string, copyTitle: string) => string | null
   /** Moves a shot one place in the authored order (timing untouched). */
@@ -322,6 +330,43 @@ export const useStore = create<State>()(
             }),
             { key: `tr:${id}:${keysOf(patch)}` },
           ),
+        updateDirection: (transitionId, patch) => {
+          const project = get().project
+          const tr = project.transitions.find((t) => t.id === transitionId)
+          if (!tr) return false
+          const src = project.scenes.find((x) => x.id === tr.source)
+          const dst = project.scenes.find((x) => x.id === tr.target)
+          if (patch.sourceShotId && !src?.shots.some((x) => x.id === patch.sourceShotId)) return false
+          if (patch.targetShotId && !dst?.shots.some((x) => x.id === patch.targetShotId)) return false
+          set(
+            (s) => ({
+              project: {
+                ...s.project,
+                transitions: s.project.transitions.map((t) =>
+                  t.id === transitionId ? { ...t, direction: { ...(t.direction ?? transitionDirectionSchema.parse({})), ...patch } } : t,
+                ),
+              },
+            }),
+            { key: `dir:${transitionId}:${keysOf(patch)}` },
+          )
+          return true
+        },
+        clearDirection: (transitionId) =>
+          set((s) => {
+            const tr = s.project.transitions.find((t) => t.id === transitionId)
+            if (!tr?.direction) return {}
+            return {
+              project: {
+                ...s.project,
+                transitions: s.project.transitions.map((t) => {
+                  if (t.id !== transitionId) return t
+                  const { direction, ...rest } = t
+                  void direction
+                  return rest
+                }),
+              },
+            }
+          }),
         deleteTransition: (id) =>
           set(
             (s) => {
@@ -379,8 +424,28 @@ export const useStore = create<State>()(
             }),
             { key: `shot:${id}:${keysOf(patch)}` },
           ),
-        deleteShot: (sceneId, id) =>
-          set((s) => ({ project: mapScene(s.project, sceneId, (sc) => ({ ...sc, shots: sc.shots.filter((x) => x.id !== id) })) })),
+        deleteShot: (sceneId, id, opts) => {
+          const project = get().project
+          if (!project.scenes.find((x) => x.id === sceneId)?.shots.some((x) => x.id === id)) return false
+          const refs = shotReferences(project, sceneId, id)
+          if (refs.length > 0 && !opts?.clearReferences) return false
+          set((s) => {
+            const cleared = new Set(refs.map((r) => r.transitionId))
+            return {
+              project: {
+                ...mapScene(s.project, sceneId, (sc) => ({ ...sc, shots: sc.shots.filter((x) => x.id !== id) })),
+                transitions: s.project.transitions.map((t) => {
+                  if (!cleared.has(t.id) || !t.direction) return t
+                  const d = { ...t.direction }
+                  if (t.source === sceneId && d.sourceShotId === id) d.sourceShotId = null
+                  if (t.target === sceneId && d.targetShotId === id) d.targetShotId = null
+                  return { ...t, direction: d }
+                }),
+              },
+            }
+          })
+          return true
+        },
         duplicateShot: (sceneId, id, copyTitle) => {
           const src = get().project.scenes.find((x) => x.id === sceneId)?.shots.find((x) => x.id === id)
           if (!src) return null

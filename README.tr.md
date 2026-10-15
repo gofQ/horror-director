@@ -30,6 +30,10 @@ korku ritmini planlamak isteyen bağımsız geliştiriciler ve küçük ekipler.
 - **Çekim planlayıcı:** sahne başına sıralı sinematik çekim notları (kadraj, kamera hareketi, psikolojik teknik, ses ve
   görsel notlar, sahneye göre başlangıç/süre); sahne denetçisinden açılır. Yalnızca planlama notlarıdır — tetikleyicilerden
   ve geçişlerden bağımsızdır, çakışma ve taşmaları uyarır ve zamanlamanızı asla değiştirmez.
+- **Geçiş tasarımcısı:** geçiş başına isteğe bağlı yönetmen notları — psikolojik teknik (gerçeğin ortaya çıkışı dahil),
+  oyuncunun inandığı ile gerçekte olanın karşılaştırması, açığa çıkış, görsel/ses sürekliliği, Unreal notları ve kaynak ile
+  hedef sahnelerin planlarına bağlantılar; önce → geçiş → sonra önizlemesiyle. Yalnızca planlama verisidir: asla
+  değerlendirilmez, geçişin stilinden, koşulundan ve süresinden bağımsızdır.
 - **Proje kütüphanesi:** birden çok proje; aç/oluştur/yeniden adlandır/çoğalt/sil, yeni proje olarak içe aktarma, hatırlanan etkin proje.
 - **Güvenlik:** geri al/yinele (50 adım), katı içe aktarma doğrulaması, kayıt durumu göstergesi, JSON yedeği, okunamayan verinin kurtarılması.
 - **İngilizce ve Türkçe** arayüz, duyarlı koyu tema (küçük ekranlarda denetçi alt panele dönüşür).
@@ -93,7 +97,12 @@ npm run preview    # üretim derlemesini sun
    başlangıcı önceki plandan önce olan planları işaretler; hiçbir şey otomatik değiştirilmez. **Zamana göre sırala** listeyi
    yeniden sıralar (zamanlama değişmez). Liste yazılış sırasını gösterir; dışa aktarma sırası da budur. Geri al/yinele her
    değişikliği kapsar.
-8. **Yedekle** düğmesini düzenli kullanın — tarayıcı depolaması temizlenebilir.
+8. **Geçişleri tasarlayın:** bir geçişi seçin (etiketine tıklayın) ve denetçide **Geçişi tasarla**yı açın. Tasarıma başlayın,
+   bir teknik seçin, oyuncunun neye inandığını, gerçekte neyin olduğunu ve açığa çıkışı yazın, süreklilik ve Unreal notları
+   ekleyin; isteğe bağlı olarak kaynak sahneden bir planı ve hedef sahneden bir planı bağlayın (kendine döngülerde ikisi de
+   aynı sahneden seçilir). Önizleme önce → geçiş → sonra akışını gösterir. Bir geçişin bağladığı planı silmek onay ister ve
+   bağlantıyı aynı geri alma adımında temizler; **Tasarımı temizle** tasarımı kaldırır.
+9. **Yedekle** düğmesini düzenli kullanın — tarayıcı depolaması temizlenebilir.
 
 Simülasyon, ritim ve karşılaştırma durumu projeden ayrıdır: proje verisini, otomatik kaydı, kütüphaneyi ya da geri al
 geçmişini değiştirmez, dışa aktarılmaz ve proje değiştirdiğinizde sıfırlanır.
@@ -103,14 +112,15 @@ geçmişini değiştirmez, dışa aktarılmaz ve proje değiştirdiğinizde sıf
 - **Depolama** (tarayıcı `localStorage`): `horror-director:library:v1` (dizin), `horror-director:proj:<id>` (proje başına
   bir kayıt), `horror-director:lang` (dil). Kimlikler dahilidir ve adlardan bağımsızdır. Kütüphane verisi (kimlikler,
   zaman damgaları, etkin proje) proje JSON'una asla yazılmaz.
-- **Yedek**, *etkin* projeyi şema 2 dışa aktarma biçiminde indirir. İçe aktarma katı doğrulama yapar (yinelenen
+- **Yedek**, *etkin* projeyi şema 3 dışa aktarma biçiminde indirir. İçe aktarma katı doğrulama yapar (yinelenen
   kimlikler, boşta kalan referanslar, geçersiz değerler, tanınmayan alanlar, daha yeni şema sürümleri hatadır ve hiçbir şey
   değiştirilmeden önce gösterilir). Bir dosya yeni proje olarak ya da onayla etkin projenin yerine aktarılabilir.
-- **Eski dosyalar ve veriler:** şema 1 dışa aktarmaları ve yalın proje dosyaları hâlâ içe aktarılır; çekim planı içermedikleri
-  için plan listeleri boş başlar (bilgilendirici bir not bunu söyler) ve sonraki yedek, diğer tüm alanlar değişmeden şema 2
-  olur. Önceki sürümlerden kalan kayıtlı projeler aynı şekilde okunur ve yalnızca siz düzenleyince yeniden yazılır. Proje
-  kayıtları `{ v: 2, project }` olarak saklanır (eski `v: 1` kayıtlar hâlâ okunur); çekim planlarını okuyamayan eski bir
-  sürüm böyle bir kaydı hasarlı gösterir ve veriyi atmak yerine korur. Sürüm düşürme desteklenmez.
+- **Eski dosyalar ve veriler:** şema 1 ve şema 2 dışa aktarmaları ile yalın proje dosyaları hâlâ içe aktarılır; eksik çekim
+  planları boş liste olarak başlar, eksik geçiş yönlendirmeleri yok olarak kalır (şema 1/yalın dosyalar için bilgilendirici bir
+  not çıkar) ve sonraki yedek, diğer tüm alanlar değişmeden şema 3 olur. Önceki sürümlerden kalan kayıtlı projeler aynı
+  şekilde okunur ve yalnızca siz düzenleyince yeniden yazılır. Proje kayıtları `{ v: 3, project }` olarak saklanır (eski
+  `v: 1`/`v: 2` kayıtlar hâlâ okunur); yeni alanları okuyamayan eski bir sürüm böyle bir kaydı hasarlı gösterir ve veriyi
+  atmak yerine korur. Sürüm düşürme desteklenmez.
 - **Taşıma:** erken sürümlerin tek projelik depolaması doğrulanır, `legacy` kimliğiyle kütüphaneye kopyalanır, kontrol
   edilir ve ancak ondan sonra dizine eklenir. Özgün anahtar (`horror-director:project:v1`) asla değiştirilmez ya da silinmez.
 - **Güvenli geçiş ve kurtarma:** proje değiştirmeden önce bekleyen düzenlemeler kaydedilir; okunamayan depolama verisi
@@ -118,7 +128,7 @@ geçmişini değiştirmez, dışa aktarılmaz ve proje değiştirdiğinizde sıf
 - **Birden çok sekme birleştirilmez** (son yazan kazanır); başka bir sekmeden gelen değişiklik algılanır, bir başlık
   gösterilir ve yeniden yükleyene kadar kütüphane işlemleri engellenir.
 
-JSON şeması `README.md` içinde belgelenmiştir ve dilden bağımsızdır (`format: "horror-director"`, `schemaVersion: 2`, sahnelerde `shots` dizisi;
+JSON şeması `README.md` içinde belgelenmiştir ve dilden bağımsızdır (`format: "horror-director"`, `schemaVersion: 3`, sahnelerde `shots` dizisi, geçişlerde isteğe bağlı `direction` nesnesi;
 `derived` bloğu içe aktarmada yok sayılır). Türkçe metin (ç, ğ, ı, İ, ö, ş, ü) UTF-8 olarak aynen korunur.
 
 ## Dil
@@ -156,6 +166,9 @@ derlemesine karşı Chromium'da çalışır; ekran görüntüsü karşılaştır
 - Otomatik Düzenle en az kesişimi değil okunabilirliği hedefleyen bir sezgisel yöntemdir; çok yoğun graflarda etiketler yine üst üste binebilir.
 - Çekim planları basit bir liste halinde planlama notlarıdır: storyboard görseli, kamera zaman çizelgesi düzenleyicisi ya da
   motor/Unreal içe aktarımı henüz yoktur. Liste yazılış sırasını korur; zamana göre sıralama açık bir eylemdir.
+- Geçiş yönlendirmeleri planlama notlarıdır: üretilmiş görsel, animasyon ya da 3D önizleme yoktur ve Unreal'de çalıştırılmaz.
+  Kayıtlı projeler yüklenirken şema denetimine girer ama bütünlük denetimine girmez (eksik bir plana bağlantı tasarımcıda
+  işaretlenir ve temizlenebilir; içe aktarma bunu reddeder).
 - Geri al/yinele geçmişi oturumluktur ve proje değiştirilince temizlenir.
 - Unreal tarafında henüz içe aktarıcı yoktur; JSON biçimi yukarıda belgelenmiştir. Üretim paketi kod bölmeli değildir.
 - Türkçe metinler oyun sektöründen anadili Türkçe bir editör tarafından gözden geçirilmemiştir; E2E yalnızca Chromium'u kapsar.

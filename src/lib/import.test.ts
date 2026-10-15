@@ -68,7 +68,7 @@ describe('import validation', () => {
   })
   it('rejects newer schema versions and foreign formats with clear messages', () => {
     const wrapped = JSON.parse(serializeProject(clone()))
-    expect(errorsOf({ ...wrapped, schemaVersion: 3 })).toMatch(/schema version 3/)
+    expect(errorsOf({ ...wrapped, schemaVersion: 4 })).toMatch(/schema version 4/)
     expect(errorsOf({ ...wrapped, format: 'other' })).toMatch(/Unrecognised file format/)
   })
   it('rejects malformed input without throwing', () => {

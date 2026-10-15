@@ -283,9 +283,9 @@ describe('localized diagnostics', () => {
   it('structured parse errors for file-level problems', () => {
     expect(parseProject('{nope')).toEqual({ ok: false, errors: [diag('diag.json')] })
     const wrapped = JSON.parse(serializeProject(sampleProject()))
-    const r = parseProject(JSON.stringify({ ...wrapped, schemaVersion: 3 }))
-    expect(r).toEqual({ ok: false, errors: [diag('diag.newerSchema', { found: '3', supported: '2' })] })
-    expect(formatDiagnostics('tr', (r as unknown as { errors: never[] }).errors)[0]).toContain('3 şema sürümünü')
+    const r = parseProject(JSON.stringify({ ...wrapped, schemaVersion: 4 }))
+    expect(r).toEqual({ ok: false, errors: [diag('diag.newerSchema', { found: '4', supported: '3' })] })
+    expect(formatDiagnostics('tr', (r as unknown as { errors: never[] }).errors)[0]).toContain('4 şema sürümünü')
   })
 })
 
@@ -299,7 +299,7 @@ describe('JSON compatibility', () => {
     p.characters[0].name = 'Şule'
     return p
   }
-  it('export bytes do not depend on the UI language and keep schemaVersion 2', () => {
+  it('export bytes do not depend on the UI language and keep schemaVersion 3', () => {
     vi.stubGlobal('localStorage', memoryStorage())
     vi.stubGlobal('document', { documentElement: { lang: '' } })
     useLang.setState({ lang: 'en' })
@@ -308,7 +308,7 @@ describe('JSON compatibility', () => {
     const b = JSON.stringify(buildExport(turkish(), when))
     vi.unstubAllGlobals()
     expect(a).toBe(b)
-    expect(JSON.parse(a).schemaVersion).toBe(2)
+    expect(JSON.parse(a).schemaVersion).toBe(3)
     expect(a).not.toMatch(/"lang"|"language"|"locale"/)
   })
   it('Turkish project text round-trips through export/import unchanged', () => {

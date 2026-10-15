@@ -141,11 +141,11 @@ describe('persistence and isolation', () => {
     expect(shotsOf()[0].title).toBe('Persisted')
   })
 
-  it('new record writes use v:2 and keep the project unchanged otherwise', () => {
+  it('new record writes use v:3 and keep the project unchanged otherwise', () => {
     st().addShot(SCENE)
     flushNow()
     const rec = rawRecord()
-    expect(rec.v).toBe(2)
+    expect(rec.v).toBe(3)
     expect(rec.project.scenes.find((s) => s.id === SCENE)!.shots).toHaveLength(1)
   })
 
@@ -175,7 +175,7 @@ describe('migration of older stored data', () => {
     st().updateProject({ description: 'edit' })
     flushNow()
     const rec = rawRecord()
-    expect(rec.v).toBe(2)
+    expect(rec.v).toBe(3)
     expect(rec.project.description).toBe('edit')
     expect(rec.project.scenes.every((s) => Array.isArray(s.shots))).toBe(true)
   })
@@ -194,9 +194,9 @@ describe('migration of older stored data', () => {
     expect(mem.data.get(STORAGE_KEY)).toBe(legacy)
   })
 
-  it('treats a malformed v:2 record as damaged: raw data preserved, never overwritten', () => {
+  it('treats a malformed v:3 record as damaged: raw data preserved, never overwritten', () => {
     const good = st().library.activeId!
-    const bad = JSON.parse(JSON.stringify({ v: 2, project: sampleProject() })) as { v: number; project: Project }
+    const bad = JSON.parse(JSON.stringify({ v: 3, project: sampleProject() })) as { v: number; project: Project }
     bad.project.scenes[0].shots[0].framing = 'dutch-angle' as never
     const raw = JSON.stringify(bad)
     const index = parseIndex(b.data.get(LIBRARY_KEY)!)!

@@ -1,10 +1,11 @@
 import { useState } from 'react'
-import { Clapperboard, Flag, Trash2, X } from 'lucide-react'
+import { Clapperboard, Drama, Flag, Trash2, X } from 'lucide-react'
 import { useStore } from '../store/useStore'
 import { useT } from '../i18n/store'
 import { SCENE_KINDS, TRANSITION_STYLES, crossingOf } from '../lib/schema'
 import { Field, NumberInput, Select, TextArea, TextInput } from './fields'
 import { ShotPlannerDialog } from './ShotPlannerDialog'
+import { TransitionDesignerDialog } from './TransitionDesignerDialog'
 
 function SceneInspector({ id }: { id: string }) {
   const { t } = useT()
@@ -128,6 +129,7 @@ function EdgeInspector({ id }: { id: string }) {
   const tr = project.transitions.find((x) => x.id === id)
   const update = useStore((s) => s.updateTransition)
   const del = useStore((s) => s.deleteTransition)
+  const [designOpen, setDesignOpen] = useState(false)
   if (!tr) return null
   const a = project.scenes.find((s) => s.id === tr.source)
   const b = project.scenes.find((s) => s.id === tr.target)
@@ -172,6 +174,21 @@ function EdgeInspector({ id }: { id: string }) {
       <Field label={t('field.condition')} hint={t('hint.transitionCondition')}>
         <TextArea value={tr.condition} rows={3} onChange={(condition) => update(id, { condition })} />
       </Field>
+
+      <div className="section-title">{t('direction.section')}</div>
+      <p className="muted" data-testid="direction-summary">
+        {tr.direction
+          ? `${t('direction.summary.some', { technique: t(`technique.${tr.direction.technique}`) })}${
+              tr.direction.sourceShotId || tr.direction.targetShotId
+                ? ` · ${t('direction.summary.shots', { n: (tr.direction.sourceShotId ? 1 : 0) + (tr.direction.targetShotId ? 1 : 0) })}`
+                : ''
+            }`
+          : t('direction.summary.none')}
+      </p>
+      <button className="btn" data-testid="open-direction" onClick={() => setDesignOpen(true)} title={t('direction.openTip')}>
+        <Drama size={14} /> {t('direction.open')}
+      </button>
+      {designOpen && <TransitionDesignerDialog transitionId={id} onClose={() => setDesignOpen(false)} />}
     </>
   )
 }
