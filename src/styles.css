@@ -195,3 +195,16 @@ kbd { background: var(--panel-2); border: 1px solid var(--border); border-radius
   .timeline-lower, .characters-top { grid-template-columns: 1fr; }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+
+/* v0.2: save status, banners, modal */
+.save-badge { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--muted); padding: 0 6px; white-space: nowrap; }
+.save-badge.error { color: #ff8a9b; font-weight: 600; }
+.save-badge.pending { color: #f0c36d; }
+.banner { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 8px 14px; border-bottom: 1px solid var(--border); background: var(--panel); }
+.banner.error { background: #2d1219; border-color: #7a2536; color: #ffb3bf; }
+.banner span { flex: 1; min-width: 200px; }
+.modal-backdrop { position: fixed; inset: 0; z-index: 100; background: rgba(5,3,7,.7); display: flex; align-items: center; justify-content: center; padding: 16px; }
+.modal { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 18px; width: min(560px, 100%); max-height: 85vh; overflow: auto; display: flex; flex-direction: column; gap: 10px; box-shadow: 0 20px 60px rgba(0,0,0,.6); }
+.modal-actions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+.inline-icon { vertical-align: -2px; } .inline-icon.err { color: #ff8a9b; }
+@media (max-width: 900px) { .save-badge { font-size: 11px; } }

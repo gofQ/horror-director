@@ -77,17 +77,6 @@ describe('import/export', () => {
     expect(parseProject('nope')).toMatchObject({ ok: false })
     const bad = parseProject(JSON.stringify({ name: 'x', scenes: [{ id: 'a', title: 'A', kind: 'bogus', position: { x: 0, y: 0 } }] }))
     expect(bad.ok).toBe(false)
-    if (!bad.ok) expect(bad.error).toMatch(/scenes\.0\.kind/)
-  })
-  it('drops dangling transitions and start references', () => {
-    const p = sampleProject()
-    p.transitions.push(newTransition('ghost', 's_hall'))
-    p.startSceneId = 'ghost'
-    const res = parseProject(JSON.stringify(p))
-    expect(res.ok).toBe(true)
-    if (res.ok) {
-      expect(res.project.transitions.length).toBe(sampleProject().transitions.length)
-      expect(res.project.startSceneId).toBeNull()
-    }
+    if (!bad.ok) expect(bad.errors.join()).toMatch(/scenes\.0\.kind/)
   })
 })

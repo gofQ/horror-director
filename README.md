@@ -17,6 +17,7 @@ everything as JSON for later Unreal Engine import. No backend, no paid APIs — 
 - **Analysis**: structural checks (no start, unreachable scenes, dead ends, closed loops without exit, inescapable dreams,
   triggers past scene duration, stale references) plus project statistics.
 - **Import / Export JSON** with schema validation (zod) and a versioned format.
+- Undo/redo (50 steps, Ctrl/Cmd+Z), strict import validation, save-status indicator and one-click JSON backup (Ctrl/Cmd+S).
 - Auto-save to `localStorage`, responsive dark UI (inspector becomes a bottom sheet on small screens).
 
 ## Setup
@@ -42,7 +43,7 @@ npm run preview    # serve the production build
 - Add scenes from the toolbar over the graph. Drag from a node's **right** handle to another node's **left** handle to connect;
   connect a node to itself to make a loop. Select and press `Del` to delete.
 - Double-click the timeline track to add a trigger at that time/intensity; drag markers to retime.
-- Use **Export** regularly for backups — browser storage can be cleared.
+- Use **Backup** regularly for backups — browser storage can be cleared.
 - **Sample** loads "The Hollow Apartment", a demo project showing dream layers, a loop and two endings.
 
 ## JSON format (for Unreal integration)
