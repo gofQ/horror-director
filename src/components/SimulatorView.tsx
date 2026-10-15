@@ -12,6 +12,7 @@ import { PacingPanel } from './PacingPanel'
 import { ComparePanel } from './ComparePanel'
 import { FlowTrace, RandomPanel } from './FlowPanels'
 import { RANDOM_PORT_COLOR } from './FlowNodes'
+import { SEQUENCE_PORT_COLOR } from './SequenceNodes'
 import { analyzePacing } from '../lib/pacing'
 
 const W = 1000
@@ -114,6 +115,11 @@ export function SimulatorView() {
                       t('sim.pendingEvent', { title: result.pending.title || t('default.event') })
                     ) : result.pending.kind === 'delay' ? (
                       t('sim.pendingDelay', { title: result.pending.title || t('default.delay'), n: result.pending.seconds ?? 0 })
+                    ) : result.pending.kind === 'sequence' ? (
+                      t('sim.pendingSequence', {
+                        title: result.pending.title || t('default.sequence'),
+                        state: (result.pending.stage ?? 0) >= (result.pending.stages ?? 2) ? t('sim.seqState.done') : t('sim.seqState.stage', { n: (result.pending.stage ?? 0) + 1, k: result.pending.stage ?? 0 }),
+                      })
                     ) : result.pending.kind === 'random' ? (
                       t('sim.pendingRandom', { title: result.pending.title || t('default.random') })
                     ) : (
@@ -144,8 +150,8 @@ export function SimulatorView() {
                     onClick={() => choose(o.transitionId, o.fromRandom ? { mode: 'manual' } : undefined)}
                   >
                     <span className="sim-option-title">
-                      {o.port && <strong style={{ color: o.port === 'true' ? '#6ee7a1' : o.port === 'false' ? '#ff6b7d' : RANDOM_PORT_COLOR[o.port] }}>{t(`pin.${o.port}`)} </strong>}
-                      {o.port ? (o.fromRandom ? (o.fromRandom.label ? `${o.fromRandom.label} · ${o.fromRandom.probability}% ` : `${o.fromRandom.probability}% `) : o.label ? `${o.label} ` : '') : `${label(o)} `}→{' '}
+                      {o.port && <strong style={{ color: o.port === 'true' ? '#6ee7a1' : o.port === 'false' ? '#ff6b7d' : o.port === 'a' || o.port === 'b' ? RANDOM_PORT_COLOR[o.port] : SEQUENCE_PORT_COLOR[o.port] }}>{t(`pin.${o.port}`)} </strong>}
+                      {o.port ? (o.fromSequence ? (o.port === 'completed' ? t('sim.seqCompleted') : t('sim.seqStage', { n: o.fromSequence.stage + 1, title: o.fromSequence.title || t('default.sequence') })) + ' ' : o.fromRandom ? (o.fromRandom.label ? `${o.fromRandom.label} · ${o.fromRandom.probability}% ` : `${o.fromRandom.probability}% `) : o.label ? `${o.label} ` : '') : `${label(o)} `}→{' '}
                       {o.targetType !== 'scene' ? (
                         <>
                           <span className="badge">{t(`${o.targetType === 'setFlag' ? 'setflag' : o.targetType}.badge`)}</span>{' '}

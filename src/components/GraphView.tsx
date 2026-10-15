@@ -26,7 +26,7 @@ import {
   type NodeChange,
   type NodeProps,
 } from '@xyflow/react'
-import { BoxSelect, ClipboardPaste, Clapperboard, Copy, Crosshair, Dices, Flag, FlagTriangleRight, GitBranch, Focus, Hand, Maximize, Milestone, MousePointer2, Network, Pencil, Plus, Repeat, ScanSearch, StickyNote, Timer, Trash2, Volume2, X, Zap } from 'lucide-react'
+import { BoxSelect, ClipboardPaste, Clapperboard, Copy, CornerDownLeft, Crosshair, Dices, Flag, FlagTriangleRight, GitBranch, Focus, Hand, ListOrdered, Maximize, Milestone, MousePointer2, Network, Pencil, Plus, Repeat, ScanSearch, StickyNote, Timer, Trash2, Volume2, X, Zap } from 'lucide-react'
 import { useStore, type NewNodeSpec } from '../store/useStore'
 import { BRANCH_PORTS, SCENE_KINDS, crossingOf, type Port, type GraphComment, type LogicNode, type Scene, type SceneType, type TransitionStyle, type Waypoint } from '../lib/schema'
 import { KIND_COLOR } from '../lib/theme'
@@ -40,10 +40,13 @@ import { TYPE_ICON_COMPONENTS } from '../lib/sceneTypes'
 import { ContextMenu, isEditableTarget, longPressHandlers, useContextMenu, type MenuItem } from './ContextMenu'
 import { useExprText } from './useExprText'
 import { DELAY_COLOR, DelayNode, EVENT_COLOR, EventNode, PIN_PITCH, PIN_TOP, RANDOM_COLOR, RANDOM_PORT_COLOR, RandomNode, type DelayFlowNode, type EventFlowNode, type RandomFlowNode } from './FlowNodes'
+import { SEQUENCE_COLOR, SEQ_RETURN_COLOR, SEQUENCE_PORT_COLOR, SeqReturnNode, SequenceNode, type SeqReturnFlowNode, type SequenceFlowNode } from './SequenceNodes'
+import { sequenceIssues, stageOf, stageOfPort } from '../lib/seqflow'
+import { formatDiagnostic } from '../lib/diagnostics'
 import { ShotPlannerDialog } from './ShotPlannerDialog'
 import { AudioPlannerDialog } from './AudioPlannerDialog'
 
-const PORT_COLOR: Record<Port, string> = { true: '#6ee7a1', false: '#ff6b7d', ...RANDOM_PORT_COLOR }
+const PORT_COLOR: Record<Port, string> = { true: '#6ee7a1', false: '#ff6b7d', ...RANDOM_PORT_COLOR, ...SEQUENCE_PORT_COLOR }
 const LOGIC_COLOR = '#e0af68'
 const SET_COLOR = '#5fd6c4'
 
@@ -61,7 +64,7 @@ type SceneFlowNode = Node<SceneNodeData, 'scene'>
 type BranchFlowNode = Node<BranchNodeData, 'branch'>
 type SetFlagFlowNode = Node<SetFlagNodeData, 'setFlag'>
 type CommentFlowNode = Node<CommentNodeData, 'comment'>
-type FlowNode = SceneFlowNode | BranchFlowNode | SetFlagFlowNode | EventFlowNode | DelayFlowNode | RandomFlowNode | CommentFlowNode
+type FlowNode = SceneFlowNode | BranchFlowNode | SetFlagFlowNode | EventFlowNode | DelayFlowNode | RandomFlowNode | SequenceFlowNode | SeqReturnFlowNode | CommentFlowNode
 
 function SceneNode({ data, selected }: NodeProps<SceneFlowNode>) {
   const { scene, sceneType, isStart, unreachable, chips } = data
@@ -354,9 +357,9 @@ function ConnectionLine({ fromX, fromY, toX, toY, connectionStatus, fromPosition
   )
 }
 
-const nodeTypes = { scene: SceneNode, branch: BranchNode, setFlag: SetFlagNode, event: EventNode, delay: DelayNode, random: RandomNode, comment: CommentNode }
+const nodeTypes = { scene: SceneNode, branch: BranchNode, setFlag: SetFlagNode, event: EventNode, delay: DelayNode, random: RandomNode, sequence: SequenceNode, seqReturn: SeqReturnNode, comment: CommentNode }
 const edgeTypes = { transition: TransitionEdge }
-const isPort = (v: unknown): v is Port => v === 'true' || v === 'false' || v === 'a' || v === 'b'
+const isPort = (v: unknown): v is Port => v === 'true' || v === 'false' || v === 'a' || v === 'b' || v === 'then0' || v === 'then1' || v === 'completed'
 
 type Pending = { x: number; y: number; from?: { id: string; port?: Port } }
 
@@ -385,6 +388,16 @@ function Canvas() {
   // Reachability only needs the structure: recomputing the full analysis on every drag tick is wasted work.
   const topoSig = [project.startSceneId, ...project.scenes.map((x) => x.id), '#', ...project.logicNodes.map((n) => n.id), '#', ...project.transitions.map((x) => `${x.source}>${x.target}`)].join(',')
   const reachable = useMemo(() => reachableIds(project), [topoSig]) // eslint-disable-line react-hooks/exhaustive-deps
+  // Sequence / Return authoring problems per node (formatted for the badges); recomputed from the structure only, never while dragging.
+  const seqSig = project.logicNodes.some((n) => n.type === 'sequence' || n.type === 'seqReturn')
+    ? [...project.logicNodes.map((n) => `${n.id}:${n.type}:${n.title}:${n.sequenceId ?? ''}:${n.stage ?? ''}`), '#', ...project.transitions.map((x) => `${x.source}>${x.target}:${x.sourcePort ?? ''}`)].join(',')
+    : ''
+  const seqIssues = useMemo(() => {
+    const map = new Map<string, string[]>()
+    if (!seqSig) return map
+    for (const i of sequenceIssues(project)) map.set(i.nodeId, [...(map.get(i.nodeId) ?? []), formatDiagnostic(t, i.diagnostic)])
+    return map
+  }, [seqSig, t]) // eslint-disable-line react-hooks/exhaustive-deps
   const selectedSet = useMemo(() => new Set(selectedNodeIds), [selectedNodeIds])
   const typeById = useMemo(() => new Map(project.sceneTypes.map((x) => [x.id, x])), [project.sceneTypes])
 
@@ -426,7 +439,7 @@ function Canvas() {
         }),
       },
     }))
-    const branches: (BranchFlowNode | SetFlagFlowNode | EventFlowNode | DelayFlowNode | RandomFlowNode)[] = project.logicNodes.map((node) => {
+    const branches: (BranchFlowNode | SetFlagFlowNode | EventFlowNode | DelayFlowNode | RandomFlowNode | SequenceFlowNode | SeqReturnFlowNode)[] = project.logicNodes.map((node) => {
       const base = { id: node.id, position: node.position, measured: dims[node.id], selected: selectedSet.has(node.id) }
       const unreachable = hasStart && !reachable.has(node.id)
       switch (node.type) {
@@ -438,12 +451,16 @@ function Canvas() {
           return { ...base, type: 'delay' as const, data: { node, unreachable } } satisfies DelayFlowNode
         case 'random':
           return { ...base, type: 'random' as const, data: { node, unreachable } } satisfies RandomFlowNode
+        case 'sequence':
+          return { ...base, type: 'sequence' as const, data: { node, unreachable, issues: seqIssues.get(node.id) ?? [] } } satisfies SequenceFlowNode
+        case 'seqReturn':
+          return { ...base, type: 'seqReturn' as const, data: { node, unreachable, issues: seqIssues.get(node.id) ?? [], ownerTitle: project.logicNodes.find((x) => x.id === node.sequenceId)?.title } } satisfies SeqReturnFlowNode
         default:
           return { ...base, type: 'branch' as const, data: { node, unreachable } } satisfies BranchFlowNode
       }
     })
     return [...comments, ...scenes, ...branches]
-  }, [project, selectedSet, reachable, typeById, dims])
+  }, [project, selectedSet, reachable, typeById, dims, seqIssues])
 
   const kindSig = project.scenes.map((x) => `${x.id}:${x.kind}`).join(',')
   const logicSig = project.logicNodes.map((n) => n.id).join(',')
@@ -617,18 +634,30 @@ function Canvas() {
     if (spec.type === 'comment') return void s.addComment(pos)
     if (from) {
       const r = s.addNodeFromPin({ fromId: from.id, fromPort: from.port, position: pos, node: spec })
-      if (!r) say(t(from.port ? 'connect.portTaken' : 'connect.outputTaken'))
+      if (!r) {
+        // Name the real reason when the pin belongs to a Sequence stage.
+        say(t(inStageContext(from) ? 'connect.seqStageForbidden' : from.port ? 'connect.portTaken' : 'connect.outputTaken'))
+      }
       return
     }
     if (spec.type !== 'scene') return void s.addLogicNode(pos, spec.type)
     s.addScene(spec.kind, pos, spec.typeId)
   }
 
+  /** True when the pin starts inside a Sequence stage (a Then pin, or an Event / Delay / Set Flag already in a stage). */
+  const inStageContext = (from?: Pending['from']) => {
+    if (!from) return false
+    const p = store().project
+    const src = p.logicNodes.find((n) => n.id === from.id)
+    return (src?.type === 'sequence' && stageOfPort(from.port) >= 0) || (!!src && stageOf(p, src.id) !== null)
+  }
+
   /** Searchable, categorized creation list (compatible targets only when started from a pin). */
   const pickerItems = (x: number, y: number, from?: Pending['from']): MenuItem[] => {
     const types = store().project.sceneTypes
     const dot = (c: string) => <span className="kind-dot" style={{ ['--kind' as string]: c }} />
-    return [
+    const stageOnly = inStageContext(from)
+    const all: MenuItem[] = [
       ...SCENE_KINDS.map<MenuItem>((k) => ({
         id: `scene:${k}`,
         label: t(`kind.${k}`),
@@ -653,8 +682,13 @@ function Canvas() {
       { id: 'event', label: t('pick.event'), group: t('pick.flow'), keywords: 'event milestone narrative beat olay', icon: <Milestone size={13} />, onSelect: () => create({ type: 'event' }, x, y, from) },
       { id: 'delay', label: t('pick.delay'), group: t('pick.flow'), keywords: 'delay wait pause timer bekleme', icon: <Timer size={13} />, onSelect: () => create({ type: 'delay' }, x, y, from) },
       { id: 'random', label: t('pick.random'), group: t('pick.flow'), keywords: 'random branch chance probability dice rastgele', icon: <Dices size={13} />, onSelect: () => create({ type: 'random' }, x, y, from) },
+      { id: 'sequence', label: t('pick.sequence'), group: t('pick.flow'), keywords: 'sequence ordered then stages completed sıra', icon: <ListOrdered size={13} />, onSelect: () => create({ type: 'sequence' }, x, y, from) },
+      // A Return only makes sense when it closes a stage; from the palette it is created unassigned.
+      ...(!from || stageOnly ? [{ id: 'seqreturn', label: t('pick.seqReturn'), group: t('pick.flow'), keywords: 'sequence return stage end dönüş', icon: <CornerDownLeft size={13} />, onSelect: () => create({ type: 'seqReturn' }, x, y, from) } as MenuItem] : []),
       ...(from ? [] : [{ id: 'comment', label: t('pick.comment'), group: t('pick.notes'), keywords: 'comment note frame', icon: <StickyNote size={13} />, onSelect: () => create({ type: 'comment' }, x, y) } as MenuItem]),
     ]
+    // Inside a stage only Event, Delay, Set Flag and the stage's own Return are valid targets.
+    return stageOnly ? all.filter((i) => ['setflag', 'event', 'delay', 'seqreturn'].includes(i.id)) : all
   }
   const openPicker = (x: number, y: number, from?: Pending['from']) =>
     open({ x, y, items: pickerItems(x, y, from), ariaLabel: t('pick.title'), search: true, searchPlaceholder: t('pick.search'), emptyText: t('ctx.noResults') })
@@ -679,6 +713,8 @@ function Canvas() {
       { id: 'add-event', label: t('ctx.addEvent'), icon: <Milestone size={13} />, onSelect: () => create({ type: 'event' }, x, y) },
       { id: 'add-delay', label: t('ctx.addDelay'), icon: <Timer size={13} />, onSelect: () => create({ type: 'delay' }, x, y) },
       { id: 'add-random', label: t('ctx.addRandom'), icon: <Dices size={13} />, onSelect: () => create({ type: 'random' }, x, y) },
+      { id: 'add-sequence', label: t('ctx.addSequence'), icon: <ListOrdered size={13} />, onSelect: () => create({ type: 'sequence' }, x, y) },
+      { id: 'add-seqreturn', label: t('ctx.addSeqReturn'), icon: <CornerDownLeft size={13} />, onSelect: () => create({ type: 'seqReturn' }, x, y) },
       { id: 'add-comment', label: t('ctx.addComment'), icon: <StickyNote size={13} />, onSelect: () => create({ type: 'comment' }, x, y) },
       { id: 'add-node', label: t('ctx.addNode'), icon: <Plus size={13} />, onSelect: () => openPicker(x, y) },
       { id: 'paste', label: t('ctx.paste'), icon: <ClipboardPaste size={13} />, separatorBefore: true, disabled: clipboardCount === 0, onSelect: () => void store().paste(flowAt(x, y)) },
@@ -707,7 +743,7 @@ function Canvas() {
   const branchMenu = (id: string): MenuItem[] => {
     const s = store()
     const type = s.project.logicNodes.find((n) => n.id === id)?.type
-    const editKey = type === 'setFlag' ? 'ctx.editSetFlag' : type === 'event' ? 'ctx.editEvent' : type === 'delay' ? 'ctx.editDelay' : type === 'random' ? 'ctx.editRandom' : 'ctx.editCondition'
+    const editKey = type === 'setFlag' ? 'ctx.editSetFlag' : type === 'event' ? 'ctx.editEvent' : type === 'delay' ? 'ctx.editDelay' : type === 'random' ? 'ctx.editRandom' : type === 'sequence' ? 'ctx.editSequence' : type === 'seqReturn' ? 'ctx.editSeqReturn' : 'ctx.editCondition'
     return [
       { id: 'cond', label: t(editKey), icon: <Pencil size={13} />, onSelect: () => { s.select({ type: 'node', id }); s.requestInspectorFocus(id) } },
       { id: 'copy', label: t('ctx.copy'), icon: <Copy size={13} />, onSelect: () => void s.copySelection() },
@@ -901,6 +937,12 @@ function Canvas() {
         <button className="btn small" data-testid="add-random" onClick={() => addAtCenter({ type: 'random' })} title={t('random.hint')} style={{ ['--kind' as string]: RANDOM_COLOR }}>
           <Dices size={14} /> {t('pick.random')}
         </button>
+        <button className="btn small" data-testid="add-sequence" onClick={() => addAtCenter({ type: 'sequence' })} title={t('sequence.hint')} style={{ ['--kind' as string]: SEQUENCE_COLOR }}>
+          <ListOrdered size={14} /> {t('pick.sequence')}
+        </button>
+        <button className="btn small" data-testid="add-seqreturn" onClick={() => addAtCenter({ type: 'seqReturn' })} title={t('seqReturn.hint')} style={{ ['--kind' as string]: SEQ_RETURN_COLOR }}>
+          <CornerDownLeft size={14} /> {t('pick.seqReturn')}
+        </button>
         <button className="btn small" data-testid="add-comment" onClick={() => addAtCenter({ type: 'comment' })} title={t('comment.hint')}>
           <StickyNote size={14} /> {t('pick.comment')}
         </button>
@@ -991,7 +1033,7 @@ function Canvas() {
           zoomable
           maskColor="rgba(8,6,10,0.7)"
           nodeColor={(n) =>
-            n.type === 'branch' ? LOGIC_COLOR : n.type === 'setFlag' ? SET_COLOR : n.type === 'event' ? EVENT_COLOR : n.type === 'delay' ? DELAY_COLOR : n.type === 'random' ? RANDOM_COLOR : n.type === 'comment' ? '#3a3445' : KIND_COLOR[(n.data as SceneNodeData).scene.kind]
+            n.type === 'branch' ? LOGIC_COLOR : n.type === 'setFlag' ? SET_COLOR : n.type === 'event' ? EVENT_COLOR : n.type === 'delay' ? DELAY_COLOR : n.type === 'random' ? RANDOM_COLOR : n.type === 'sequence' ? SEQUENCE_COLOR : n.type === 'seqReturn' ? SEQ_RETURN_COLOR : n.type === 'comment' ? '#3a3445' : KIND_COLOR[(n.data as SceneNodeData).scene.kind]
           }
         />
       </ReactFlow>

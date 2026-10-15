@@ -71,7 +71,7 @@ describe('library integrity on load', () => {
     const index = parseIndex(b.data.get(LIBRARY_KEY)!)!
     const activeId = index.activeId!
     const bad = broken['a transition to a missing scene'](sampleProject())
-    const raw = JSON.stringify({ v: 8, project: bad })
+    const raw = JSON.stringify({ v: 9, project: bad })
     b.data.set(recordKey(activeId), raw)
     bootLibrary(b)
     expect(st().notices.some((n) => n.kind === 'activeDamaged')).toBe(true)
@@ -104,7 +104,7 @@ describe('Open anyway recovery', () => {
     expect(b.data.get(recordKey('bad1'))).toBe(raw)
     st().updateProject({ description: 'edited' })
     flushNow()
-    expect(JSON.parse(b.data.get(recordKey('bad1'))!).v).toBe(8)
+    expect(JSON.parse(b.data.get(recordKey('bad1'))!).v).toBe(9)
     expect(b.data.get(copies[0])).toBe(raw) // the raw copy stays
   })
   it('refuses (and opens nothing) when the raw copy cannot be stored', () => {

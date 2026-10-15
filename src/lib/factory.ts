@@ -15,6 +15,8 @@ export interface DefaultNames {
   event: string
   delay: string
   random: string
+  sequence: string
+  seqReturn: string
   outcomeA: string
   outcomeB: string
   flag: string
@@ -37,6 +39,8 @@ export const ENGLISH_NAMES: DefaultNames = {
   event: 'Event',
   delay: 'Delay',
   random: 'Random branch',
+  sequence: 'Sequence',
+  seqReturn: 'Sequence return',
   outcomeA: 'Outcome A',
   outcomeB: 'Outcome B',
   flag: 'New flag',
@@ -139,9 +143,18 @@ export function newRandomNode(position = { x: 0, y: 0 }, names: DefaultNames = E
   return { id: uid('rnd'), type: 'random', title: names.random, description: '', condition: '', probabilityA: 50, labelA: names.outcomeA, labelB: names.outcomeB, position }
 }
 
+export function newSequenceNode(position = { x: 0, y: 0 }, names: DefaultNames = ENGLISH_NAMES): LogicNode {
+  return { id: uid('seq'), type: 'sequence', title: names.sequence, description: '', condition: '', position }
+}
+
+/** A Sequence Return: `sequenceId` null means it is not assigned to a Sequence yet (incomplete authoring). */
+export function newSeqReturnNode(position = { x: 0, y: 0 }, names: DefaultNames = ENGLISH_NAMES, sequenceId: string | null = null, stage = 0): LogicNode {
+  return { id: uid('ret'), type: 'seqReturn', title: names.seqReturn, description: '', condition: '', sequenceId, stage, position }
+}
+
 /** Id prefix of a logic node type (IF keeps `if`, Set Flag `set`). */
 export const logicIdPrefix = (type: LogicNode['type']): string =>
-  ({ branch: 'if', setFlag: 'set', event: 'evt', delay: 'dly', random: 'rnd' })[type]
+  ({ branch: 'if', setFlag: 'set', event: 'evt', delay: 'dly', random: 'rnd', sequence: 'seq', seqReturn: 'ret' })[type]
 
 /** A fresh logic node of any type with that type's defaults. */
 export function newLogicNodeOfType(type: LogicNode['type'], position = { x: 0, y: 0 }, names: DefaultNames = ENGLISH_NAMES): LogicNode {
@@ -154,6 +167,10 @@ export function newLogicNodeOfType(type: LogicNode['type'], position = { x: 0, y
       return newDelayNode(position, names)
     case 'random':
       return newRandomNode(position, names)
+    case 'sequence':
+      return newSequenceNode(position, names)
+    case 'seqReturn':
+      return newSeqReturnNode(position, names)
     default:
       return newLogicNode(position, names)
   }

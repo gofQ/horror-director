@@ -3,17 +3,36 @@
 Version history of Horror Director, newest first. This file is the canonical user-facing history; the READMEs describe
 the current product only and `progress.md` tracks engineering status.
 
-The labels below (MVP/v0.1 through v0.7D) are **development milestones**, not published releases: the project has no
+The labels below (MVP/v0.1 through v0.7E) are **development milestones**, not published releases: the project has no
 tagged releases and `package.json` stays at `0.1.0`. Each milestone after the MVP was developed on its own branch and
 merged through a pull request into the integration branch (`claude/optimistic-tesla-r2v8g6`). The JSON schema was
 `schemaVersion: 1` until v0.6A introduced `schemaVersion: 2` (scene shots) and v0.6B `schemaVersion: 3`
-(transition direction) v0.6C `schemaVersion: 4` (scene audio cues) v0.7A `schemaVersion: 5` (IF nodes, comments, custom scene types, branch-port links) v0.7B `schemaVersion: 6` (narrative flags, Set Flag nodes, structured IF conditions) v0.7C `schemaVersion: 7` (reroute points) and v0.7D `schemaVersion: 8` (Event, Delay and Random Branch nodes); files of every earlier version, and bare project files, are still imported.
+(transition direction) v0.6C `schemaVersion: 4` (scene audio cues) v0.7A `schemaVersion: 5` (IF nodes, comments, custom scene types, branch-port links) v0.7B `schemaVersion: 6` (narrative flags, Set Flag nodes, structured IF conditions) v0.7C `schemaVersion: 7` (reroute points) v0.7D `schemaVersion: 8` (Event, Delay and Random Branch nodes) and v0.7E `schemaVersion: 9` (ordered Sequence and Sequence Return nodes); files of every earlier version, and bare project files, are still imported.
 
 Every future feature or fix milestone must add an entry here (see `CLAUDE.md`).
 
+## v0.7E — Ordered Sequence
+
+Pull request: [#17](https://github.com/gofQ/horror-director/pull/17)
+
+### Added
+- **Sequence node**: a Blueprint-style ordered-execution node with one input and three outputs, **Then 0**, **Then 1** and **Completed** (stable id, title, description). Entering it runs the connected Then 0 subflow, returns to the Sequence, runs the Then 1 subflow, returns again and only then follows Completed into the normal narrative graph. The Then outputs are stages that run one after the other — never alternative branches. Exactly two stages (the data model keeps the stage as an index); no dynamic output counts, no nesting, no parallel execution.
+- **Sequence Return node**: one input, no execution output; it references its owning Sequence and the Then stage it closes (assigned automatically when created from a Then pin or a stage chain, otherwise in the Inspector). In the simulator it hands control back to its Sequence.
+- **Stages** are linear subflows of existing **Event, Delay and Set Flag** nodes that end in the matching Return. Scenes, IF, Random Branch and nested Sequence nodes are not allowed inside a stage, and a stage can only be entered through its own Then output and left through its own Return. Shared pure helpers (`src/lib/seqflow.ts`) drive the connection rules, project validation, analysis and the editor badges; refused connections explain why (wrong stage or owner, forbidden node, shortcut into a stage, Return without output, one connection per pin).
+- **Simulator**: the single pure `simulateRoute` gains a bounded Sequence frame. Every connection stays an explicit route choice and no transition id is invented: after the Return the Sequence offers the next stage, after the second Return only Completed. Sequence and Returns take no time, Delay seconds are counted exactly once, Event timestamps and Set Flag assignments keep their order, and the Flow Trace shows *Sequence started*, *stage entered*, *stage returned* and *Sequence completed*. Back, Restart and graph edits rebuild the frame from the chosen transition ids; the step cap and loop limits still apply; visiting the Sequence again starts a fresh invocation. An unconnected or unclosed stage is reported and the route stops there — a stage is never treated as complete, Completed is never offered early and no scene visit is invented.
+- **Editor**: right-click menu, searchable picker (a Then pin offers only valid stage nodes), palette buttons, drag-to-create, Inspector for both nodes (outputs overview and the node's authoring problems), copy/paste/duplicate with ownership remapping (a complete selected Sequence subgraph keeps its stages and Returns with fresh ids; a partial copy leaves a Return unassigned instead of dangling), multi-selection, batch delete (deleting a Sequence leaves its Returns unassigned), undo/redo, Auto Arrange, minimap, reroute points, reachability and analysis (valid Sequence paths produce no false dead ends or unreachable scenes), Turkish/English and keyboard operation. Nodes with incomplete outputs or stages show a visible *Incomplete* warning.
+
+### Changed
+- **JSON schema 9**: logic nodes may be `sequence` or `seqReturn` (`sequenceId` owner or `null` while unassigned, `stage` 0–1); `sourcePort` additionally accepts `then0`, `then1` and `completed` (only for connections leaving a Sequence). Malformed ownership references, invalid stage ports, fields that belong to another node type, a Return that is not on its own stage, forbidden stage contents, shortcuts into a stage, extra Return inputs/outputs, unknown fields and more than one connection per output are rejected rather than repaired; incomplete authoring (unconnected outputs, a stage without its Return, an unassigned Return) imports with warnings. Schema 1–8 and bare project files are still imported unchanged; library records are written as `{ v: 9, project }`; `v: 1`–`v: 8` are still read and never rewritten at boot; an older build treats `v: 9` records as damaged and preserves them.
+- Connection and validation messages now name Sequence pins; the v0.7D PR link above points to #16. `CLAUDE.md` compatibility rules now state schema 9 and records `{ v: 9 }`. `package.json` version metadata is unchanged.
+- E2E: the batch-drag test waits for the drag handler before releasing the pointer (removes a timing race under load).
+
+### Not included
+Parallel execution, nested Sequences, dynamic output counts, gameplay execution, new variable types, Unreal integration.
+
 ## v0.7D — Event & flow control
 
-Pull request: _link added when the pull request is opened_
+Pull request: [#16](https://github.com/gofQ/horror-director/pull/16)
 
 ### Added
 - **Event node**: an authored narrative milestone (stable id, title, description, category: story beat / reveal / threat / relief / decision / custom; one input, one output). When the simulated route passes it, an entry with the absolute route time is appended to the chronological flow trace. Events are planning milestones, not gameplay callbacks: they are separate from scene triggers and audio cues and never change trigger counts, pacing intensity, scene timelines or authored scene data.

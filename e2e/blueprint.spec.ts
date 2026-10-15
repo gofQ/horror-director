@@ -124,7 +124,7 @@ test.describe('canvas context menu and node creation', () => {
     await page.getByTestId('add-node').click()
     await expect(menu(page)).toHaveAttribute('aria-label', 'Add node')
     await expect(page.getByTestId('ctx-search')).toBeFocused()
-    await expect(menu(page).getByTestId('ctx-item')).toHaveCount(11) // 5 kinds + IF + Set Flag + Event + Delay + Random + comment
+    await expect(menu(page).getByTestId('ctx-item')).toHaveCount(13) // 5 kinds + IF + Set Flag + Event + Delay + Random + Sequence + Sequence Return + comment
     await page.getByTestId('ctx-search').fill('night')
     await expect(menu(page).getByTestId('ctx-item')).toHaveCount(1)
     await page.getByTestId('ctx-search').fill('zzz')
@@ -262,7 +262,7 @@ test.describe('drag-to-create and connection feedback', () => {
     await expect(page.getByTestId('connection-line')).toBeVisible()
     await page.mouse.up()
     await expect(menu(page)).toHaveAttribute('aria-label', 'Add node')
-    await expect(menu(page).getByTestId('ctx-item')).toHaveCount(10) // compatible targets only: no comment
+    await expect(menu(page).getByTestId('ctx-item')).toHaveCount(11) // compatible targets only: no comment, no unassigned Return
     await page.getByTestId('ctx-search').fill('IF')
     await page.keyboard.press('Enter')
     await expect(branches(page)).toHaveCount(1)
@@ -456,7 +456,7 @@ test.describe('custom scene types', () => {
     await page.getByTestId('scene-type-add').click()
     await page.getByTestId('scene-type').first().getByLabel('Name').fill('Chase Sequence')
     await page.getByTestId('add-node').click()
-    await expect(menu(page).getByTestId('ctx-item')).toHaveCount(12)
+    await expect(menu(page).getByTestId('ctx-item')).toHaveCount(14)
     await page.getByTestId('ctx-search').fill('chase')
     await expect(menu(page).getByTestId('ctx-item')).toHaveCount(1)
     await page.keyboard.press('Enter')
@@ -562,7 +562,7 @@ test.describe('backup, import and storage', () => {
     await page.getByTestId('add-comment').click()
     await waitSaved(page)
     const exported = await backup(page)
-    expect(exported.schemaVersion).toBe(8)
+    expect(exported.schemaVersion).toBe(9)
     expect(exported.project.logicNodes).toHaveLength(1)
     expect(exported.project.comments).toHaveLength(1)
     expect(exported.project.transitions.filter((t) => t.sourcePort)).toHaveLength(2)
@@ -586,7 +586,7 @@ test.describe('backup, import and storage', () => {
     await page.getByRole('button', { name: 'Add project' }).click()
     await expect(nodes(page)).toHaveCount(8)
     const migrated = await backup(page)
-    expect(migrated.schemaVersion).toBe(8)
+    expect(migrated.schemaVersion).toBe(9)
     expect(migrated.project.logicNodes).toEqual([])
     expect(migrated.project.scenes).toEqual(original.project.scenes)
     expect(migrated.project.transitions).toEqual(original.project.transitions)

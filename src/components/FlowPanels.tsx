@@ -35,6 +35,14 @@ export function FlowTrace({ result }: { result: SimResult }) {
         )
       case 'flag':
         return <>{t('flow.flag', { flag: e.flagName ?? '', before: e.before ? t('bool.true') : t('bool.false'), after: e.after ? t('bool.true') : t('bool.false') })}</>
+      case 'sequenceStart':
+        return <>{t('flow.sequenceStart', { title: e.title || t('default.sequence') })}</>
+      case 'stageEnter':
+        return <>{t('flow.stageEnter', { title: e.title || t('default.sequence'), n: (e.stage ?? 0) + 1 })}</>
+      case 'stageReturn':
+        return <>{t('flow.stageReturn', { title: e.title || t('default.sequence'), n: (e.stage ?? 0) + 1 })}</>
+      case 'sequenceComplete':
+        return <>{t('flow.sequenceComplete', { title: e.title || t('default.sequence') })}</>
       case 'random': {
         const mark = e.choiceIndex !== undefined ? marks[e.choiceIndex] : undefined
         return (

@@ -25,11 +25,11 @@ const node = (e: Raw, id: string) => e.project.logicNodes.find((n) => n.id === i
 
 describe('schema 8 export and round trip', () => {
   it('writes schemaVersion 8 and round-trips Event, Delay and Random nodes exactly', () => {
-    expect(SCHEMA_VERSION).toBe(8)
+    expect(SCHEMA_VERSION).toBe(9)
     const p = flowProject()
     const text = serializeProject(p)
     const e = exportOf(p)
-    expect(e.schemaVersion).toBe(8)
+    expect(e.schemaVersion).toBe(9)
     expect(node(e, 'D')).toMatchObject({ type: 'delay', seconds: 12 })
     expect(node(e, 'E')).toMatchObject({ type: 'event', eventCategory: 'reveal', description: 'The bell rings once' })
     expect(node(e, 'R')).toMatchObject({ type: 'random', probabilityA: 30, labelA: 'Door opens', labelB: 'Silence' })
@@ -59,7 +59,7 @@ describe('schema 8 export and round trip', () => {
       expect(bare.ok).toBe(true)
     }
   })
-  it('rejects versions newer than 8', () => expect(reject(mutate((e) => (e.schemaVersion = 9)))).toMatch(/schema version 9/))
+  it('rejects versions newer than 9', () => expect(reject(mutate((e) => (e.schemaVersion = 10)))).toMatch(/schema version 10/))
 })
 
 describe('malformed v8 data is rejected without repair', () => {
@@ -93,7 +93,7 @@ describe('malformed v8 data is rejected without repair', () => {
     expect(reject(mutate((e) => (tr(e, 'la').sourcePort = 'true')))).toMatch(/does not belong/)
     expect(reject(mutate((e) => (tr(e, 'la').sourcePort = 'c')))).toBeTruthy()
     expect(reject(mutate((e) => delete tr(e, 'la').sourcePort))).toMatch(/without an output pin/)
-    expect(reject(mutate((e) => (tr(e, 'l2').sourcePort = 'a')))).toMatch(/does not start at an IF or Random/)
+    expect(reject(mutate((e) => (tr(e, 'l2').sourcePort = 'a')))).toMatch(/does not start at an IF, Random Branch or Sequence/)
     expect(reject(mutate((e) => (tr(e, 'lb').sourcePort = 'a')))).toMatch(/already connected/)
     expect(reject(mutate((e) => e.project.transitions.push({ ...tr(e, 'l2'), id: 'extra', target: 'a' })))).toMatch(/more than one outgoing/)
   })

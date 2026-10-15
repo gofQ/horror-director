@@ -89,6 +89,9 @@ export function pasteGraph(p: Pick<Project, 'sceneTypes' | 'flags'>, data: Clipb
     }
     return copy
   })
+  // Sequence ownership follows the copy when the owning Sequence was copied too; otherwise the Return becomes unassigned
+  // (a partial copy never produces a dangling owner reference).
+  for (const n of logicNodes) if (n.type === 'seqReturn') n.sequenceId = n.sequenceId ? (idMap.get(n.sequenceId) ?? null) : null
   const comments = data.comments.map((src): GraphComment => {
     const id = uid('note')
     idMap.set(src.id, id)

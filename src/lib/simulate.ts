@@ -1,7 +1,8 @@
 import { diag, type Diagnostic } from './diagnostics'
 import { evalExpr, initialFlagState, type FlagState } from './flags'
 import { portsOf } from './graphRules'
-import { crossingOf, BRANCH_PORTS, type BranchPort, type CrossingType, type EventCategory, type Port, type RandomPort, type Project, type SceneKind, type Transition, type TransitionStyle, type TriggerKind } from './schema'
+import { isStageNodeType, stageOfPort } from './seqflow'
+import { crossingOf, BRANCH_PORTS, SEQUENCE_PORTS, SEQUENCE_STAGES, type BranchPort, type CrossingType, type EventCategory, type Port, type RandomPort, type Project, type SceneKind, type Transition, type TransitionStyle, type TriggerKind } from './schema'
 
 /**
  * Read-only story path simulation.
@@ -21,6 +22,13 @@ import { crossingOf, BRANCH_PORTS, type BranchPort, type CrossingType, type Even
  * the route clock exactly once (scene durations and link durations are untouched, so a later scene starts later and
  * its triggers shift with it); a Random Branch waits for the user's explicit A/B choice (any draw happens in the
  * session store, never here). None of them creates a scene visit or a horror trigger occurrence.
+ *
+ * Sequence (schema 9): entering a Sequence node starts a bounded frame. Its stages run strictly one after the other:
+ * the route may only take the `then0` link, then the linear Event / Delay / Set Flag chain up to the stage's Sequence Return;
+ * arriving at the Return hands control back to the Sequence automatically (no transition id is invented), which then
+ * offers `then1`, and after the second Return only `completed`. Every connection walked stays an explicit route choice,
+ * the Sequence and its Returns take no time, and a stage that is not connected or not closed by its Return is reported
+ * and never treated as finished. Revisiting the Sequence later starts a fresh frame.
  *
  * IF (branch) nodes: every link is an explicit choice, so a branch hop is two choices — the link into the
  * branch (the route is then *pending* at the branch) and the TRUE or FALSE output the user picks. The branch
@@ -71,7 +79,7 @@ export interface SimOption {
   targetTitle: string
   targetKind: SceneKind
   /** Every type but `scene` leads to a logic node (no visit); `scene` options enter a scene. */
-  targetType: 'scene' | 'branch' | 'setFlag' | 'event' | 'delay' | 'random'
+  targetType: 'scene' | 'branch' | 'setFlag' | 'event' | 'delay' | 'random' | 'sequence' | 'seqReturn'
   /** Only for options leaving an IF node: how the output relates to the structured condition. */
   logic?: BranchLogic
   /** Output pin of the IF / Random node this option leaves (only for options taken while pending at one). */
@@ -80,6 +88,8 @@ export interface SimOption {
   fromBranch?: { nodeId: string; title: string; condition: string }
   /** Random Branch whose output this option is: authored probability of this output and its outcome label. */
   fromRandom?: { nodeId: string; title: string; probability: number; label: string }
+  /** Sequence whose stage (or Completed) this option leaves from: `stage` 0/1 for the Then pins, 2 for Completed. */
+  fromSequence?: { nodeId: string; title: string; stage: number }
   blocked: BlockReason | null
 }
 
@@ -98,7 +108,7 @@ export interface BranchPass {
 }
 
 /** One chronological entry of the flow trace (narrative events, delays, decisions, flag assignments). */
-export type FlowKind = 'event' | 'delayStart' | 'delayEnd' | 'if' | 'flag' | 'random'
+export type FlowKind = 'event' | 'delayStart' | 'delayEnd' | 'if' | 'flag' | 'random' | 'sequenceStart' | 'stageEnter' | 'stageReturn' | 'sequenceComplete'
 export interface FlowEntry {
   key: string
   kind: FlowKind
@@ -110,6 +120,8 @@ export interface FlowEntry {
   stepIndex: number
   /** Index in the requested choices of the choice leaving the node (decisions only: `if`, `random`). */
   choiceIndex?: number
+  /** Sequence entries: the stage (0-based) entered / returned from. */
+  stage?: number
   category?: EventCategory
   description?: string
   seconds?: number
@@ -244,7 +256,7 @@ export interface SimResult {
 
 export interface PendingNode {
   nodeId: string
-  kind: 'branch' | 'setFlag' | 'event' | 'delay' | 'random'
+  kind: 'branch' | 'setFlag' | 'event' | 'delay' | 'random' | 'sequence'
   title: string
   condition: string
   /** IF with a structured condition: its result for the current state; otherwise null. */
@@ -258,6 +270,9 @@ export interface PendingNode {
   probabilityA?: number
   labelA?: string
   labelB?: string
+  /** Sequence: the stage waited on (0-based; 2 = both returned, only Completed is left) and the stage count. */
+  stage?: number
+  stages?: number
 }
 
 const emptyStats = (): SimStats => ({
@@ -338,15 +353,22 @@ export function simulateRoute(project: Project, choices: readonly string[], opti
   let pathBranches: BranchPass[] = []
   let pathChanges: FlagChange[] = []
   // Time spent since the last scene ended: link durations plus Delay nodes (accumulated in traversal order).
+  // Bounded Sequence frame: `stage` 0/1 = waiting for / running that Then stage, 2 = both returned (only Completed left).
+  let seq = null as { nodeId: string; stage: number } | null
+  let inStage = false
   let pathDur = 0
   let pathDelay = 0
   const flow: FlowEntry[] = []
   const assumption = (n: { title: string; condition: string; id: string }) => n.condition.trim() || n.title.trim() || n.id
   /** IF and Random nodes only continue through their own output pins; the other logic nodes through their single port-less link. */
   const portFits = (n: LogicNode, port: Port | undefined) => {
+    if (n.type === 'sequence') return !!seq && seq.nodeId === n.id && port === SEQUENCE_PORTS[Math.min(seq.stage, SEQUENCE_STAGES)]
     const ports = portsOf(n.type)
     return ports.length === 0 || (port !== undefined && ports.includes(port))
   }
+  /** Inside a Sequence stage only Event / Delay / Set Flag nodes and the stage's own Return may be entered. */
+  const stageTargetOk = (target: LogicNode | undefined) =>
+    !!target && !!seq && (isStageNodeType(target.type) || (target.type === 'seqReturn' && target.sequenceId === seq.nodeId && target.stage === seq.stage))
   const isBranchPort = (v: unknown): v is BranchPort => (BRANCH_PORTS as readonly unknown[]).includes(v)
   const pushFlow = (e: Omit<FlowEntry, 'key'>) => flow.push({ ...e, key: `${flow.length}:${e.kind}:${e.nodeId}` })
 
@@ -364,6 +386,13 @@ export function simulateRoute(project: Project, choices: readonly string[], opti
         return
       case 'random':
         return
+      case 'sequence':
+        seq = { nodeId: node.id, stage: 0 }
+        inStage = false
+        pushFlow({ kind: 'sequenceStart', nodeId: node.id, title: node.title, time: now(), stepIndex })
+        return
+      case 'seqReturn':
+        return // handled by the caller (control returns to the owning Sequence)
       case 'event':
         pushFlow({ kind: 'event', nodeId: node.id, title: node.title, time: now(), stepIndex, category: node.eventCategory ?? 'story', description: node.description })
         return
@@ -403,7 +432,11 @@ export function simulateRoute(project: Project, choices: readonly string[], opti
       (!pendingNode && here.kind === 'ending') ||
       (toScene && blockedBy(tr.target)) ||
       // The output pin must still belong to the node the route waits at (a graph edit may have changed it).
-      (pendingNode && !portFits(pendingNode, tr.sourcePort))
+      (pendingNode && !portFits(pendingNode, tr.sourcePort)) ||
+      // Sequence rules: stages hold only Event / Delay / Set Flag and their own Return; a Return is only entered from its stage.
+      (inStage || (pendingNode?.type === 'sequence' && stageOfPort(tr.sourcePort) >= 0)
+        ? !stageTargetOk(branches.get(tr.target))
+        : branches.get(tr.target)?.type === 'seqReturn')
     ) {
       invalidated = choices.length - i
       break
@@ -426,9 +459,30 @@ export function simulateRoute(project: Project, choices: readonly string[], opti
         probabilityA: pendingNode.probabilityA ?? 50,
       })
     }
+    if (pendingNode?.type === 'sequence' && seq) {
+      const k = stageOfPort(tr.sourcePort)
+      if (k >= 0) {
+        pushFlow({ kind: 'stageEnter', nodeId: pendingNode.id, title: pendingNode.title, time: here.end + pathDur, stepIndex: here.index, stage: k })
+        inStage = true
+      } else {
+        seq = null // Completed: the narrative continues
+        inStage = false
+      }
+    }
     pathDur += tr.duration
     const links = [...pathLinks, tr]
-    if (toBranch) {
+    const targetNode = toBranch ? branches.get(tr.target)! : undefined
+    if (targetNode?.type === 'seqReturn') {
+      // Control returns to the owning Sequence: no transition id is invented, the next stage (or Completed) is offered.
+      const frame = seq!
+      pushFlow({ kind: 'stageReturn', nodeId: frame.nodeId, title: branches.get(frame.nodeId)!.title, time: here.end + pathDur, stepIndex: here.index, stage: frame.stage })
+      frame.stage++
+      inStage = false
+      pendingNode = branches.get(frame.nodeId)!
+      pendingEval = null
+      pathLinks = links
+      if (frame.stage >= SEQUENCE_STAGES) pushFlow({ kind: 'sequenceComplete', nodeId: frame.nodeId, title: pendingNode.title, time: here.end + pathDur, stepIndex: here.index })
+    } else if (toBranch) {
       pendingNode = branches.get(tr.target)!
       pathLinks = links
       enterLogic(pendingNode, here.index, here.end)
@@ -458,6 +512,8 @@ export function simulateRoute(project: Project, choices: readonly string[], opti
       )
       pendingNode = null
       pendingEval = null
+      seq = null
+      inStage = false
       pathLinks = []
       pathBranches = []
       pathChanges = []
@@ -477,6 +533,7 @@ export function simulateRoute(project: Project, choices: readonly string[], opti
   // (ending scenes are terminal; their outgoing transitions are ignored).
   let simOptions: SimOption[] = []
   let missingTargets = 0
+  let illegalTargets = 0
   const fromId = pendingNode ? pendingNode.id : current.sceneId
   if (pendingNode || current.kind !== 'ending') {
     for (const t of project.transitions) {
@@ -485,6 +542,11 @@ export function simulateRoute(project: Project, choices: readonly string[], opti
       const branch = branches.get(t.target)
       if (!target && !branch) {
         missingTargets++
+        continue
+      }
+      if (pendingNode?.type === 'sequence' && !portFits(pendingNode, t.sourcePort)) continue // only the current stage's pin (or Completed)
+      if (inStage || (pendingNode?.type === 'sequence' && stageOfPort(t.sourcePort) >= 0) ? !stageTargetOk(branch) : branch?.type === 'seqReturn') {
+        illegalTargets++
         continue
       }
       simOptions.push({
@@ -499,6 +561,9 @@ export function simulateRoute(project: Project, choices: readonly string[], opti
         targetKind: target ? target.kind : current.kind,
         targetType: target ? 'scene' : branch!.type,
         ...(pendingNode && pendingNode.type === 'branch' && isBranchPort(t.sourcePort) ? { port: t.sourcePort, logic: logicOf(pendingEval, t.sourcePort).logic } : {}),
+        ...(pendingNode && pendingNode.type === 'sequence' && seq && t.sourcePort
+          ? { port: t.sourcePort, fromSequence: { nodeId: pendingNode.id, title: pendingNode.title, stage: Math.min((seq as { stage: number }).stage, SEQUENCE_STAGES) } }
+          : {}),
         ...(pendingNode && pendingNode.type === 'random' && t.sourcePort && portFits(pendingNode, t.sourcePort)
           ? {
               port: t.sourcePort,
@@ -521,6 +586,12 @@ export function simulateRoute(project: Project, choices: readonly string[], opti
     for (const port of ['a', 'b'] as const)
       if (!project.transitions.some((t) => t.source === pendingNode!.id && t.sourcePort === port))
         warnings.push(diag('diag.sim.randomOpenPort', { node: pendingNode.title, port: port.toUpperCase() }))
+  }
+  if (illegalTargets > 0) warnings.push(diag('diag.sim.seqIllegal', { n: illegalTargets }))
+  if (simOptions.length === 0 && seq && pendingNode) {
+    // An unconnected or unclosed stage is reported, never treated as finished.
+    const frame = seq as { nodeId: string; stage: number }
+    warnings.push(diag('diag.sim.seqStageOpen', { node: branches.get(frame.nodeId)!.title || frame.nodeId, stage: inStage ? frame.stage : Math.min(frame.stage, SEQUENCE_STAGES) }))
   }
   if (missingTargets > 0) warnings.push(diag('diag.sim.missingTarget', { n: missingTargets }))
 
@@ -617,12 +688,13 @@ export function simulateRoute(project: Project, choices: readonly string[], opti
     pending: pendingNode
       ? {
           nodeId: pendingNode.id,
-          kind: pendingNode.type,
+          kind: pendingNode.type as PendingNode['kind'],
           title: pendingNode.title,
           condition: pendingNode.condition,
           evaluated: pendingEval,
           ...(pendingNode.type === 'event' ? { category: pendingNode.eventCategory ?? 'story', description: pendingNode.description } : {}),
           ...(pendingNode.type === 'delay' ? { seconds: pendingNode.seconds ?? 0, description: pendingNode.description } : {}),
+          ...(pendingNode.type === 'sequence' && seq ? { stage: Math.min((seq as { stage: number }).stage, SEQUENCE_STAGES), stages: SEQUENCE_STAGES } : {}),
           ...(pendingNode.type === 'random' ? { probabilityA: pendingNode.probabilityA ?? 50, labelA: pendingNode.labelA ?? '', labelB: pendingNode.labelB ?? '' } : {}),
         }
       : null,
