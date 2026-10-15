@@ -13,7 +13,7 @@ Every future feature or fix milestone must add an entry here (see `CLAUDE.md`).
 
 ## v0.6C — Audio & atmosphere planner
 
-Pull request: PR_LINK_PLACEHOLDER
+Pull request: [#10](https://github.com/gofQ/horror-director/pull/10)
 
 ### Added
 - **Audio cues** per scene: ordered planning notes with a stable id, title, start and duration (seconds relative to the scene), type (ambience, music, SFX, voice, whisper, stinger, silence), origin (diegetic / non-diegetic / ambiguous), spatial direction (non-spatial, front, behind, left, right, above, moving), a descriptive target level (0–10, not measured loudness), fade-in/fade-out, loop flag, asset/reference identifier, sound direction notes and an optional text-to-audio brief. They are planning data only — not playable audio or engine commands — and independent of triggers, scene ambience, shot sound notes and transition audio continuity (nothing is migrated or overwritten). They do not influence pacing statistics.
