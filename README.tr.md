@@ -27,6 +27,9 @@ korku ritmini planlamak isteyen bağımsız geliştiriciler ve küçük ekipler.
   tetikleyicileri yazılmış yoğunluklarıyla mutlak zaman grafiğinde ve rota istatistikleriyle gösterir.
 - **Ritim analizi:** simüle edilen rota hakkında tarafsız, belirleyici gözlemler (aşağıya bakın).
 - **Rota karşılaştırması:** bir rotayı Rota A olarak sabitleyin, Rota B'yi oluşturun ve yan yana karşılaştırın (aşağıya bakın).
+- **Çekim planlayıcı:** sahne başına sıralı sinematik çekim notları (kadraj, kamera hareketi, psikolojik teknik, ses ve
+  görsel notlar, sahneye göre başlangıç/süre); sahne denetçisinden açılır. Yalnızca planlama notlarıdır — tetikleyicilerden
+  ve geçişlerden bağımsızdır, çakışma ve taşmaları uyarır ve zamanlamanızı asla değiştirmez.
 - **Proje kütüphanesi:** birden çok proje; aç/oluştur/yeniden adlandır/çoğalt/sil, yeni proje olarak içe aktarma, hatırlanan etkin proje.
 - **Güvenlik:** geri al/yinele (50 adım), katı içe aktarma doğrulaması, kayıt durumu göstergesi, JSON yedeği, okunamayan verinin kurtarılması.
 - **İngilizce ve Türkçe** arayüz, duyarlı koyu tema (küçük ekranlarda denetçi alt panele dönüşür).
@@ -84,7 +87,13 @@ npm run preview    # üretim derlemesini sun
    kullanır ve mevcut projeye göre yeniden simüle edilir; graf değişiklikleri Rota A'yı geçersiz kılarsa açık bir uyarı
    görürsünüz ve karşılaştırma eksik olarak işaretlenir. **Rota A'yı değiştir** veya **Karşılaştırmayı temizle**
    istediğiniz an kullanılabilir. Bilerek bir "en iyi rota" sıralaması yoktur.
-7. **Yedekle** düğmesini düzenli kullanın — tarayıcı depolaması temizlenebilir.
+7. **Çekimleri planlayın:** bir sahneyi seçin ve denetçide **Çekim planlayıcı**yı açın. Plan ekleyin; başlangıç/süreyi
+   (sahne başından saniye), kadrajı, kamera hareketini, psikolojik/gerçeklik tekniğini ve ses/görsel notları belirleyin;
+   çoğaltın, yukarı/aşağı taşıyın ya da silin. Uyarılar üst üste binen planları, sahne bittikten sonra biten planları ve
+   başlangıcı önceki plandan önce olan planları işaretler; hiçbir şey otomatik değiştirilmez. **Zamana göre sırala** listeyi
+   yeniden sıralar (zamanlama değişmez). Liste yazılış sırasını gösterir; dışa aktarma sırası da budur. Geri al/yinele her
+   değişikliği kapsar.
+8. **Yedekle** düğmesini düzenli kullanın — tarayıcı depolaması temizlenebilir.
 
 Simülasyon, ritim ve karşılaştırma durumu projeden ayrıdır: proje verisini, otomatik kaydı, kütüphaneyi ya da geri al
 geçmişini değiştirmez, dışa aktarılmaz ve proje değiştirdiğinizde sıfırlanır.
@@ -94,9 +103,14 @@ geçmişini değiştirmez, dışa aktarılmaz ve proje değiştirdiğinizde sıf
 - **Depolama** (tarayıcı `localStorage`): `horror-director:library:v1` (dizin), `horror-director:proj:<id>` (proje başına
   bir kayıt), `horror-director:lang` (dil). Kimlikler dahilidir ve adlardan bağımsızdır. Kütüphane verisi (kimlikler,
   zaman damgaları, etkin proje) proje JSON'una asla yazılmaz.
-- **Yedek**, *etkin* projeyi şema v1 dışa aktarma biçiminde indirir. İçe aktarma katı doğrulama yapar (yinelenen
-  kimlikler, boşta kalan referanslar, tanınmayan alanlar, daha yeni şema sürümleri hatadır ve hiçbir şey
+- **Yedek**, *etkin* projeyi şema 2 dışa aktarma biçiminde indirir. İçe aktarma katı doğrulama yapar (yinelenen
+  kimlikler, boşta kalan referanslar, geçersiz değerler, tanınmayan alanlar, daha yeni şema sürümleri hatadır ve hiçbir şey
   değiştirilmeden önce gösterilir). Bir dosya yeni proje olarak ya da onayla etkin projenin yerine aktarılabilir.
+- **Eski dosyalar ve veriler:** şema 1 dışa aktarmaları ve yalın proje dosyaları hâlâ içe aktarılır; çekim planı içermedikleri
+  için plan listeleri boş başlar (bilgilendirici bir not bunu söyler) ve sonraki yedek, diğer tüm alanlar değişmeden şema 2
+  olur. Önceki sürümlerden kalan kayıtlı projeler aynı şekilde okunur ve yalnızca siz düzenleyince yeniden yazılır. Proje
+  kayıtları `{ v: 2, project }` olarak saklanır (eski `v: 1` kayıtlar hâlâ okunur); çekim planlarını okuyamayan eski bir
+  sürüm böyle bir kaydı hasarlı gösterir ve veriyi atmak yerine korur. Sürüm düşürme desteklenmez.
 - **Taşıma:** erken sürümlerin tek projelik depolaması doğrulanır, `legacy` kimliğiyle kütüphaneye kopyalanır, kontrol
   edilir ve ancak ondan sonra dizine eklenir. Özgün anahtar (`horror-director:project:v1`) asla değiştirilmez ya da silinmez.
 - **Güvenli geçiş ve kurtarma:** proje değiştirmeden önce bekleyen düzenlemeler kaydedilir; okunamayan depolama verisi
@@ -104,7 +118,7 @@ geçmişini değiştirmez, dışa aktarılmaz ve proje değiştirdiğinizde sıf
 - **Birden çok sekme birleştirilmez** (son yazan kazanır); başka bir sekmeden gelen değişiklik algılanır, bir başlık
   gösterilir ve yeniden yükleyene kadar kütüphane işlemleri engellenir.
 
-JSON şeması `README.md` içinde belgelenmiştir ve dilden bağımsızdır (`format: "horror-director"`, `schemaVersion: 1`;
+JSON şeması `README.md` içinde belgelenmiştir ve dilden bağımsızdır (`format: "horror-director"`, `schemaVersion: 2`, sahnelerde `shots` dizisi;
 `derived` bloğu içe aktarmada yok sayılır). Türkçe metin (ç, ğ, ı, İ, ö, ş, ü) UTF-8 olarak aynen korunur.
 
 ## Dil
@@ -140,6 +154,8 @@ derlemesine karşı Chromium'da çalışır; ekran görüntüsü karşılaştır
 - Yalnızca mevcut rota (ve sabitlenmiş bir rota) analiz edilir ya da karşılaştırılır; rotalar oturumluktur, kaydedilmez ve dışa aktarılmaz.
 - Birden çok tarayıcı sekmesi birleştirilmez; bulut eşitlemesi yoktur. Tarayıcı depolaması temizlenebilir, bu yüzden yedek alın.
 - Otomatik Düzenle en az kesişimi değil okunabilirliği hedefleyen bir sezgisel yöntemdir; çok yoğun graflarda etiketler yine üst üste binebilir.
+- Çekim planları basit bir liste halinde planlama notlarıdır: storyboard görseli, kamera zaman çizelgesi düzenleyicisi ya da
+  motor/Unreal içe aktarımı henüz yoktur. Liste yazılış sırasını korur; zamana göre sıralama açık bir eylemdir.
 - Geri al/yinele geçmişi oturumluktur ve proje değiştirilince temizlenir.
 - Unreal tarafında henüz içe aktarıcı yoktur; JSON biçimi yukarıda belgelenmiştir. Üretim paketi kod bölmeli değildir.
 - Türkçe metinler oyun sektöründen anadili Türkçe bir editör tarafından gözden geçirilmemiştir; E2E yalnızca Chromium'u kapsar.

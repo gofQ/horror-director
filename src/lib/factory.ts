@@ -1,5 +1,5 @@
 import { uid } from './id'
-import type { Character, Project, Scene, SceneKind, Transition, Trigger } from './schema'
+import type { Character, Project, Scene, SceneKind, Shot, Transition, Trigger } from './schema'
 
 /** Display names given to newly created items. The UI passes the current language's set. */
 export interface DefaultNames {
@@ -8,6 +8,7 @@ export interface DefaultNames {
   scene: string
   ending: string
   trigger: string
+  shot: string
   character: string
   state: string
   stateIdle: string
@@ -18,6 +19,7 @@ export const ENGLISH_NAMES: DefaultNames = {
   scene: 'New Scene',
   ending: 'New Ending',
   trigger: 'New trigger',
+  shot: 'New shot',
   character: 'New Character',
   state: 'New state',
   stateIdle: 'Idle',
@@ -39,6 +41,7 @@ export function newScene(
     duration: 120,
     loop: { enabled: false, maxIterations: 0, exitCondition: '' },
     triggers: [],
+    shots: [],
     characterStates: {},
   }
 }
@@ -53,6 +56,22 @@ export function newTrigger(time = 0, names: DefaultNames = ENGLISH_NAMES): Trigg
     description: '',
     condition: '',
     once: true,
+  }
+}
+
+export const DEFAULT_SHOT_DURATION = 5
+
+export function newShot(start = 0, names: DefaultNames = ENGLISH_NAMES): Shot {
+  return {
+    id: uid('shot'),
+    title: names.shot,
+    start,
+    duration: DEFAULT_SHOT_DURATION,
+    framing: 'medium',
+    movement: 'static',
+    technique: 'none',
+    soundNotes: '',
+    visualNotes: '',
   }
 }
 

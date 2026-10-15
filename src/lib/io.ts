@@ -43,7 +43,7 @@ export function exportFileName(project: Project): string {
 }
 
 export type ParseResult =
-  | { ok: true; project: Project; warnings: Diagnostic[] }
+  | { ok: true; project: Project; warnings: Diagnostic[]; /** Declared schema version of the file (null for a bare project object). */ schemaVersion: number | null }
   | { ok: false; errors: Diagnostic[] }
 
 const MAX_LISTED = 50
@@ -150,5 +150,8 @@ export function parseProject(text: string): ParseResult {
   const v = validateProject(project)
   errors.push(...v.errors)
   if (errors.length) return { ok: false, errors: cap(errors) }
-  return { ok: true, project, warnings: cap(v.warnings) }
+  const declared = isExport ? (result.data as { schemaVersion: number }).schemaVersion : null
+  // Files older than schema 2 carry no shots: they start empty and the next export is schema 2.
+  const warnings = declared === null || declared < 2 ? [diag('diag.migratedV1'), ...v.warnings] : v.warnings
+  return { ok: true, project, warnings: cap(warnings), schemaVersion: declared }
 }

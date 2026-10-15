@@ -7,7 +7,7 @@ Horror Director is a browser-only planning tool (React + TypeScript + Vite, no b
 - **README files describe the current product**, not version-to-version changes: no version headings, implementation history or test counts. Version history belongs in `CHANGELOG.md`.
 - **Keep `README.md` and `README.tr.md` synchronized** (same structure and facts).
 - **Update `progress.md`** with the current status and remaining risks/limitations (engineering handoff, not a changelog).
-- **Preserve data compatibility** (schema v1, JSON export format, library storage keys, legacy migration) unless a task explicitly says otherwise. Do not change `package.json` version metadata silently.
+- **Preserve data compatibility** (JSON schema — currently v2, with v1 and bare-project imports — export format, library storage keys, legacy migration) unless a task explicitly says otherwise. Do not change `package.json` version metadata silently.
 - **Run and report the relevant tests** with real results; state environment limitations honestly.
 
 ## Commands

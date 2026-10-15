@@ -1,5 +1,6 @@
 import { diag, type Diagnostic } from './diagnostics'
 import type { Project } from './schema'
+import { analyzeShots } from './shots'
 
 export interface ValidationResult {
   /** Blocking problems: the project is internally inconsistent. */
@@ -31,6 +32,9 @@ export function validateProject(p: Project): ValidationResult {
     for (const id of duplicates(s.triggers.map((t) => t.id)))
       errors.push(diag('diag.dupTrigger', { id, scene: s.title }))
 
+  for (const s of p.scenes)
+    for (const id of duplicates(s.shots.map((x) => x.id))) errors.push(diag('diag.dupShot', { id, scene: s.title }))
+
   const sceneIds = new Set(p.scenes.map((s) => s.id))
   if (p.startSceneId !== null && !sceneIds.has(p.startSceneId))
     errors.push(diag('diag.badStart', { id: p.startSceneId }))
@@ -58,6 +62,9 @@ export function validateProject(p: Project): ValidationResult {
       warnings.push(diag('diag.loopNoExit', { scene: s.title }))
     const late = s.triggers.filter((t) => t.time > s.duration).length
     if (late) warnings.push(diag('diag.lateTriggers', { scene: s.title, n: late, duration: s.duration }))
+    const sa = analyzeShots(s)
+    if (sa.overlapPairs) warnings.push(diag('diag.shotOverlap', { scene: s.title, n: sa.overlapPairs }))
+    if (sa.exceeding) warnings.push(diag('diag.shotLate', { scene: s.title, n: sa.exceeding, duration: s.duration }))
   }
 
   return { errors, warnings }

@@ -1,6 +1,7 @@
 import { z } from 'zod'
 
-export const SCHEMA_VERSION = 1
+/** 2 adds `scene.shots`; schema-1 files and bare projects are still imported (shots default to `[]`). */
+export const SCHEMA_VERSION = 2
 export const FORMAT_ID = 'horror-director'
 
 export const SCENE_KINDS = ['reality', 'dream', 'nightmare', 'memory', 'ending'] as const
@@ -13,11 +14,17 @@ export const TRIGGER_KINDS = [
   'environment',
   'narrative',
 ] as const
+export const SHOT_FRAMINGS = ['wide', 'medium', 'close-up', 'extreme-close-up', 'pov'] as const
+export const SHOT_MOVEMENTS = ['static', 'pan', 'tilt', 'tracking', 'handheld'] as const
+export const SHOT_TECHNIQUES = ['none', 'match-cut', 'impossible-space', 'identity-discontinuity', 'false-awakening'] as const
 export const CHARACTER_ROLES = ['player', 'entity', 'npc'] as const
 
 export type SceneKind = (typeof SCENE_KINDS)[number]
 export type TransitionStyle = (typeof TRANSITION_STYLES)[number]
 export type TriggerKind = (typeof TRIGGER_KINDS)[number]
+export type ShotFraming = (typeof SHOT_FRAMINGS)[number]
+export type ShotMovement = (typeof SHOT_MOVEMENTS)[number]
+export type ShotTechnique = (typeof SHOT_TECHNIQUES)[number]
 export type CharacterRole = (typeof CHARACTER_ROLES)[number]
 
 const id = z.string().min(1)
@@ -31,6 +38,19 @@ export const triggerSchema = z.object({
   description: z.string().default(''),
   condition: z.string().default(''),
   once: z.boolean().default(true),
+})
+
+/** Planning notes for one cinematic shot (not executable engine commands). Times are seconds relative to the scene. */
+export const shotSchema = z.object({
+  id,
+  title: z.string(),
+  start: z.number().min(0),
+  duration: z.number().positive(),
+  framing: z.enum(SHOT_FRAMINGS),
+  movement: z.enum(SHOT_MOVEMENTS),
+  technique: z.enum(SHOT_TECHNIQUES),
+  soundNotes: z.string().default(''),
+  visualNotes: z.string().default(''),
 })
 
 export const sceneSchema = z.object({
@@ -50,6 +70,8 @@ export const sceneSchema = z.object({
     })
     .default({ enabled: false, maxIterations: 0, exitCondition: '' }),
   triggers: z.array(triggerSchema).default([]),
+  /** Ordered cinematic shots (authored order). */
+  shots: z.array(shotSchema).default([]),
   /** characterId -> characterStateId */
   characterStates: z.record(z.string(), z.string()).default({}),
 })
@@ -98,6 +120,7 @@ export const exportSchema = z.object({
   project: projectSchema,
 })
 
+export type Shot = z.infer<typeof shotSchema>
 export type Trigger = z.infer<typeof triggerSchema>
 export type Scene = z.infer<typeof sceneSchema>
 export type Transition = z.infer<typeof transitionSchema>
