@@ -12,7 +12,7 @@ Every future feature or fix milestone must add an entry here (see `CLAUDE.md`).
 
 ## v0.5C — Route comparison and documentation cleanup
 
-Pull request: _link added when the pull request is opened_ (see the repository's pull requests).
+Pull request: [#7](https://github.com/gofQ/horror-director/pull/7)
 
 ### Added
 - **Route comparison** inside the Simulator: pin the current route as **Route A**, build **Route B** with Back/Restart and compare them side by side. Pinned Route A can be replaced or cleared.
