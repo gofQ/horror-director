@@ -1,5 +1,6 @@
 import { diag, type Diagnostic } from './diagnostics'
 import { exprFlags } from './flags'
+import { sequenceIssues } from './seqflow'
 import { BRANCH_PORTS, RANDOM_PORTS, crossingOf, isDreamLayer, type Project } from './schema'
 
 export type Severity = 'error' | 'warning' | 'info'
@@ -25,6 +26,7 @@ export interface Analysis {
     crossings: number
     branches: number
     setFlags: number
+    sequences: number
     events: number
     delays: number
     randoms: number
@@ -212,12 +214,16 @@ export function analyze(p: Project): Analysis {
         if (!n.flagId) add('warning', diag('diag.setFlagNoFlag', { node: label }))
         if (!p.transitions.some((t) => t.source === n.id && known(t.target))) add('warning', diag('diag.setFlagNoOutput', { node: label }))
         break
+      case 'sequence':
+      case 'seqReturn':
+        break // reported from sequenceIssues below
       case 'event':
       case 'delay':
         if (!p.transitions.some((t) => t.source === n.id && known(t.target))) add('warning', diag('diag.flowNoOutput', { node: label }))
         break
     }
   }
+  for (const i of sequenceIssues(p)) add(i.severity === 'error' ? 'error' : 'warning', i.diagnostic)
   // Flags that structured conditions test but that no Set Flag node ever changes: the test always yields the default.
   const setIds = new Set(p.logicNodes.filter((n) => n.type === 'setFlag' && n.flagId).map((n) => n.flagId as string))
   const flagName = new Map(p.flags.map((f) => [f.id, f.name]))
@@ -244,6 +250,7 @@ export function analyze(p: Project): Analysis {
       crossings,
       branches: p.logicNodes.filter((n) => n.type === 'branch').length,
       setFlags: p.logicNodes.filter((n) => n.type === 'setFlag').length,
+      sequences: p.logicNodes.filter((n) => n.type === 'sequence').length,
       events: p.logicNodes.filter((n) => n.type === 'event').length,
       delays: p.logicNodes.filter((n) => n.type === 'delay').length,
       randoms: p.logicNodes.filter((n) => n.type === 'random').length,

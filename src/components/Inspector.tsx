@@ -11,6 +11,7 @@ import { ShotPlannerDialog } from './ShotPlannerDialog'
 import { TransitionDesignerDialog } from './TransitionDesignerDialog'
 import { ConditionBuilder, FlagManager, SetFlagInspector } from './FlagInspectors'
 import { DelayInspector, EventInspector, RandomInspector } from './FlowInspectors'
+import { SeqReturnInspector, SequenceInspector } from './SequenceInspectors'
 import { shift as shiftPoint } from '../lib/waypoints'
 import { NODE_W } from '../lib/layout'
 
@@ -360,6 +361,10 @@ function NodeInspector({ id }: { id: string }) {
       return <DelayInspector id={id} />
     case 'random':
       return <RandomInspector id={id} />
+    case 'sequence':
+      return <SequenceInspector id={id} />
+    case 'seqReturn':
+      return <SeqReturnInspector id={id} />
     default:
       return <BranchInspector id={id} />
   }

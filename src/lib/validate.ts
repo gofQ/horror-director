@@ -3,6 +3,7 @@ import { BRANCH_PORTS, RANDOM_PORTS, type Project } from './schema'
 import { analyzeAudioCues } from './audio'
 import { analyzeShots } from './shots'
 import { logicCycles, portsOf } from './graphRules'
+import { sequenceIssues } from './seqflow'
 import { exprFlags, exprWithinLimits, normalizeFlagName } from './flags'
 
 export interface ValidationResult {
@@ -97,6 +98,7 @@ export function validateProject(p: Project): ValidationResult {
     }
   }
   for (const id of logicCycles(p)) errors.push(diag('diag.logicCycle', { id }))
+  for (const i of sequenceIssues(p)) (i.severity === 'error' ? errors : warnings).push(i.diagnostic)
   const pairs = p.transitions.filter((t) => sceneIds.has(t.source) && sceneIds.has(t.target)).map((t) => `${t.source}\u0000${t.target}`)
   const dupPairs = duplicates(pairs).length
   if (dupPairs > 0) warnings.push(diag('diag.multiTransitions', { n: dupPairs }))
@@ -127,11 +129,14 @@ export function validateProject(p: Project): ValidationResult {
       event: ['eventCategory'],
       delay: ['seconds'],
       random: ['probabilityA', 'labelA', 'labelB'],
+      sequence: [],
+      seqReturn: ['sequenceId', 'stage'],
     }
     const allTypeFields = Object.values(own).flat()
     if (allTypeFields.some((f) => !own[n.type].includes(f) && n[f] !== undefined)) errors.push(diag('diag.nodeFields', { node: label }))
     if (n.type === 'delay' && n.seconds === undefined) errors.push(diag('diag.nodeFieldsMissing', { node: label }))
     if (n.type === 'random' && n.probabilityA === undefined) errors.push(diag('diag.nodeFieldsMissing', { node: label }))
+    if (n.type === 'seqReturn' && n.stage === undefined) errors.push(diag('diag.nodeFieldsMissing', { node: label }))
     switch (n.type) {
       case 'branch':
         if (n.expression) {
@@ -152,6 +157,9 @@ export function validateProject(p: Project): ValidationResult {
         if (outs.length > 1) errors.push(diag('diag.setFlagOutputs', { node: label }))
         if (outs.length === 0) warnings.push(diag('diag.setFlagNoOutput', { node: label }))
         break
+      case 'sequence':
+      case 'seqReturn':
+        break // ports, ownership and stage topology: see sequenceIssues below
       case 'event':
       case 'delay':
         if (outs.length > 1) errors.push(diag('diag.singleOutput', { node: label }))

@@ -4,9 +4,9 @@ import { z } from 'zod'
  * 2 added `scene.shots`; 3 the optional `transition.direction`; 4 `scene.audioCues`; 5 adds logic (branch) nodes,
  * graph comments, custom scene types and branch-port links; 6 adds narrative flags, Set Flag nodes and optional
  * structured branch conditions; 7 adds optional reroute `waypoints` on transitions (presentation only); 8 adds Event, Delay and Random Branch
- * logic nodes (and the A/B random ports). Older files and bare projects are still imported.
+ * logic nodes (and the A/B random ports); 9 adds the ordered Sequence node (`then0`/`then1`/`completed` ports) and its Sequence Return nodes. Older files and bare projects are still imported.
  */
-export const SCHEMA_VERSION = 8
+export const SCHEMA_VERSION = 9
 export const FORMAT_ID = 'horror-director'
 
 export const SCENE_KINDS = ['reality', 'dream', 'nightmare', 'memory', 'ending'] as const
@@ -27,9 +27,16 @@ export const DIRECTION_TECHNIQUES = [...SHOT_TECHNIQUES, 'reality-reveal'] as co
 export const AUDIO_CUE_TYPES = ['ambience', 'music', 'sfx', 'voice', 'whisper', 'stinger', 'silence'] as const
 export const AUDIO_ORIGINS = ['diegetic', 'non-diegetic', 'ambiguous'] as const
 export const AUDIO_DIRECTIONS = ['nonspatial', 'front', 'behind', 'left', 'right', 'above', 'moving'] as const
-export const LOGIC_NODE_TYPES = ['branch', 'setFlag', 'event', 'delay', 'random'] as const
+export const LOGIC_NODE_TYPES = ['branch', 'setFlag', 'event', 'delay', 'random', 'sequence', 'seqReturn'] as const
 export const BRANCH_PORTS = ['true', 'false'] as const
 export const RANDOM_PORTS = ['a', 'b'] as const
+/**
+ * Output pins of a Sequence node in execution order: the two stages (`then0`, `then1`) run one after the other, each
+ * ending in its own Sequence Return, and `completed` continues the narrative once both have returned. They are never
+ * alternative branches. v0.7E supports exactly two stages (the data model keeps the stage as an index).
+ */
+export const SEQUENCE_PORTS = ['then0', 'then1', 'completed'] as const
+export const SEQUENCE_STAGES = 2
 /** Authored narrative milestone categories of an Event node (planning labels, not gameplay callbacks). */
 export const EVENT_CATEGORIES = ['story', 'reveal', 'threat', 'relief', 'decision', 'custom'] as const
 /** Upper bound of a Delay node, in seconds. */
@@ -53,8 +60,9 @@ export type AudioDirection = (typeof AUDIO_DIRECTIONS)[number]
 export type LogicNodeType = (typeof LOGIC_NODE_TYPES)[number]
 export type BranchPort = (typeof BRANCH_PORTS)[number]
 export type RandomPort = (typeof RANDOM_PORTS)[number]
-/** Any output pin a link can leave from: IF true/false or Random A/B. */
-export type Port = BranchPort | RandomPort
+export type SequencePort = (typeof SEQUENCE_PORTS)[number]
+/** Any output pin a link can leave from: IF true/false, Random A/B or a Sequence stage / completed pin. */
+export type Port = BranchPort | RandomPort | SequencePort
 export type EventCategory = (typeof EVENT_CATEGORIES)[number]
 export type CharacterRole = (typeof CHARACTER_ROLES)[number]
 
@@ -172,7 +180,7 @@ export const transitionSchema = z.object({
   /** Optional psychological direction; absent for transitions that have not been designed. */
   direction: transitionDirectionSchema.optional(),
   /** Output pin of the branch node this link leaves (only for links whose source is a branch). */
-  sourcePort: z.enum([...BRANCH_PORTS, ...RANDOM_PORTS]).optional(),
+  sourcePort: z.enum([...BRANCH_PORTS, ...RANDOM_PORTS, ...SEQUENCE_PORTS]).optional(),
   /** Reroute points that shape the wire (flow coordinates, source→target). Presentation only: never read by simulation or analysis. */
   waypoints: z.array(waypointSchema).max(WAYPOINT_MAX).optional(),
 })
@@ -231,6 +239,9 @@ export const logicNodeSchema = z.object({
   probabilityA: z.number().min(0).max(100).optional(),
   labelA: z.string().max(RANDOM_LABEL_MAX).optional(),
   labelB: z.string().max(RANDOM_LABEL_MAX).optional(),
+  /** `seqReturn` only: the owning Sequence (null = not assigned yet, incomplete authoring) and the stage it closes. */
+  sequenceId: id.nullable().optional(),
+  stage: z.number().int().min(0).max(SEQUENCE_STAGES - 1).optional(),
   position,
 })
 

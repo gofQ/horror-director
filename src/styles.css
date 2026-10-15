@@ -552,3 +552,14 @@ kbd { background: var(--panel-2); border: 1px solid var(--border); border-radius
 .flow-text { overflow-wrap: anywhere; }
 .sim-random { margin: 10px 0; padding: 10px; border: 1px solid color-mix(in srgb, #e879f9 45%, var(--border)); border-radius: 10px; display: flex; flex-direction: column; gap: 8px; }
 .sim-seed { display: flex; flex-direction: column; gap: 2px; flex: 1 1 140px; }
+
+/* v0.7E — ordered Sequence and Sequence Return nodes */
+.bp-sequence, .bp-seqreturn { min-width: 200px; max-width: 260px; border-radius: 12px; border: 1px solid color-mix(in srgb, var(--kind) 50%, var(--border)); box-shadow: 0 6px 20px rgba(0,0,0,.45); padding-bottom: 12px; }
+.bp-sequence { background: linear-gradient(180deg, #2b1c12, #1b120c); border-top: 3px solid var(--kind); }
+.bp-seqreturn { background: linear-gradient(180deg, #2a141a, #1b0d11); border-radius: 12px 22px 22px 12px; border-right: 4px solid var(--kind); }
+.bp-sequence.selected, .bp-seqreturn.selected { box-shadow: 0 0 0 2px var(--kind), 0 0 24px color-mix(in srgb, var(--kind) 55%, transparent); }
+.bp-sequence.unreachable, .bp-seqreturn.unreachable { opacity: .6; border-style: dashed; }
+.bp-seq-pins { height: 78px; }
+.bp-incomplete { margin: 6px 12px 0; display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; font-weight: 600; color: #f0c36d; }
+.issue-list { list-style: none; margin: 4px 0 8px; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.flow-kind.sequenceStart, .flow-kind.stageEnter, .flow-kind.stageReturn, .flow-kind.sequenceComplete { color: #ff9e64; }

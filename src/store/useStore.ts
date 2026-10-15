@@ -3,7 +3,8 @@ import { emptyProject, newAudioCue, newCharacter, newComment, newFlag, newLogicN
 import { getLang } from '../i18n/store'
 import { translate } from '../i18n'
 import { uid } from '../lib/id'
-import { DELAY_MAX_SECONDS, RANDOM_LABEL_MAX } from '../lib/schema'
+import { DELAY_MAX_SECONDS, RANDOM_LABEL_MAX, SEQUENCE_STAGES } from '../lib/schema'
+import { stageOf, stageOfPort } from '../lib/seqflow'
 import { loadLibrary, type DamagedEntry, type LibraryIndex, type LoadNotice, type LoadedLibrary } from '../lib/library'
 import { browserBackend, useSaveStatus } from '../lib/persist'
 import type {
@@ -58,6 +59,8 @@ export function defaultNames(): DefaultNames {
     event: translate(l, 'default.event'),
     delay: translate(l, 'default.delay'),
     random: translate(l, 'default.random'),
+    sequence: translate(l, 'default.sequence'),
+    seqReturn: translate(l, 'default.seqReturn'),
     outcomeA: translate(l, 'default.outcomeA'),
     outcomeB: translate(l, 'default.outcomeB'),
     flag: translate(l, 'default.flag'),
@@ -532,7 +535,8 @@ export const useStore = create<State>()(
                 project: {
                   ...p,
                   scenes,
-                  logicNodes: p.logicNodes.filter((x) => !gone.has(x.id)),
+                  // A Return whose Sequence is deleted stays, unassigned (never a dangling owner reference).
+                  logicNodes: p.logicNodes.filter((x) => !gone.has(x.id)).map((x) => (x.type === 'seqReturn' && x.sequenceId && gone.has(x.sequenceId) ? { ...x, sequenceId: null } : x)),
                   comments: p.comments.filter((x) => !gone.has(x.id)),
                   transitions: p.transitions.filter((t) => !gone.has(t.source) && !gone.has(t.target)),
                   startSceneId: p.startSceneId && gone.has(p.startSceneId) ? (scenes[0]?.id ?? null) : p.startSceneId,
@@ -624,6 +628,7 @@ export const useStore = create<State>()(
           const clean: typeof patch = { ...patch }
           if (patch.seconds !== undefined) clean.seconds = fit(patch.seconds, DELAY_MAX_SECONDS)
           if (patch.probabilityA !== undefined) clean.probabilityA = fit(patch.probabilityA, 100)
+          if (patch.stage !== undefined) clean.stage = Math.min(SEQUENCE_STAGES - 1, Math.max(0, Math.round(Number.isFinite(patch.stage) ? patch.stage : 0)))
           if (patch.labelA !== undefined) clean.labelA = patch.labelA.slice(0, RANDOM_LABEL_MAX)
           if (patch.labelB !== undefined) clean.labelB = patch.labelB.slice(0, RANDOM_LABEL_MAX)
           set(
@@ -648,6 +653,14 @@ export const useStore = create<State>()(
           let nodeId: string
           if (node.type !== 'scene') {
             const n = newLogicNodeOfType(node.type, position, defaultNames())
+            if (n.type === 'seqReturn') {
+              // Created from a stage: it belongs to that Sequence and stage.
+              const here = stageOfPort(fromPort) >= 0 ? { seqId: fromId, stage: stageOfPort(fromPort) } : stageOf(base, fromId)
+              if (here) {
+                n.sequenceId = here.seqId
+                n.stage = here.stage
+              }
+            }
             newBranches = [...base.logicNodes, n]
             nodeId = n.id
           } else {
