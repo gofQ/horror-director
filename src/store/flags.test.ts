@@ -172,7 +172,7 @@ describe('persistence', () => {
     load(stateProject())
     st().addFlag('Extra')
     flushNow()
-    expect(rawRecord().v).toBe(6)
+    expect(rawRecord().v).toBe(7)
     expect(rawRecord().project.flags).toHaveLength(3)
     const other = addAndOpen(emptyProject())
     expect(other.ok).toBe(true)
@@ -220,7 +220,7 @@ describe('older stored data', () => {
     expect(b.data.get(recordKey(id))).toBe(raw)
     st().addFlag()
     flushNow()
-    expect(rawRecord().v).toBe(6)
+    expect(rawRecord().v).toBe(7)
   })
   it('migrates the legacy single-project key without modifying it', () => {
     const legacy = JSON.stringify({ state: { project: strip(sampleProject()), timelineSceneId: 's_bed' }, version: 0 })
@@ -230,7 +230,7 @@ describe('older stored data', () => {
     st().addFlag()
     flushNow()
     expect(mem.data.get(STORAGE_KEY)).toBe(legacy)
-    expect(JSON.parse(mem.data.get(recordKey(st().library.activeId!))!).v).toBe(6)
+    expect(JSON.parse(mem.data.get(recordKey(st().library.activeId!))!).v).toBe(7)
   })
   it('a malformed v:6 record (bad expression) is damaged: raw preserved, never overwritten', () => {
     const bad = { v: 6, project: structuredClone(stateProject()) } as { v: number; project: Project }

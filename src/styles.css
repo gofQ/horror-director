@@ -513,3 +513,16 @@ kbd { background: var(--panel-2); border: 1px solid var(--border); border-radius
 .flag-affected { margin: 4px 0 8px; padding-left: 18px; }
 .linklike { background: none; border: 0; padding: 0; color: var(--accent, #9ecbff); text-decoration: underline; cursor: pointer; font: inherit; }
 .expr-row select[data-testid="expr-flag"] { flex-basis: 100%; }
+
+/* v0.7C — reroute points, multi-selection */
+.bp-wp { position: absolute; width: 12px; height: 12px; border-radius: 50%; background: var(--bg); border: 2px solid var(--c, #cfc7e0); pointer-events: all; cursor: grab; opacity: .75; transition: opacity .1s, box-shadow .1s; z-index: 5; }
+.bp-wp.selected { width: 16px; height: 16px; opacity: 1; box-shadow: 0 0 0 3px color-mix(in srgb, var(--c) 35%, transparent); }
+.bp-wp:hover, .bp-wp:focus-visible { opacity: 1; outline: none; box-shadow: 0 0 0 4px color-mix(in srgb, var(--c) 45%, transparent); }
+.bp-wp.dragging { cursor: grabbing; background: var(--c); }
+.bp-selcount { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); z-index: 6; display: flex; align-items: center; gap: 8px; padding: 5px 8px 5px 12px; border-radius: 999px; background: var(--panel, #1a1620); border: 1px solid var(--border); font-size: 13px; box-shadow: 0 6px 20px rgba(0,0,0,.45); }
+.react-flow__node.selected .bp-node, .react-flow__node.selected .bp-comment { outline: 2px solid rgba(158,203,255,.55); outline-offset: 2px; border-radius: 12px; }
+.react-flow__nodesselection-rect, .react-flow__selection { border: 1px dashed #9ecbff; background: rgba(158,203,255,.08); }
+.reroute-list { list-style: none; margin: 0 0 8px; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.reroute-list li { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.row-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.library-damaged ul { margin: 4px 0 0; padding-left: 18px; font-size: 12.5px; }

@@ -10,6 +10,8 @@ import { AudioPlannerDialog } from './AudioPlannerDialog'
 import { ShotPlannerDialog } from './ShotPlannerDialog'
 import { TransitionDesignerDialog } from './TransitionDesignerDialog'
 import { ConditionBuilder, FlagManager, SetFlagInspector } from './FlagInspectors'
+import { shift as shiftPoint } from '../lib/waypoints'
+import { NODE_W } from '../lib/layout'
 
 function SceneInspector({ id }: { id: string }) {
   const { t } = useT()
@@ -148,7 +150,30 @@ function EdgeInspector({ id }: { id: string }) {
   const update = useStore((s) => s.updateTransition)
   const del = useStore((s) => s.deleteTransition)
   const [designOpen, setDesignOpen] = useState(false)
+  const setPoints = (pts: { x: number; y: number }[]) => useStore.getState().setWaypoints(id, pts)
+  const removePoint = useStore((s) => s.removeWaypoint)
+  const addWaypoint = useStore((s) => s.addWaypoint)
   if (!tr) return null
+  /** Touch/keyboard alternative to the context menu: a point in the middle of the longest stretch of the wire. */
+  const addMid = () => {
+    const at = (nid: string) => project.scenes.find((x) => x.id === nid)?.position ?? project.logicNodes.find((x) => x.id === nid)?.position
+    const sp = at(tr.source)
+    const tp = at(tr.target)
+    if (!sp || !tp) return
+    const chain = [{ x: sp.x + NODE_W, y: sp.y + 40 }, ...(tr.waypoints ?? []), { x: tp.x, y: tp.y + 40 }]
+    let best = 0
+    let len = -1
+    for (let i = 0; i < chain.length - 1; i++) {
+      const l = Math.hypot(chain[i + 1].x - chain[i].x, chain[i + 1].y - chain[i].y)
+      if (l > len) {
+        len = l
+        best = i
+      }
+    }
+    // a self-loop has no horizontal extent: lift the point above the node instead
+    const dy = tr.source === tr.target ? -120 : 0
+    addWaypoint(id, best, { x: (chain[best].x + chain[best + 1].x) / 2 + (tr.source === tr.target ? 60 : 0), y: (chain[best].y + chain[best + 1].y) / 2 + dy })
+  }
   const a = project.scenes.find((s) => s.id === tr.source)
   const b = project.scenes.find((s) => s.id === tr.target)
   const logicA = project.logicNodes.find((n) => n.id === tr.source)
@@ -196,6 +221,32 @@ function EdgeInspector({ id }: { id: string }) {
       <Field label={t('field.condition')} hint={t('hint.transitionCondition')}>
         <TextArea value={tr.condition} rows={3} onChange={(condition) => update(id, { condition })} />
       </Field>
+
+      <div className="section-title">{t('reroute.title')}</div>
+      {(tr.waypoints?.length ?? 0) === 0 ? (
+        <p className="muted" data-testid="reroute-none">{t('reroute.none')}</p>
+      ) : (
+        <ol className="reroute-list" data-testid="reroute-list">
+          {tr.waypoints!.map((w, i) => (
+            <li key={i}>
+              <span>{t('reroute.item', { n: i + 1 })} <span className="muted">({Math.round(w.x)}, {Math.round(w.y)})</span></span>
+              <span className="row-actions">
+                <button className="btn small" disabled={i === 0} aria-label={t('reroute.up')} title={t('reroute.up')} onClick={() => setPoints(shiftPoint(tr.waypoints!, i, -1))}>↑</button>
+                <button className="btn small" disabled={i === tr.waypoints!.length - 1} aria-label={t('reroute.down')} title={t('reroute.down')} onClick={() => setPoints(shiftPoint(tr.waypoints!, i, 1))}>↓</button>
+                <button className="btn small danger" data-testid="reroute-remove" aria-label={t('reroute.remove')} title={t('reroute.remove')} onClick={() => removePoint(id, i)}><Trash2 size={12} /></button>
+              </span>
+            </li>
+          ))}
+        </ol>
+      )}
+      <div className="row-actions">
+        <button className="btn small" data-testid="reroute-add-mid" disabled={(tr.waypoints?.length ?? 0) >= 16} onClick={addMid}>
+          <Plus size={13} /> {t('reroute.addMid')}
+        </button>
+        {(tr.waypoints?.length ?? 0) > 0 && (
+          <button className="btn small" data-testid="reroute-clear" onClick={() => setPoints([])}>{t('reroute.clear')}</button>
+        )}
+      </div>
 
       {!touchesLogic && (
         <>
@@ -273,6 +324,26 @@ function BranchInspector({ id }: { id: string }) {
         })}
       </ul>
       <p className="muted">{t('branch.incoming', { n: project.transitions.filter((x) => x.target === id).length })}</p>
+    </>
+  )
+}
+
+function MultiInspector({ ids }: { ids: string[] }) {
+  const { t } = useT()
+  const copy = useStore((s) => s.copySelection)
+  const duplicate = useStore((s) => s.duplicateSelection)
+  const del = useStore((s) => s.deleteScenes)
+  return (
+    <>
+      <div className="insp-head">
+        <h3 data-testid="multi-title">{t('sel.title', { n: ids.length })}</h3>
+      </div>
+      <p className="muted">{t('sel.hint')}</p>
+      <div className="row-actions">
+        <button className="btn small" data-testid="multi-copy" onClick={() => copy()}><Copy size={14} /> {t('ctx.copy')}</button>
+        <button className="btn small" data-testid="multi-duplicate" onClick={() => duplicate(t('ctx.copySuffix'))}><Copy size={14} /> {t('ctx.duplicate')}</button>
+        <button className="btn small danger" data-testid="multi-delete" onClick={() => del(ids)}><Trash2 size={14} /> {t('btn.delete')}</button>
+      </div>
     </>
   )
 }
@@ -433,6 +504,7 @@ function ProjectInspector() {
 export function Inspector({ onClose }: { onClose?: () => void }) {
   const { t } = useT()
   const selection = useStore((s) => s.selection)
+  const selectedIds = useStore((s) => s.selectedNodeIds)
   return (
     <aside className="inspector" aria-label={t('insp.aria')}>
       {onClose && (
@@ -440,7 +512,9 @@ export function Inspector({ onClose }: { onClose?: () => void }) {
           <X size={16} />
         </button>
       )}
-      {selection?.type === 'scene' ? (
+      {selectedIds.length > 1 ? (
+        <MultiInspector ids={selectedIds} />
+      ) : selection?.type === 'scene' ? (
         <SceneInspector key={selection.id} id={selection.id} />
       ) : selection?.type === 'node' ? (
         <NodeInspector key={selection.id} id={selection.id} />

@@ -114,7 +114,7 @@ describe('persistence', () => {
     const a = st().addAudioCue(SCENE)
     st().updateAudioCue(SCENE, a, { title: 'Kalp atışı', type: 'music', prompt: 'slow heartbeat' })
     flushNow()
-    expect(rawRecord().v).toBe(6)
+    expect(rawRecord().v).toBe(7)
     const other = addAndOpen(emptyProject())
     expect(other.ok).toBe(true)
     expect(st().project.scenes.every((s) => s.audioCues.length === 0)).toBe(true)
@@ -168,7 +168,7 @@ describe('older stored data', () => {
     expect(b.data.get(recordKey(id))).toBe(raw)
     st().addAudioCue(SCENE)
     flushNow()
-    expect(rawRecord().v).toBe(6)
+    expect(rawRecord().v).toBe(7)
   })
 
   it('migrates the legacy single-project key without modifying it', () => {
@@ -179,7 +179,7 @@ describe('older stored data', () => {
     st().addAudioCue(SCENE)
     flushNow()
     expect(mem.data.get(STORAGE_KEY)).toBe(legacy)
-    expect(JSON.parse(mem.data.get(recordKey(st().library.activeId!))!).v).toBe(6)
+    expect(JSON.parse(mem.data.get(recordKey(st().library.activeId!))!).v).toBe(7)
   })
 
   it('treats a malformed v:4 record as damaged: raw preserved, never overwritten', () => {

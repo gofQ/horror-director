@@ -3,9 +3,9 @@ import { z } from 'zod'
 /**
  * 2 added `scene.shots`; 3 the optional `transition.direction`; 4 `scene.audioCues`; 5 adds logic (branch) nodes,
  * graph comments, custom scene types and branch-port links; 6 adds narrative flags, Set Flag nodes and optional
- * structured branch conditions. Older files and bare projects are still imported.
+ * structured branch conditions; 7 adds optional reroute `waypoints` on transitions (presentation only). Older files and bare projects are still imported.
  */
-export const SCHEMA_VERSION = 6
+export const SCHEMA_VERSION = 7
 export const FORMAT_ID = 'horror-director'
 
 export const SCENE_KINDS = ['reality', 'dream', 'nightmare', 'memory', 'ending'] as const
@@ -142,6 +142,14 @@ export const transitionDirectionSchema = z.object({
   targetShotId: z.string().min(1).nullable().default(null),
 })
 
+export const WAYPOINT_MAX = 16
+const WAYPOINT_LIMIT = 100000
+export const waypointSchema = z.object({
+  x: z.number().min(-WAYPOINT_LIMIT).max(WAYPOINT_LIMIT),
+  y: z.number().min(-WAYPOINT_LIMIT).max(WAYPOINT_LIMIT),
+})
+export type Waypoint = z.infer<typeof waypointSchema>
+
 export const transitionSchema = z.object({
   id,
   source: id,
@@ -154,6 +162,8 @@ export const transitionSchema = z.object({
   direction: transitionDirectionSchema.optional(),
   /** Output pin of the branch node this link leaves (only for links whose source is a branch). */
   sourcePort: z.enum(BRANCH_PORTS).optional(),
+  /** Reroute points that shape the wire (flow coordinates, source→target). Presentation only: never read by simulation or analysis. */
+  waypoints: z.array(waypointSchema).max(WAYPOINT_MAX).optional(),
 })
 
 const position = z.object({ x: z.number(), y: z.number() })

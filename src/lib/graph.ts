@@ -121,6 +121,15 @@ export function findLoops(adj: Map<string, string[]>): string[][] {
   return out
 }
 
+/** Scenes and logic nodes reachable from the start scene (cheap: no diagnostics; used while dragging in the editor). */
+export function reachableIds(p: Pick<Project, 'scenes' | 'logicNodes' | 'transitions' | 'startSceneId'>): Set<string> {
+  const adj = new Map<string, string[]>()
+  for (const s of p.scenes) adj.set(s.id, [])
+  for (const n of p.logicNodes) adj.set(n.id, [])
+  for (const t of p.transitions) if (adj.has(t.source) && adj.has(t.target)) adj.get(t.source)!.push(t.target)
+  return reachableFrom(adj, p.startSceneId)
+}
+
 export function analyze(p: Project): Analysis {
   const issues: Issue[] = []
   const adj = adjacency(p)

@@ -14,6 +14,7 @@ import {
   Position,
   ReactFlow,
   ReactFlowProvider,
+  SelectionMode,
   useReactFlow,
   type Connection,
   type ConnectionLineComponentProps,
@@ -25,12 +26,13 @@ import {
   type NodeChange,
   type NodeProps,
 } from '@xyflow/react'
-import { Clapperboard, Copy, Flag, FlagTriangleRight, GitBranch, Focus, Maximize, Network, Pencil, Plus, Repeat, StickyNote, Trash2, Volume2, Zap } from 'lucide-react'
+import { BoxSelect, ClipboardPaste, Clapperboard, Copy, Crosshair, Flag, FlagTriangleRight, GitBranch, Focus, Hand, Maximize, MousePointer2, Network, Pencil, Plus, Repeat, ScanSearch, StickyNote, Trash2, Volume2, X, Zap } from 'lucide-react'
 import { useStore, type NewNodeSpec } from '../store/useStore'
-import { BRANCH_PORTS, SCENE_KINDS, crossingOf, type BranchPort, type GraphComment, type LogicNode, type Scene, type SceneType, type TransitionStyle } from '../lib/schema'
+import { BRANCH_PORTS, SCENE_KINDS, crossingOf, type BranchPort, type GraphComment, type LogicNode, type Scene, type SceneType, type TransitionStyle, type Waypoint } from '../lib/schema'
 import { KIND_COLOR } from '../lib/theme'
 import { useT } from '../i18n/store'
-import { analyze } from '../lib/graph'
+import { reachableIds } from '../lib/graph'
+import { moveAt, nearestSegmentIndex } from '../lib/waypoints'
 import { edgeGeometry } from '../lib/edgePath'
 import { NODE_H, NODE_W } from '../lib/layout'
 import { canConnect, type ConnectReason } from '../lib/graphRules'
@@ -217,6 +219,7 @@ type TransitionData = {
   reciprocal: boolean
   /** Stable 0/1 tie-break (from ids) so a reciprocal pair routes on different lanes. */
   rank: 0 | 1
+  waypoints: Waypoint[]
 }
 type TransitionFlowEdge = Edge<TransitionData, 'transition'>
 
@@ -225,6 +228,10 @@ function TransitionEdge(props: EdgeProps<TransitionFlowEdge>) {
   const d = data!
   const { t } = useT()
   const select = useStore((s) => s.select)
+  const rf = useReactFlow()
+  // A point being dragged is previewed locally; the store is written once, on release (one undo step).
+  const [drag, setDrag] = useState<{ index: number; pt: Waypoint } | null>(null)
+  const wps = drag ? moveAt(d.waypoints, drag.index, drag.pt) : d.waypoints
   const geo = edgeGeometry({
     sx: sourceX,
     sy: sourceY,
@@ -233,9 +240,44 @@ function TransitionEdge(props: EdgeProps<TransitionFlowEdge>) {
     self: d.selfLoop,
     reciprocal: d.reciprocal,
     rank: d.rank,
+    waypoints: wps,
   })
   const crossing = d.crossing !== 'same-layer'
   const text = d.label || (d.port ? '' : t(`style.${d.style as TransitionStyle}`))
+  const startDrag = (e: React.PointerEvent<HTMLDivElement>, index: number) => {
+    if (e.button !== 0) return
+    e.stopPropagation()
+    e.currentTarget.setPointerCapture(e.pointerId)
+    e.currentTarget.focus()
+    select({ type: 'edge', id })
+    setDrag({ index, pt: d.waypoints[index] })
+  }
+  const moveDrag = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!drag) return
+    const p = rf.screenToFlowPosition({ x: e.clientX, y: e.clientY })
+    setDrag({ index: drag.index, pt: { x: Math.round(p.x * 10) / 10, y: Math.round(p.y * 10) / 10 } })
+  }
+  const endDrag = () => {
+    if (drag) useStore.getState().setWaypoints(id, moveAt(d.waypoints, drag.index, drag.pt))
+    setDrag(null)
+  }
+  const pointKey = (e: React.KeyboardEvent<HTMLDivElement>, index: number) => {
+    const step = e.shiftKey ? 40 : 10
+    const delta: Record<string, [number, number]> = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] }
+    if (e.key === 'Escape' && drag) {
+      e.stopPropagation()
+      setDrag(null)
+    } else if (delta[e.key]) {
+      e.preventDefault()
+      e.stopPropagation()
+      const q = d.waypoints[index]
+      useStore.getState().setWaypoints(id, moveAt(d.waypoints, index, { x: q.x + delta[e.key][0], y: q.y + delta[e.key][1] }))
+    } else if (e.key === 'Delete' || e.key === 'Backspace') {
+      e.preventDefault()
+      e.stopPropagation() // do not also delete the selected connection
+      useStore.getState().removeWaypoint(id, index)
+    }
+  }
   return (
     <>
       <BaseEdge
@@ -246,9 +288,9 @@ function TransitionEdge(props: EdgeProps<TransitionFlowEdge>) {
         className="bp-wire"
         style={{
           stroke: d.color,
-          strokeWidth: selected ? 3 : 2,
+          strokeWidth: selected ? 3.5 : 2,
           strokeDasharray: crossing ? '7 5' : undefined,
-          filter: selected ? `drop-shadow(0 0 6px ${d.color})` : undefined,
+          filter: selected ? `drop-shadow(0 0 7px ${d.color})` : undefined,
         }}
       />
       <defs>
@@ -256,6 +298,30 @@ function TransitionEdge(props: EdgeProps<TransitionFlowEdge>) {
           <path d="M 0 0 L 10 5 L 0 10 z" fill={d.color} />
         </marker>
       </defs>
+      {wps.length > 0 && (
+        <EdgeLabelRenderer>
+          {wps.map((w, i) => (
+            <div
+              key={i}
+              className={`bp-wp nodrag nopan${selected ? ' selected' : ''}${drag?.index === i ? ' dragging' : ''}`}
+              data-testid="reroute-point"
+              data-edge-id={id}
+              data-wp-index={i}
+              role="button"
+              tabIndex={selected ? 0 : -1}
+              aria-label={t('reroute.pointAria', { n: i + 1, total: wps.length })}
+              title={t('reroute.pointTip')}
+              style={{ transform: `translate(-50%, -50%) translate(${w.x}px, ${w.y}px)`, borderColor: d.color, ['--c' as string]: d.color }}
+              onPointerDown={(e) => startDrag(e, i)}
+              onPointerMove={moveDrag}
+              onPointerUp={endDrag}
+              onPointerCancel={() => setDrag(null)}
+              onKeyDown={(e) => pointKey(e, i)}
+              onClick={(e) => e.stopPropagation()}
+            />
+          ))}
+        </EdgeLabelRenderer>
+      )}
       {(text || d.port) && (
         <EdgeLabelRenderer>
           <div
@@ -299,12 +365,17 @@ type Pending = { x: number; y: number; from?: { id: string; port?: BranchPort } 
 function Canvas() {
   const project = useStore((s) => s.project)
   const selection = useStore((s) => s.selection)
+  const selectedNodeIds = useStore((s) => s.selectedNodeIds)
+  const clipboardCount = useStore((s) => (s.clipboard ? s.clipboard.data.scenes.length + s.clipboard.data.logicNodes.length + s.clipboard.data.comments.length : 0))
   const select = useStore((s) => s.select)
   const store = useStore.getState
   const rf = useReactFlow()
   const { t } = useT()
   const sceneCount = useStore((s) => s.project.scenes.length + s.project.logicNodes.length)
   const [arrangeMsg, setArrangeMsg] = useState('')
+  /** Plain drag on empty canvas draws a selection box instead of panning (touch/mouse alternative to Shift+drag). */
+  const [selectMode, setSelectMode] = useState(false)
+  const pointer = useRef<{ x: number; y: number } | null>(null)
   const [notice, setNotice] = useState('')
   // Node sizes measured by React Flow (kept in session state, never in the project) so the minimap can draw the nodes.
   const [dims, setDims] = useState<Record<string, { width: number; height: number }>>({})
@@ -313,7 +384,10 @@ function Canvas() {
   const wrapRef = useRef<HTMLDivElement>(null)
   const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const analysis = useMemo(() => analyze(project), [project])
+  // Reachability only needs the structure: recomputing the full analysis on every drag tick is wasted work.
+  const topoSig = [project.startSceneId, ...project.scenes.map((x) => x.id), '#', ...project.logicNodes.map((n) => n.id), '#', ...project.transitions.map((x) => `${x.source}>${x.target}`)].join(',')
+  const reachable = useMemo(() => reachableIds(project), [topoSig]) // eslint-disable-line react-hooks/exhaustive-deps
+  const selectedSet = useMemo(() => new Set(selectedNodeIds), [selectedNodeIds])
   const typeById = useMemo(() => new Map(project.sceneTypes.map((x) => [x.id, x])), [project.sceneTypes])
 
   const say = useCallback((msg: string) => {
@@ -330,7 +404,7 @@ function Canvas() {
       id: comment.id,
       type: 'comment' as const,
       position: comment.position,
-      selected: selection?.type === 'comment' && selection.id === comment.id,
+      selected: selectedSet.has(comment.id),
       zIndex: -1,
       measured: dims[comment.id],
       style: { width: comment.width, height: comment.height },
@@ -341,12 +415,12 @@ function Canvas() {
       type: 'scene' as const,
       position: scene.position,
       measured: dims[scene.id],
-      selected: selection?.type === 'scene' && selection.id === scene.id,
+      selected: selectedSet.has(scene.id),
       data: {
         scene,
         sceneType: scene.typeId ? typeById.get(scene.typeId) : undefined,
         isStart: project.startSceneId === scene.id,
-        unreachable: hasStart && !analysis.reachable.has(scene.id),
+        unreachable: hasStart && !reachable.has(scene.id),
         chips: Object.entries(scene.characterStates).flatMap(([cid, sid]) => {
           const c = project.characters.find((c) => c.id === cid)
           const st = c?.states.find((s) => s.id === sid)
@@ -361,21 +435,23 @@ function Canvas() {
             type: 'setFlag' as const,
             position: node.position,
             measured: dims[node.id],
-            selected: selection?.type === 'node' && selection.id === node.id,
-            data: { node, unreachable: hasStart && !analysis.reachable.has(node.id), flagName: project.flags.find((f) => f.id === node.flagId)?.name ?? null },
+            selected: selectedSet.has(node.id),
+            data: { node, unreachable: hasStart && !reachable.has(node.id), flagName: project.flags.find((f) => f.id === node.flagId)?.name ?? null },
           } satisfies SetFlagFlowNode)
         : ({
             id: node.id,
             type: 'branch' as const,
             position: node.position,
             measured: dims[node.id],
-            selected: selection?.type === 'node' && selection.id === node.id,
-            data: { node, unreachable: hasStart && !analysis.reachable.has(node.id) },
+            selected: selectedSet.has(node.id),
+            data: { node, unreachable: hasStart && !reachable.has(node.id) },
           } satisfies BranchFlowNode),
     )
     return [...comments, ...scenes, ...branches]
-  }, [project, selection, analysis, typeById, dims])
+  }, [project, selectedSet, reachable, typeById, dims])
 
+  const kindSig = project.scenes.map((x) => `${x.id}:${x.kind}`).join(',')
+  const logicSig = project.logicNodes.map((n) => n.id).join(',')
   const edges: TransitionFlowEdge[] = useMemo(() => {
     const kind = new Map(project.scenes.map((s) => [s.id, s.kind]))
     const logic = new Set(project.logicNodes.map((n) => n.id))
@@ -411,22 +487,35 @@ function Canvas() {
           port: tr.sourcePort,
           reciprocal: tr.source !== tr.target && pairs.has(`${tr.target}\u0000${tr.source}`),
           rank: (tr.source < tr.target ? 0 : 1) as 0 | 1,
+          waypoints: tr.waypoints ?? [],
         },
       }
     })
-  }, [project, selection])
+    // positions never matter here: wires follow the nodes inside React Flow
+  }, [project.transitions, kindSig, logicSig, selection]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const typeOf = (id: string): 'scene' | 'node' | 'comment' =>
     project.logicNodes.some((n) => n.id === id) ? 'node' : project.comments.some((c) => c.id === id) ? 'comment' : 'scene'
 
   const onNodesChange = useCallback((changes: NodeChange<FlowNode>[]) => {
     const removed: string[] = []
+    const moved: Record<string, { x: number; y: number }> = {}
     const measured: Record<string, { width: number; height: number }> = {}
     for (const c of changes) {
       if (c.type === 'dimensions' && c.dimensions) measured[c.id] = { width: c.dimensions.width, height: c.dimensions.height }
-      if (c.type === 'position' && c.position) store().moveNode(c.id, c.position)
+      if (c.type === 'position' && c.position) moved[c.id] = c.position
       else if (c.type === 'remove') removed.push(c.id)
     }
+    // User-initiated selection (click, Ctrl-click, box). Prop-driven re-selection is never reported as a change,
+    // which is why this is not `onSelectionChange` (that one echoes the store back and can ping-pong on remount).
+    const picks = changes.filter((c): c is Extract<NodeChange<FlowNode>, { type: 'select' }> => c.type === 'select')
+    if (picks.length) {
+      const cur = new Set(store().selectedNodeIds)
+      for (const c of picks) (c.selected ? cur.add(c.id) : cur.delete(c.id))
+      store().selectNodes([...cur])
+    }
+    // one change batch (e.g. a multi-node drag) is one store write, hence one undo step
+    if (Object.keys(moved).length) store().moveNodes(moved)
     if (removed.length) store().deleteScenes(removed)
     if (Object.keys(measured).length)
       setDims((d) => {
@@ -483,8 +572,9 @@ function Canvas() {
     void rf.setViewport(vp, { duration: 300 })
   }
   const autoArrange = () => {
+    const hadPoints = store().project.transitions.some((x) => x.waypoints?.length)
     const moved = store().arrangeScenes()
-    setArrangeMsg(moved ? t('graph.arranged') : t('graph.alreadyArranged'))
+    setArrangeMsg(moved ? t(hadPoints ? 'graph.arrangedPoints' : 'graph.arranged') : t('graph.alreadyArranged'))
     // viewport only: positions live in the project and are never read back from the viewport
     if (moved) setTimeout(fitArranged, 50)
   }
@@ -494,6 +584,36 @@ function Canvas() {
     return { x: (r?.left ?? 0) + (r?.width ?? 600) / 2 - 90 + Math.random() * 40, y: (r?.top ?? 0) + (r?.height ?? 400) / 2 - 40 + Math.random() * 40 }
   }
   const flowAt = (x: number, y: number) => rf.screenToFlowPosition({ x, y })
+
+  const fitSelection = () => {
+    const ids = store().selectedNodeIds
+    if (ids.length === 0) return void rf.fitView({ padding: 0.2, duration: 300 })
+    void rf.fitView({ nodes: ids.map((id) => ({ id })), padding: 0.35, maxZoom: 1.2, duration: 300 })
+  }
+  const centerSelection = () => {
+    const ids = store().selectedNodeIds
+    if (ids.length === 0) return
+    const b = rf.getNodesBounds(ids)
+    void rf.setCenter(b.x + b.width / 2, b.y + b.height / 2, { zoom: rf.getZoom(), duration: 300 })
+  }
+  /** Adds a reroute point at a screen position, in the segment of the wire nearest to it. */
+  const addRerouteAt = (edgeId: string, x: number, y: number) => {
+    const tr = store().project.transitions.find((q) => q.id === edgeId)
+    if (!tr) return
+    const pt = flowAt(x, y)
+    const wps = tr.waypoints ?? []
+    let index = wps.length
+    const path = wrapRef.current?.querySelector<SVGPathElement>(`[data-testid="rf__edge-${CSS.escape(edgeId)}"] path.react-flow__edge-path`)
+    if (path && typeof path.getTotalLength === 'function') {
+      const total = path.getTotalLength()
+      index = nearestSegmentIndex(path.getPointAtLength(0), wps, path.getPointAtLength(total), pt)
+    }
+    if (!store().addWaypoint(edgeId, index, pt)) say(t('reroute.limit'))
+  }
+  const selectAll = () => {
+    const p = store().project
+    store().selectNodes([...p.scenes, ...p.logicNodes, ...p.comments].map((n) => n.id))
+  }
 
   /** Creates a node at a screen point; with `from` it is connected in the same undoable step. */
   const create = (spec: NewNodeSpec | { type: 'comment' }, x: number, y: number, from?: Pending['from']) => {
@@ -560,6 +680,9 @@ function Canvas() {
       { id: 'add-setflag', label: t('ctx.addSetFlag'), icon: <FlagTriangleRight size={13} />, onSelect: () => create({ type: 'setFlag' }, x, y) },
       { id: 'add-comment', label: t('ctx.addComment'), icon: <StickyNote size={13} />, onSelect: () => create({ type: 'comment' }, x, y) },
       { id: 'add-node', label: t('ctx.addNode'), icon: <Plus size={13} />, onSelect: () => openPicker(x, y) },
+      { id: 'paste', label: t('ctx.paste'), icon: <ClipboardPaste size={13} />, separatorBefore: true, disabled: clipboardCount === 0, onSelect: () => void store().paste(flowAt(x, y)) },
+      { id: 'select-all', label: t('ctx.selectAll'), icon: <BoxSelect size={13} />, onSelect: selectAll },
+      ...(store().selectedNodeIds.length > 0 ? [{ id: 'fit-sel', label: t('ctx.fitSelection'), icon: <ScanSearch size={13} />, onSelect: fitSelection } as MenuItem] : []),
       { id: 'arrange', label: t('graph.autoArrange'), icon: <Network size={13} />, separatorBefore: true, disabled: sceneCount < 2, onSelect: autoArrange },
       { id: 'fit', label: t('ctx.fitView'), icon: <Maximize size={13} />, onSelect: () => void rf.fitView({ padding: 0.2, duration: 300 }) },
     ]
@@ -570,6 +693,7 @@ function Canvas() {
     const isStart = s.project.startSceneId === id
     return [
       { id: 'edit', label: t('ctx.edit'), icon: <Pencil size={13} />, onSelect: () => { s.select({ type: 'scene', id }); void rf.fitView({ nodes: [{ id }], padding: 1.2, maxZoom: 1.2, duration: 300 }) } },
+      { id: 'copy', label: t('ctx.copy'), icon: <Copy size={13} />, onSelect: () => void s.copySelection() },
       { id: 'duplicate', label: t('ctx.duplicate'), icon: <Copy size={13} />, onSelect: () => void s.duplicateScene(id, t('ctx.copySuffix')) },
       { id: 'start', label: t('btn.setStart'), icon: <Flag size={13} />, disabled: isStart, onSelect: () => s.setStart(id) },
       { id: 'timeline', label: t('ctx.openTimeline'), icon: <Zap size={13} />, separatorBefore: true, onSelect: () => { s.setTimelineScene(id); s.setTimelineMode('triggers'); s.setView('timeline') } },
@@ -584,6 +708,7 @@ function Canvas() {
     const isSet = s.project.logicNodes.find((n) => n.id === id)?.type === 'setFlag'
     return [
       { id: 'cond', label: t(isSet ? 'ctx.editSetFlag' : 'ctx.editCondition'), icon: <Pencil size={13} />, onSelect: () => { s.select({ type: 'node', id }); s.requestInspectorFocus(id) } },
+      { id: 'copy', label: t('ctx.copy'), icon: <Copy size={13} />, onSelect: () => void s.copySelection() },
       { id: 'duplicate', label: t('ctx.duplicate'), icon: <Copy size={13} />, onSelect: () => void s.duplicateNode(id) },
       { id: 'delete', label: t('btn.delete'), icon: <Trash2 size={13} />, danger: true, separatorBefore: true, onSelect: () => s.deleteScenes([id]) },
     ]
@@ -592,15 +717,33 @@ function Canvas() {
     const s = store()
     return [
       { id: 'edit', label: t('ctx.edit'), icon: <Pencil size={13} />, onSelect: () => s.select({ type: 'comment', id }) },
+      { id: 'copy', label: t('ctx.copy'), icon: <Copy size={13} />, onSelect: () => void s.copySelection() },
       { id: 'duplicate', label: t('ctx.duplicate'), icon: <Copy size={13} />, onSelect: () => void s.duplicateNode(id) },
       { id: 'delete', label: t('btn.delete'), icon: <Trash2 size={13} />, danger: true, separatorBefore: true, onSelect: () => s.deleteScenes([id]) },
     ]
   }
-  const edgeMenu = (id: string): MenuItem[] => {
+  const multiMenu = (): MenuItem[] => {
+    const s = store()
+    const n = s.selectedNodeIds.length
+    return [
+      { id: 'copy', label: t('ctx.copyN', { n }), icon: <Copy size={13} />, onSelect: () => void s.copySelection() },
+      { id: 'duplicate', label: t('ctx.duplicateN', { n }), icon: <Copy size={13} />, onSelect: () => void s.duplicateSelection(t('ctx.copySuffix')) },
+      { id: 'fit', label: t('ctx.fitSelection'), icon: <ScanSearch size={13} />, separatorBefore: true, onSelect: fitSelection },
+      { id: 'center', label: t('ctx.centerSelection'), icon: <Crosshair size={13} />, onSelect: centerSelection },
+      { id: 'delete', label: t('ctx.deleteN', { n }), icon: <Trash2 size={13} />, danger: true, separatorBefore: true, onSelect: () => s.deleteScenes(s.selectedNodeIds) },
+    ]
+  }
+  const pointMenu = (edgeId: string, index: number): MenuItem[] => [
+    { id: 'remove-point', label: t('reroute.remove'), icon: <Trash2 size={13} />, danger: true, onSelect: () => store().removeWaypoint(edgeId, index) },
+    { id: 'clear-points', label: t('reroute.clear'), onSelect: () => store().clearWaypoints(edgeId) },
+  ]
+  const edgeMenu = (id: string, x: number, y: number): MenuItem[] => {
     const s = store()
     const tr = s.project.transitions.find((x) => x.id === id)
     return [
       { id: 'edit', label: t('ctx.editConnection'), icon: <Pencil size={13} />, onSelect: () => s.select({ type: 'edge', id }) },
+      { id: 'add-point', label: t('reroute.add'), icon: <Plus size={13} />, onSelect: () => addRerouteAt(id, x, y) },
+      ...(tr?.waypoints?.length ? [{ id: 'clear-points', label: t('reroute.clear'), onSelect: () => s.clearWaypoints(id) } as MenuItem] : []),
       {
         id: 'insert',
         label: t('ctx.insertBranch'),
@@ -617,8 +760,16 @@ function Canvas() {
   const openFor = (target: Element | null, x: number, y: number) => {
     const nodeEl = target?.closest('.react-flow__node')
     const edgeEl = target?.closest('.react-flow__edge, [data-edge-id]')
+    const wpEl = target?.closest('[data-wp-index]')
+    if (wpEl) {
+      const id = wpEl.getAttribute('data-edge-id')!
+      select({ type: 'edge', id })
+      return open({ x, y, items: pointMenu(id, Number(wpEl.getAttribute('data-wp-index'))), ariaLabel: t('reroute.menu') })
+    }
     if (nodeEl) {
       const id = nodeEl.getAttribute('data-id')!
+      if (store().selectedNodeIds.length > 1 && store().selectedNodeIds.includes(id))
+        return open({ x, y, items: multiMenu(), ariaLabel: t('ctx.selectionMenu') })
       const kind = typeOf(id)
       select({ type: kind, id })
       return open({ x, y, items: kind === 'scene' ? sceneMenu(id) : kind === 'node' ? branchMenu(id) : commentMenu(id), ariaLabel: t('ctx.nodeMenu') })
@@ -627,7 +778,7 @@ function Canvas() {
       const id = edgeEl.getAttribute('data-edge-id') ?? edgeEl.getAttribute('data-id')!.replace(/^.*?(?=tr_)/, '')
       if (store().project.transitions.some((x) => x.id === id)) {
         select({ type: 'edge', id })
-        return open({ x, y, items: edgeMenu(id), ariaLabel: t('ctx.edgeMenu') })
+        return open({ x, y, items: edgeMenu(id, x, y), ariaLabel: t('ctx.edgeMenu') })
       }
     }
     open({ x, y, items: canvasMenu(x, y), ariaLabel: t('ctx.canvasMenu') })
@@ -639,9 +790,52 @@ function Canvas() {
     e.preventDefault()
     openFor(el, e.clientX, e.clientY)
   }
+  /**
+   * Graph shortcuts. Registered on the document (the pane itself is not focusable, so focus often rests on <body>)
+   * but only acting when focus is on the canvas or nowhere: never inside inputs, menus, dialogs or other panels.
+   */
+  const shortcut = (e: KeyboardEvent) => {
+    const el = e.target as Element | null
+    if (!el || isEditableTarget(el) || el.closest('.ctx-menu, .modal, [role="dialog"]')) return
+    if (el !== document.body && !wrapRef.current?.contains(el)) return
+    if (document.querySelector('.modal-backdrop')) return
+    const mod = e.ctrlKey || e.metaKey
+    if (mod && !e.altKey && !e.shiftKey) {
+      const k = e.key.toLowerCase()
+      if (k === 'c' && store().selectedNodeIds.length > 0 && !window.getSelection()?.toString()) {
+        e.preventDefault()
+        say(t('clip.copied', { n: store().copySelection() }))
+      } else if (k === 'v' && clipboardCount > 0) {
+        e.preventDefault()
+        const box = wrapRef.current?.getBoundingClientRect()
+        const at = pointer.current && box && pointer.current.x >= box.left && pointer.current.x <= box.right && pointer.current.y >= box.top && pointer.current.y <= box.bottom ? flowAt(pointer.current.x, pointer.current.y) : undefined
+        void store().paste(at)
+      } else if (k === 'd' && store().selectedNodeIds.length > 0) {
+        e.preventDefault() // the browser would bookmark the page
+        void store().duplicateSelection(t('ctx.copySuffix'))
+      } else if (k === 'a') {
+        e.preventDefault()
+        selectAll()
+      }
+      return
+    }
+    if (!mod && !e.altKey && !e.shiftKey && !menu) {
+      if (e.key === 'f' || e.key === 'F') {
+        e.preventDefault()
+        fitSelection()
+      } else if (e.key === 'Escape' && store().selectedNodeIds.length > 0) store().selectNodes([])
+    }
+  }
+  const shortcutRef = useRef(shortcut)
+  shortcutRef.current = shortcut
+  useEffect(() => {
+    const on = (e: KeyboardEvent) => shortcutRef.current(e)
+    document.addEventListener('keydown', on)
+    return () => document.removeEventListener('keydown', on)
+  }, [])
   const onKeyDown = (e: React.KeyboardEvent) => {
-    if (!((e.shiftKey && e.key === 'F10') || e.key === 'ContextMenu')) return
     if (isEditableTarget(e.target)) return
+    if (!((e.shiftKey && e.key === 'F10') || e.key === 'ContextMenu')) return
     e.preventDefault()
     const el = (e.target as Element).closest('.react-flow__node, .react-flow__edge') ?? (document.activeElement as Element | null)
     const box = (el && el.closest('.react-flow__node, .react-flow__edge'))?.getBoundingClientRect() ?? wrapRef.current?.getBoundingClientRect()
@@ -674,7 +868,7 @@ function Canvas() {
   }
 
   return (
-    <div className="graph-wrap" ref={wrapRef} onContextMenu={onContextMenu} onKeyDown={onKeyDown} {...lp}>
+    <div className="graph-wrap" ref={wrapRef} onContextMenu={onContextMenu} onKeyDown={onKeyDown} {...lp} onPointerMove={(e) => { pointer.current = { x: e.clientX, y: e.clientY }; lp.onPointerMove?.(e) }}>
       <div className="palette" role="toolbar" aria-label={t('palette.title')}>
         <span className="palette-title">{t('palette.title')}</span>
         {SCENE_KINDS.map((k) => (
@@ -712,10 +906,37 @@ function Canvas() {
         >
           <Network size={14} /> {t('graph.autoArrange')}
         </button>
+        <button
+          className={`btn small${selectMode ? ' active' : ''}`}
+          data-testid="select-mode"
+          aria-pressed={selectMode}
+          onClick={() => setSelectMode((v) => !v)}
+          title={t('sel.modeTip')}
+        >
+          {selectMode ? <MousePointer2 size={14} /> : <Hand size={14} />} {selectMode ? t('sel.modeSelect') : t('sel.modePan')}
+        </button>
+        {selectedNodeIds.length > 0 && (
+          <>
+            <button className="btn small" data-testid="fit-selection" onClick={fitSelection} title={t('ctx.fitSelection')}>
+              <ScanSearch size={14} /> {t('ctx.fitSelection')}
+            </button>
+            <button className="btn small" data-testid="center-selection" onClick={centerSelection} title={t('ctx.centerSelection')}>
+              <Crosshair size={14} /> {t('ctx.centerSelection')}
+            </button>
+          </>
+        )}
         <span className="sr-only" role="status" aria-live="polite">
           {arrangeMsg}
         </span>
       </div>
+      {selectedNodeIds.length > 1 && (
+        <div className="bp-selcount" data-testid="selection-count" role="status">
+          {t('sel.count', { n: selectedNodeIds.length })}
+          <button className="btn small icon" data-testid="selection-clear" onClick={() => store().selectNodes([])} aria-label={t('sel.clear')} title={t('sel.clear')}>
+            <X size={13} />
+          </button>
+        </div>
+      )}
       {notice && (
         <div className="bp-toast" role="alert" data-testid="connect-notice">
           {notice}
@@ -732,7 +953,17 @@ function Canvas() {
         onConnectEnd={onConnectEnd}
         isValidConnection={isValidConnection}
         connectionLineComponent={ConnectionLine}
-        onNodeClick={(_, n) => select({ type: typeOf(n.id), id: n.id })}
+        onNodeClick={(ev, n) => {
+          if (ev.ctrlKey || ev.metaKey || ev.shiftKey) return // multi-selection is owned by the select changes of onNodesChange
+          select({ type: typeOf(n.id), id: n.id })
+        }}
+        multiSelectionKeyCode={['Control', 'Meta']}
+        selectionKeyCode="Shift"
+        selectionOnDrag={selectMode}
+        panOnDrag={selectMode ? [1, 2] : true}
+        selectionMode={SelectionMode.Partial}
+        nodeDragThreshold={3}
+        onlyRenderVisibleElements={project.scenes.length + project.logicNodes.length + project.comments.length > 60}
         onEdgeClick={(_, e) => select({ type: 'edge', id: e.id })}
         onPaneClick={() => select(null)}
         fitView

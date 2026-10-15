@@ -32,8 +32,20 @@ korku ritmini planlamak isteyen bağımsız geliştiriciler ve küçük ekipler.
 - **Bağlam menüleri:** grafik tuvalinde, sahnelerde, EĞER düğümlerinde, yorumlarda ve bağlantılarda; ayrıca Zaman
   çizelgesi/Sekans öğelerinde ve proje satırlarında erişilebilir sağ tık menüleri (Shift+F10 / menü tuşu ve dokunmatikte
   uzun basma ile de). Girdi alanlarında ve metin kutularında tarayıcının kendi sağ tık menüsü korunur.
-- **Otomatik Düzenle:** sahnelerin soldan sağa, belirleyici (deterministik) yerleşimi. Yalnızca düğmeye bastığınızda
-  çalışır, yalnızca sahne konumlarını değiştirir ve tek bir geri al/yinele adımıdır.
+- **Yönlendirme noktaları:** bir bağlantıya sağ tıklayın → **Yönlendirme Noktası Ekle** (ya da bağlantı denetçisindeki
+  düğmeleri kullanın), teli şekillendirmek için noktaları sürükleyin, bir noktaya sağ tıklayın → **Noktayı Kaldır**. Bir
+  bağlantıda birden çok nokta (en çok 16) olabilir; sahne, EĞER ve Bayrak Ata bağlantılarının hepsinde çalışır. Noktalar yalnızca
+  telin nasıl çizildiğini değiştirir: uçlar, pinler, kimlikler, koşullar ve tasarım notları aynı kalır; simülasyon, analiz,
+  ritim ve karşılaştırma onları yok sayar.
+- **Seçim ve verimlilik:** Ctrl/Cmd-tık ya da Shift+sürükleme (veya Seç/Kaydır düğmesi) birden çok sahneyi, EĞER/Bayrak Ata
+  düğümünü ve yorumu seçer; birlikte taşınır, kopyalanır, çoğaltılır ve silinir, her toplu işlem tek geri alma adımıdır.
+  **Kopyala / Yapıştır / Çoğalt** (Ctrl/Cmd+C, V, D; bağlam menülerinde de) grafiğe ve projeye özeldir: bağlantılar yalnızca iki
+  ucu da kopyalandıysa kopyalanır, tüm kimlikler yeniden üretilir (çekimler, ses ipuçları, tetikleyiciler ve çekime bağlı
+  yönlendirme notları dâhil), pinler ve bayrak başvuruları geçerli kalır, yapıştırma imlecin olduğu yere yapılır. **Seçime Sığdır**,
+  **Seçime Ortala**, Tümünü Seç ve `F`, büyük grafiklerde yardımcı olur. Kısayollar bir alana yazarken asla çalışmaz.
+- **Otomatik Düzenle:** sahnelerin ve mantık düğümlerinin soldan sağa, belirleyici (deterministik) yerleşimi. Yalnızca düğmeye
+  bastığınızda çalışır, yalnızca konumları değiştirir (bağlantılardaki yönlendirme noktaları temizlenir, geri alma onları geri
+  getirir) ve tek bir geri al/yinele adımıdır.
 - **Döngüler:** kendine döngüler, sahne başına döngü ayarları (en çok yineleme, çıkış koşulu) ve otomatik döngü tespiti.
 - **Korku zaman çizelgesi:** sahne başına tetikleyici izi; sürüklenebilir işaretçiler, yoğunluk (0–10), tetikleyici
   türleri (jumpscare, ses, görsel, YZ, çevre, anlatı), koşullar ve bir kez tetikleme seçeneği.
@@ -165,14 +177,14 @@ geçmişini değiştirmez, dışa aktarılmaz ve proje değiştirdiğinizde sıf
 - **Depolama** (tarayıcı `localStorage`): `horror-director:library:v1` (dizin), `horror-director:proj:<id>` (proje başına
   bir kayıt), `horror-director:lang` (dil). Kimlikler dahilidir ve adlardan bağımsızdır. Kütüphane verisi (kimlikler,
   zaman damgaları, etkin proje) proje JSON'una asla yazılmaz.
-- **Yedek**, *etkin* projeyi şema 6 dışa aktarma biçiminde indirir. İçe aktarma katı doğrulama yapar (yinelenen
+- **Yedek**, *etkin* projeyi şema 7 dışa aktarma biçiminde indirir. İçe aktarma katı doğrulama yapar (yinelenen
   kimlikler, boşta kalan referanslar, geçersiz değerler, tanınmayan alanlar, daha yeni şema sürümleri hatadır ve hiçbir şey
   değiştirilmeden önce gösterilir). Bir dosya yeni proje olarak ya da onayla etkin projenin yerine aktarılabilir.
-- **Eski dosyalar ve veriler:** şema 1'den şema 5'e kadar dışa aktarmalar ile yalın proje dosyaları hâlâ içe aktarılır; eksik
+- **Eski dosyalar ve veriler:** şema 1'den şema 6'ya kadar dışa aktarmalar ile yalın proje dosyaları hâlâ içe aktarılır; eksik
   çekim planları, ses ipuçları, EĞER düğümleri, yorumlar, sahne türleri ve bayraklar boş liste olarak başlar, eksik geçiş yönlendirmeleri yok olarak kalır (şema 1/yalın dosyalar
-  için bilgilendirici bir not çıkar) ve sonraki yedek, diğer tüm alanlar değişmeden şema 6 olur. Önceki sürümlerden kalan kayıtlı projeler aynı
-  şekilde okunur ve yalnızca siz düzenleyince yeniden yazılır. Proje kayıtları `{ v: 6, project }` olarak saklanır (eski
-  `v: 1`–`v: 5` kayıtlar hâlâ okunur); yeni alanları okuyamayan eski bir sürüm böyle bir kaydı hasarlı gösterir ve veriyi
+  için bilgilendirici bir not çıkar) ve sonraki yedek, diğer tüm alanlar değişmeden şema 7 olur. Önceki sürümlerden kalan kayıtlı projeler aynı
+  şekilde okunur ve yalnızca siz düzenleyince yeniden yazılır. Proje kayıtları `{ v: 7, project }` olarak saklanır (eski
+  `v: 1`–`v: 6` kayıtlar hâlâ okunur); yeni alanları okuyamayan eski bir sürüm böyle bir kaydı hasarlı gösterir ve veriyi
   atmak yerine korur. Sürüm düşürme desteklenmez.
 - **Taşıma:** erken sürümlerin tek projelik depolaması doğrulanır, `legacy` kimliğiyle kütüphaneye kopyalanır, kontrol
   edilir ve ancak ondan sonra dizine eklenir. Özgün anahtar (`horror-director:project:v1`) asla değiştirilmez ya da silinmez.
@@ -181,7 +193,7 @@ geçmişini değiştirmez, dışa aktarılmaz ve proje değiştirdiğinizde sıf
 - **Birden çok sekme birleştirilmez** (son yazan kazanır); başka bir sekmeden gelen değişiklik algılanır, bir başlık
   gösterilir ve yeniden yükleyene kadar kütüphane işlemleri engellenir.
 
-JSON şeması `README.md` içinde belgelenmiştir ve dilden bağımsızdır (`format: "horror-director"`, `schemaVersion: 6`, sahnelerde `shots` ve `audioCues` dizileri, projede `logicNodes` (`branch` ve `setFlag`; EĞER'de isteğe bağlı `expression`), `flags`, `comments` ve `sceneTypes`, bağlantılarda isteğe bağlı `sourcePort`, geçişlerde isteğe bağlı `direction` nesnesi;
+JSON şeması `README.md` içinde belgelenmiştir ve dilden bağımsızdır (`format: "horror-director"`, `schemaVersion: 7`, geçişlerde isteğe bağlı `waypoints` (yönlendirme noktaları), sahnelerde `shots` ve `audioCues` dizileri, projede `logicNodes` (`branch` ve `setFlag`; EĞER'de isteğe bağlı `expression`), `flags`, `comments` ve `sceneTypes`, bağlantılarda isteğe bağlı `sourcePort`, geçişlerde isteğe bağlı `direction` nesnesi;
 `derived` bloğu içe aktarmada yok sayılır). Türkçe metin (ç, ğ, ı, İ, ö, ş, ü) UTF-8 olarak aynen korunur.
 
 ## Dil
@@ -229,8 +241,10 @@ derlemesine karşı Chromium'da çalışır; ekran görüntüsü karşılaştır
 - Ses ipuçları planlama notlarıdır: çalma, dalga biçimi, 3B uzamsallaştırma, yapay zekâ üretimi ya da motor/Unreal çalışma
   zamanı komutu ve varlık kütüphanesi yoktur. İpuçları tetikleyicilerden bağımsızdır ve ritim istatistiklerini etkilemez.
 - Geçiş yönlendirmeleri planlama notlarıdır: üretilmiş görsel, animasyon ya da 3D önizleme yoktur ve Unreal'de çalıştırılmaz.
-  Kayıtlı projeler yüklenirken şema denetimine girer ama bütünlük denetimine girmez (eksik bir plana bağlantı tasarımcıda
-  işaretlenir ve temizlenebilir; içe aktarma bunu reddeder).
+  Kayıtlı projeler yüklenirken şema **ve bütünlük** denetimine girer (boşta kalan sahne, mantık düğümü, bayrak, çekim, karakter
+  ya da sahne türü başvuruları, geçersiz pinler vb.): tutarsız bir kayıt Projeler'de ilk sorunlarıyla birlikte öyle listelenir;
+  kendiliğinden açılmaz, onarılmaz, üzerine yazılmaz ya da silinmez, birebir indirilebilir ve **Yine de aç** ile açıkça açılabilir
+  (önce ham kopya kaydedilir; siz düzenleyene kadar hiçbir şey onarılmaz).
 - Geri al/yinele geçmişi oturumluktur ve proje değiştirilince temizlenir.
 - Unreal tarafında henüz içe aktarıcı yoktur; JSON biçimi yukarıda belgelenmiştir. Üretim paketi kod bölmeli değildir.
 - Türkçe metinler oyun sektöründen anadili Türkçe bir editör tarafından gözden geçirilmemiştir; E2E yalnızca Chromium'u kapsar.

@@ -16,6 +16,8 @@ export interface EdgeInput {
   reciprocal: boolean
   /** Stable 0/1 tie-break for reciprocal pairs (derived from ids by the caller). */
   rank: 0 | 1
+  /** Reroute points (flow coordinates, source→target). With none the routing is exactly the automatic one. */
+  waypoints?: readonly { x: number; y: number }[]
 }
 export interface EdgeGeometry {
   d: string
@@ -45,7 +47,33 @@ const fmt = (n: number) => (Number.isFinite(n) ? Math.round(n * 100) / 100 : 0)
 const path = (a: Pt, b: Pt, c: Pt, d: Pt) =>
   `M ${fmt(a[0])},${fmt(a[1])} C ${fmt(b[0])},${fmt(b[1])} ${fmt(c[0])},${fmt(c[1])} ${fmt(d[0])},${fmt(d[1])}`
 
+/**
+ * Smooth route through the reroute points: horizontal tangents at both pins (so the arrowhead enters the target
+ * pin cleanly) and Catmull-Rom style tangents at the points. The label sits on the middle segment.
+ */
+function throughPoints(i: EdgeInput, wps: readonly { x: number; y: number }[]): EdgeGeometry {
+  const pts: Pt[] = [[i.sx, i.sy], ...wps.map((w): Pt => [w.x, w.y]), [i.tx, i.ty]]
+  const tangent = (k: number): Pt => {
+    if (k === 0 || k === pts.length - 1) return [Math.min(90, Math.max(40, Math.abs(pts[Math.min(k + 1, pts.length - 1)][0] - pts[Math.max(k - 1, 0)][0]) * 0.4)), 0]
+    return [(pts[k + 1][0] - pts[k - 1][0]) * 0.25, (pts[k + 1][1] - pts[k - 1][1]) * 0.25]
+  }
+  let d = `M ${fmt(pts[0][0])},${fmt(pts[0][1])}`
+  const segs: [Pt, Pt, Pt, Pt][] = []
+  for (let k = 0; k < pts.length - 1; k++) {
+    const ta = tangent(k)
+    const tb = tangent(k + 1)
+    const c1: Pt = [pts[k][0] + ta[0], pts[k][1] + ta[1]]
+    const c2: Pt = [pts[k + 1][0] - tb[0], pts[k + 1][1] - tb[1]]
+    segs.push([pts[k], c1, c2, pts[k + 1]])
+    d += ` C ${fmt(c1[0])},${fmt(c1[1])} ${fmt(c2[0])},${fmt(c2[1])} ${fmt(pts[k + 1][0])},${fmt(pts[k + 1][1])}`
+  }
+  const mid = segs[Math.ceil(wps.length / 2)]
+  const [labelX, labelY] = cubic(mid[0], mid[1], mid[2], mid[3], 0.5)
+  return { d, labelX: fmt(labelX), labelY: fmt(labelY) }
+}
+
 export function edgeGeometry(i: EdgeInput): EdgeGeometry {
+  if (i.waypoints && i.waypoints.length > 0) return throughPoints(i, i.waypoints)
   const a: Pt = [i.sx, i.sy]
   const d: Pt = [i.tx, i.ty]
   let b: Pt
