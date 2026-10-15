@@ -16,6 +16,8 @@ interface SimState {
   selectedFindingId: string | null
   /** Adjustable pacing thresholds (session-only; the UI exposes the kind window and silence minimum). */
   pacing: PacingOptions
+  /** Route A of the comparison: a copy of the choices made when pinned (session-only, never pruned). */
+  pinned: { projectId: string; choices: string[] } | null
   /** How many chosen steps were dropped because graph edits invalidated them (0 = none). */
   invalidatedNotice: number
   choose: (transitionId: string) => void
@@ -27,6 +29,9 @@ interface SimState {
   selectEvent: (key: string | null) => void
   selectFinding: (id: string | null) => void
   setPacing: (o: Partial<PacingOptions>) => void
+  /** Pins the current route as Route A for the active project (replaces any earlier pin). */
+  pinRouteA: () => void
+  clearPin: () => void
   reset: () => void
 }
 
@@ -36,6 +41,7 @@ export const useSim = create<SimState>((set) => ({
   selectedEventKey: null,
   selectedFindingId: null,
   pacing: clampPacing(),
+  pinned: null,
   invalidatedNotice: 0,
   choose: (id) => set((s) => ({ choices: [...s.choices, id], invalidatedNotice: 0, selectedEventKey: null, selectedFindingId: null })),
   back: () => set((s) => ({ choices: s.choices.slice(0, -1), invalidatedNotice: 0, selectedEventKey: null, selectedFindingId: null })),
@@ -46,7 +52,13 @@ export const useSim = create<SimState>((set) => ({
   selectEvent: (key) => set({ selectedEventKey: key }),
   selectFinding: (id) => set((s) => ({ selectedFindingId: s.selectedFindingId === id ? null : id })),
   setPacing: (o) => set((s) => ({ pacing: clampPacing({ ...s.pacing, ...o }) })),
-  reset: () => set({ choices: [], invalidatedNotice: 0, selectedEventKey: null, selectedFindingId: null }),
+  pinRouteA: () =>
+    set((s) => {
+      const projectId = useStore.getState().library.activeId
+      return projectId ? { pinned: { projectId, choices: [...s.choices] } } : {}
+    }),
+  clearPin: () => set({ pinned: null }),
+  reset: () => set({ choices: [], invalidatedNotice: 0, selectedEventKey: null, selectedFindingId: null, pinned: null }),
 }))
 
 // The route belongs to one project: switching projects starts over (limits are kept).

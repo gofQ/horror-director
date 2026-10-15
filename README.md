@@ -1,161 +1,105 @@
 # Horror Director
 
-A browser-based planning tool for solo psychological-horror projects (built with Unreal Engine 5.x in mind).
-Design your scene flow as a node graph, plan scares on a timeline, track character behaviour, and export
-everything as JSON for later Unreal Engine import. No backend, no paid APIs — projects live in your browser's
-`localStorage`.
+A browser-based planning tool for solo psychological-horror projects, built with Unreal Engine 5.x in mind. Design your
+scene flow as a node graph, plan scares on a timeline, track character behaviour, simulate and compare story routes,
+and export everything as JSON for later Unreal Engine import. No backend and no paid APIs — projects live in your
+browser's `localStorage`.
+
+**Who it is for:** solo developers and small teams who want to plan scene flow, dream/reality transitions, loops and
+scare pacing before (or alongside) building the game. Version history: [CHANGELOG.md](CHANGELOG.md). Turkish
+documentation: [README.tr.md](README.tr.md).
 
 ## Features
 
-- **Scene graph** (React Flow): drag-and-drop scene nodes (Reality / Dream / Nightmare / Memory / Ending),
-  connect them with typed transitions (cut, fade, glitch, blackout, morph, loop-back), conditions and durations.
-- **Dream ⇄ reality transitions**: automatically detected and drawn as dashed, colour-coded edges (↓ descent, ↑ awakening).
-- **Looping scenes**: self-loop edges, per-scene loop settings (max iterations, exit condition), and automatic cycle detection.
-- **Horror event timeline**: per-scene trigger track with draggable markers, intensity curve (0–10),
-  trigger types (jumpscare, audio, visual, AI, environment, narrative), conditions and fire-once flag.
-- **Characters**: states with behaviour notes and aggression level; a scene × character matrix tracks each character's state across scenes.
-- **Analysis**: structural checks (no start, unreachable scenes, dead ends, closed loops without exit, inescapable dreams,
-  triggers past scene duration, stale references) plus project statistics.
-- **Import / Export JSON** with schema validation (zod) and a versioned format.
-- Undo/redo (50 steps, Ctrl/Cmd+Z), strict import validation, save-status indicator and one-click JSON backup (Ctrl/Cmd+S).
-- Auto-save to `localStorage`, responsive dark UI (inspector becomes a bottom sheet on small screens).
+- **Scene graph:** drag-and-drop scenes (Reality / Dream / Nightmare / Memory / Ending) connected by typed transitions
+  (cut, fade, glitch, blackout, morph, loop-back) with conditions and durations. Dream ⇄ reality crossings are drawn as
+  dashed, colour-coded edges. Reciprocal edges, backward edges and self-loops are routed so paths and labels stay readable.
+- **Auto Arrange:** a deterministic left-to-right layout of the scenes. It runs only when you press the button, changes
+  only scene positions and is a single undo/redo step.
+- **Loops:** self-loops, per-scene loop settings (max iterations, exit condition) and automatic cycle detection.
+- **Horror timeline:** per-scene trigger track with draggable markers, intensity (0–10), trigger types (jumpscare,
+  audio, visual, AI, environment, narrative), conditions and a fire-once flag.
+- **Characters:** behaviour states with aggression levels and a scene × character matrix.
+- **Analysis:** structural checks (no start, unreachable scenes, dead ends, closed loops without exit, inescapable
+  dreams, triggers past scene duration, stale references) plus project statistics.
+- **Story path simulator:** walk a route through the graph by choosing transitions (Back / Restart). Reports whether the
+  route reaches an ending, a dead end, is incomplete or was stopped by a limit; shows an absolute-time chart of planned
+  triggers at their authored intensity and route statistics.
+- **Pacing analysis:** neutral, deterministic observations about the simulated route (see below).
+- **Route comparison:** pin a route as Route A, build Route B and compare them side by side (see below).
+- **Project library:** several projects, open/create/rename/duplicate/delete, import as new, remembered active project.
+- **Safety:** undo/redo (50 steps), strict import validation, save-status indicator, JSON backup, recovery of unreadable data.
+- **English and Turkish** interface, responsive dark UI (the inspector becomes a bottom sheet on small screens).
 
-## Story path simulator (v0.5A)
-
-The **Simulator** tab walks a route through your scene graph, read-only, by manual choice:
-
-- Starts at the project's start scene, shows the current scene and its outgoing transitions (label, style, duration,
-  dream/reality crossing, condition), and lets you pick the next one. **Back** and **Restart** are available; the
-  status says whether the route reached an **ending**, a **dead end**, is **incomplete**, or was **stopped by a limit**.
-- **Transition conditions are never evaluated.** They are shown as *assumptions* you make by choosing that transition.
-- **Loops:** `Max iterations` on a looping scene counts *additional repeat visits after the first* (4 ⇒ up to 5 visits).
-  `0` (unlimited) is bounded by a separate configurable **safety limit** (default 5 repeat visits). Cycles through
-  scenes without loop settings are bounded by a hard **step cap** (transitions taken; default 40, configurable 1–200).
-  Limits always produce an explicit warning; blocked options are disabled with the reason.
-- **Absolute timeline:** scene visits run for the scene's `duration`, followed by the transition's `duration`; a
-  trigger's absolute time is *scene start + its local time* (repeat visits handled per visit). `Fire only once`
-  triggers appear on the first visit only. Triggers with a **condition** are drawn hollow as *hypothetical* (not
-  verified gameplay events). Triggers **after their scene's duration** are flagged (red outline), shown at their true
-  time (never shifted) and excluded from the statistics.
-- **Statistics:** total duration, scene visits, unique scenes, planned trigger occurrences, average/peak intensity,
-  reality→dream and dream→reality transitions, loop repetitions (repeat visits) and the route status.
-- The chart plots trigger markers at their authored 0–10 intensity with scene boundaries; it deliberately draws no
-  curve, because intensity values are designer planning numbers, **not** a measured fear/tension score. Markers and
-  events are clickable/keyboard-selectable for details.
-- Simulation state is separate from the project: it never changes project data, autosave, the library or undo history,
-  resets when you switch projects, and the route is revalidated (shortened with a notice) if graph edits invalidate it.
-
-## Horror pacing analysis (v0.5B)
-
-Below the simulator chart, **Pacing analysis** inspects the *currently simulated route* (it reuses the simulator's planned
-events — no second traversal). It is a read-only set of **design observations** about *authored* trigger data: trigger
-intensity is design intent, not measured player fear; clustering, repetition and silence can all be deliberate, and
-there is deliberately **no tension curve and no quality score**.
-
-Only valid planned events are analyzed (events after their scene's duration and once-only repeats are excluded);
-hypothetical (conditional) events are included, and findings that rely on them — or on conditional (assumed) transitions —
-are labelled. All thresholds are inclusive:
-
-| Pattern | Rule | Severity |
-|---|---|---|
-| Trigger cluster | ≥ 4 events within 20 s | caution from 6 events |
-| Repeated high intensity | ≥ 2 events with intensity ≥ 8 within 45 s | caution from 3 |
-| Repeated trigger type | ≥ 4 events of one kind within 120 s *(adjustable)* | caution from 6 |
-| Trigger-free interval | gap ≥ 90 s *(adjustable)* from route start, between events, and after the last event of a **finished** route | informational (neutral) |
-| Escalation | ≥ 3 consecutive events with strictly rising intensity, each ≤ 60 s apart | informational |
-
-Overlapping windows are merged into one finding per run. The overview shows planned events, events per minute, events
-per trigger kind, high-intensity events, hypothetical events and the longest trigger-free interval. Selecting a finding
-highlights its events and exact time range on the chart. Fewer than 2 planned events shows an explanatory empty state;
-unfinished or step-limited routes do not evaluate trailing silence.
-
-## Graph usability (v0.4B)
-
-- **Auto Arrange** (graph toolbar): lays scenes out left to right in layers following the story flow — branching,
-  merging, cycles, self-loops, disconnected groups (stacked vertically) and multiple endings (one final column) are
-  handled. It only changes **scene positions** (ids, transitions, triggers, characters and text are untouched), runs
-  **only when you press the button** (never on load, reload or project switch), is **one undo/redo step** that restores
-  exact positions, and is deterministic/idempotent (pressing it again changes nothing). Manual dragging still works.
-  The viewport then fits the result (the viewport is not stored in the project).
-- **Edge routing:** A→B and B→A are drawn on separate paths with separate labels; backward edges arc underneath or
-  S-curve instead of cutting through scenes; self-loops arc above their scene. Edge labels are clickable (they select
-  the edge) and show the full text as a tooltip. No schema change; duplicate ordered pairs are still rejected.
-
-## Tests
-
-```bash
-npm test            # unit tests (vitest)
-npm run test:e2e    # Playwright browser tests (builds and serves the app itself)
-```
-E2E needs a Chromium: run `npx playwright install chromium` once, or point `PW_CHROMIUM_PATH` at an existing binary
-(Cloud Sessions: `PW_CHROMIUM_PATH=/opt/pw-browsers/chromium npm run test:e2e`). The suite covers startup, adding and
-connecting scenes, Auto Arrange + undo/redo, reciprocal edges and self-loops, project switching, reload persistence and
-TR/EN switching, using test ids and DOM geometry (no screenshot comparisons).
-
-## Project library (v0.4A)
-
-The **Projects** button in the top bar opens the library: create, open, rename, duplicate and delete projects, add the
-sample, **import a JSON file as a new project**, or (explicitly, with confirmation) replace the active project from a file.
-The active project is remembered across reloads. **Backup** always downloads the *active* project in the unchanged
-schema-v1 export format — library data (ids, timestamps, active project) is never written into project JSON.
-
-- **Storage:** `horror-director:library:v1` (index), `horror-director:proj:<id>` (one record per project), all in
-  `localStorage`. Ids are internal and independent of names.
-- **Migration from v0.1–v0.3:** on first start the old single project (`horror-director:project:v1`) is validated,
-  copied into the library under the id `legacy`, read back and compared, and only then listed in the index. The original
-  key is **never modified or deleted** (it stays as a stale rollback copy), the migration never re-runs, and a crash or
-  failed write retries cleanly without duplicates. Unreadable legacy data is preserved (`horror-director:unreadable:<time>`)
-  and offered for download instead of being migrated.
-- **Switching is protected:** pending edits are saved first; if saving fails you stay on the current project and can
-  download a backup or retry. Undo/redo history belongs to the active project and is cleared on every switch.
-- **Damaged data:** an unreadable index is preserved and rebuilt from the stored project records; an unreadable project is
-  listed as damaged (raw data kept, downloadable) and is never overwritten.
-- **Known limit — multiple tabs:** two tabs editing the same library are *not* merged (last write wins). Horror Director
-  only detects a change from another tab, shows a banner and blocks library operations until you reload.
-
-## Language / Dil
-
-The interface is fully available in **English** and **Türkçe**. The language is chosen on first visit from the browser
-language (`tr*` → Turkish, anything else → English); use the **TR | EN** switch in the top bar to change it at any time —
-the UI updates immediately without reloading or losing edits, and the choice is remembered separately from project data
-(`localStorage` key `horror-director:lang`). Your own content (scene names, descriptions, imported text and the sample
-project's narrative) is never translated, and exported JSON is identical in both languages (JSON keys, enum values and
-Unreal asset paths stay as-is). New items (scene, trigger, character…) are given default names in the language active when
-they are created. Turkish documentation: [README.tr.md](README.tr.md).
-
-### Adding or changing translations
-`src/i18n/en.ts` is the source of truth; `src/i18n/tr.ts` is typed `Record<MessageKey, string>`, so a missing key fails
-`npm run typecheck`. Messages use `{placeholder}` interpolation, checked at compile time by `t(key, params)`. Analysis,
-validation and import problems are *structured diagnostics* (`code` + `params`, see `src/lib/diagnostics.ts`) rendered
-through the dictionary — never English strings translated after the fact.
-
-## Setup
+## Installation and launch
 
 Requires Node.js 20+.
 
 ```bash
 npm install
 npm run dev        # http://localhost:5173
-```
-
-Other scripts:
-
-```bash
-npm test           # vitest unit tests (graph analysis, import/export, store)
-npm run typecheck  # tsc
 npm run build      # typecheck + production build into dist/
 npm run preview    # serve the production build
 ```
 
-## Usage tips
+## How to use
 
-- Add scenes from the toolbar over the graph. Drag from a node's **right** handle to another node's **left** handle to connect;
-  connect a node to itself to make a loop. Select and press `Del` to delete.
-- Double-click the timeline track to add a trigger at that time/intensity; drag markers to retime.
-- Use **Backup** regularly for backups — browser storage can be cleared.
-- **Sample** loads "The Hollow Apartment", a demo project showing dream layers, a loop and two endings.
+1. **Build the graph.** Add scenes from the toolbar over the graph. Drag from a node's **right** handle to another
+   node's **left** handle to connect; connect a node to itself for a loop. Select an item and press `Del` to delete it.
+   Set the start scene in the scene inspector. **Sample** loads "The Hollow Apartment", a demo with dream layers, a loop
+   and two endings.
+2. **Plan scares.** In **Timeline**, double-click the track to add a trigger at that time and intensity; drag markers to retime.
+3. **Track characters** in **Characters** and check the structure in **Analysis**.
+4. **Simulate a route** in **Simulator:** pick transitions from the current scene. Transition conditions are *never
+   evaluated*; they are shown as assumptions you make by choosing that transition.
+   - Loop `Max iterations` counts *additional repeat visits after the first* (4 ⇒ up to 5 visits). `0` (unlimited) is
+     bounded by a configurable safety limit (default 5); other cycles by a hard step cap (default 40, 1–200).
+   - A scene visit lasts the scene's `duration`, followed by the transition's `duration`; a trigger's time is *scene
+     start + its local time*. `Fire only once` triggers appear on the first visit only; triggers with a condition are
+     drawn hollow as *hypothetical*; triggers after their scene's duration are flagged, shown at their true time and
+     excluded from the statistics.
+   - The chart shows markers only, with no curve: intensity is a design number you entered, **not** a measured fear or
+     tension score.
+5. **Read the pacing analysis** below the chart. It inspects only valid planned events of the current route
+   (hypothetical events are included and flagged). All thresholds are inclusive:
 
-## JSON format (for Unreal integration)
+   | Pattern | Rule | Severity |
+   |---|---|---|
+   | Trigger cluster | ≥ 4 events within 20 s | caution from 6 events |
+   | Repeated high intensity | ≥ 2 events with intensity ≥ 8 within 45 s | caution from 3 |
+   | Repeated trigger type | ≥ 4 events of one kind within 120 s *(adjustable)* | caution from 6 |
+   | Trigger-free interval | gap ≥ 90 s *(adjustable)* from route start, between events and after the last event of a **finished** route | informational |
+   | Escalation | ≥ 3 consecutive events with strictly rising intensity, each ≤ 60 s apart | informational |
+
+   Findings are observations, not verdicts: clustering, repetition and silence can all be deliberate. There is no
+   quality score and no tension curve. Selecting a finding highlights its events and time range on the chart.
+6. **Compare routes:** click **Pin as Route A**, use **Back/Restart** to build **Route B**, and the comparison panel
+   shows both side by side: duration and status, scene visits, unique scenes, loop repetitions, planned events,
+   events per minute, average/peak authored intensity, trigger-kind distribution, pacing findings by category and
+   severity (with explicit `B − A` deltas), the first divergence point, shared and route-exclusive scenes, transitions
+   and events, and aligned event timelines. Events are identified by scene, trigger and visit occurrence, so repeated
+   visits compare correctly. Both routes use the same limits and thresholds and are re-simulated against the current
+   project; if graph edits invalidate Route A you get an explicit warning and the comparison is marked incomplete.
+   **Replace Route A** or **Clear comparison** at any time. There is deliberately no "best route" ranking.
+7. Use **Backup** regularly — browser storage can be cleared.
+
+Simulation, pacing and comparison state is separate from the project: it never changes project data, autosave, the
+library or undo history, it is not exported, and it resets when you switch projects.
+
+## Data storage, backups and JSON compatibility
+
+- **Storage** (browser `localStorage`): `horror-director:library:v1` (index), `horror-director:proj:<id>` (one record per
+  project), `horror-director:lang` (language). Ids are internal and independent of names. Library data (ids,
+  timestamps, active project) is never written into project JSON.
+- **Backup** downloads the *active* project in the schema-v1 export format. Importing validates strictly (duplicate ids,
+  dangling references, unrecognised fields, newer schema versions are errors shown before anything is replaced). A file
+  can be imported as a new project or, with confirmation, replace the active project.
+- **Migration:** the single-project storage of early versions is validated, copied into the library under the id
+  `legacy`, verified and only then indexed. The original key (`horror-director:project:v1`) is never modified or deleted.
+- **Safe switching and recovery:** pending edits are saved before switching; unreadable stored data is preserved
+  (`horror-director:unreadable:<time>`) and offered for download instead of being overwritten.
+- **Multiple tabs are not merged** (last write wins); a change from another tab is detected, a banner is shown and
+  library operations are blocked until you reload.
 
 ```jsonc
 {
@@ -175,9 +119,46 @@ npm run preview    # serve the production build
 }
 ```
 
-`derived` is a convenience block for engine-side readers and is ignored on import. A bare `project` object is also accepted on import.
-In Unreal, parse the file with `FJsonObjectConverter`/`UE::Json` or a Python editor script, and map `unrealLevel` to level assets.
+`derived` is a convenience block for engine-side readers and is ignored on import. A bare `project` object is also
+accepted on import. In Unreal, parse the file with `FJsonObjectConverter`/`UE::Json` or a Python editor script and map
+`unrealLevel` to level assets.
+
+## Language
+
+The interface is available in **English** and **Türkçe**. The first visit uses the browser language (`tr*` → Turkish,
+otherwise English); the **TR | EN** switch changes it immediately without reloading or losing edits, and the choice is
+remembered separately from project data. Your own content (scene names, descriptions, imported text, the sample's
+narrative) is never translated, and exported JSON is identical in both languages.
+
+Translation guide: `src/i18n/en.ts` is the source of truth; `src/i18n/tr.ts` is typed `Record<MessageKey, string>`, so a
+missing key fails `npm run typecheck`. Messages use `{placeholder}` interpolation checked at compile time; problems from
+analysis, validation and import are structured diagnostics (`code` + `params`) rendered through the dictionary.
+
+## Testing
+
+```bash
+npm run typecheck   # tsc (app and e2e)
+npm test            # unit tests (vitest)
+npm run test:e2e    # Playwright browser tests (builds and serves the app itself)
+```
+
+E2E needs a Chromium: run `npx playwright install chromium` once, or point `PW_CHROMIUM_PATH` at an existing binary
+(e.g. `PW_CHROMIUM_PATH=/opt/pw-browsers/chromium npm run test:e2e`). The suite runs against the production build in
+Chromium and uses test ids and DOM geometry rather than screenshot comparisons.
+
+## Known limitations
+
+- Simulation is manual: no automatic route enumeration, probabilities or "best path"; conditions are display-only text.
+- Timing assumes the full scene duration is spent in every scene; real gameplay timing will differ.
+- Pacing thresholds are fixed heuristics (only the repeated-type window and trigger-free minimum are adjustable), not tuned
+  to an audience or validated against player behaviour. Intensity is authored design intent, not measured fear.
+- Only the current route (and one pinned route) is analyzed or compared; routes are session-only and not saved or exported.
+- Multiple browser tabs are not merged; there is no cloud sync. Browser storage can be cleared, so keep backups.
+- Auto Arrange uses a readability heuristic, not minimal crossings; very dense graphs can still have overlapping labels.
+- Undo/redo history is session-only and cleared when switching projects.
+- No Unreal-side importer yet; the JSON format is documented above. The production bundle is not code-split.
+- Turkish strings have not been reviewed by a native game-industry editor; E2E covers Chromium only.
 
 ## Stack
 
-React 19, TypeScript, Vite, @xyflow/react, Zustand (persisted), Zod, lucide-react, Vitest.
+React 19, TypeScript, Vite, @xyflow/react, Zustand, Zod, lucide-react, Vitest, Playwright.
