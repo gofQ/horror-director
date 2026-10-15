@@ -13,7 +13,7 @@ Every future feature or fix milestone must add an entry here (see `CLAUDE.md`).
 
 ## v0.7B — Narrative state & logic
 
-Pull request: _link added when the pull request is opened_
+Pull request: [#13](https://github.com/gofQ/horror-director/pull/13)
 
 ### Added
 - **Narrative flags**: per-project Boolean flags (stable id, name, optional description, default TRUE/FALSE) with a localized **Flag manager** in the project inspector (add, rename, edit, delete). Everything references flags by id, so renaming never breaks a node; empty and duplicate names (compared ignoring case) are refused with an explanation.
