@@ -3,13 +3,14 @@ import { exportFileName, parseProject, serializeProject } from './io'
 import { sampleProject } from './sample'
 import { validateProject, findDroppedKeys } from './validate'
 import type { Project } from './schema'
+import { formatDiagnostics } from './diagnostics'
 
 const clone = (): Project => structuredClone(sampleProject())
 const parse = (p: unknown) => parseProject(JSON.stringify(p))
 const errorsOf = (p: unknown) => {
   const r = parse(p)
   if (r.ok) throw new Error('expected rejection')
-  return r.errors.join('\n')
+  return formatDiagnostics('en', r.errors).join('\n')
 }
 
 describe('import validation', () => {
@@ -86,7 +87,7 @@ describe('import validation', () => {
     p.startSceneId = null
     const r = parse(p)
     expect(r.ok).toBe(true)
-    if (r.ok) expect(r.warnings.join()).toMatch(/after its/)
+    if (r.ok) expect(formatDiagnostics('en', r.warnings).join()).toMatch(/after its/)
   })
   it('accepts the derived block written by exports', () => {
     const wrapped = JSON.parse(serializeProject(clone()))

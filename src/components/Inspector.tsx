@@ -1,10 +1,11 @@
 import { Flag, Trash2, X } from 'lucide-react'
 import { useStore } from '../store/useStore'
+import { useT } from '../i18n/store'
 import { SCENE_KINDS, TRANSITION_STYLES, crossingOf } from '../lib/schema'
-import { KIND_META, STYLE_LABEL } from '../lib/theme'
 import { Field, NumberInput, Select, TextArea, TextInput } from './fields'
 
 function SceneInspector({ id }: { id: string }) {
+  const { t } = useT()
   const project = useStore((s) => s.project)
   const scene = project.scenes.find((s) => s.id === id)
   const updateScene = useStore((s) => s.updateScene)
@@ -19,58 +20,58 @@ function SceneInspector({ id }: { id: string }) {
   return (
     <>
       <div className="insp-head">
-        <h3>Scene</h3>
-        <button className="btn small danger" onClick={() => deleteScene(id)} title="Delete scene (Del)">
-          <Trash2 size={14} /> Delete
+        <h3>{t('insp.scene')}</h3>
+        <button className="btn small danger" onClick={() => deleteScene(id)} title={t('tip.deleteScene')}>
+          <Trash2 size={14} /> {t('btn.delete')}
         </button>
       </div>
-      <Field label="Title">
+      <Field label={t('field.title')}>
         <TextInput value={scene.title} onChange={(title) => updateScene(id, { title })} />
       </Field>
       <div className="row">
-        <Field label="Type">
+        <Field label={t('field.type')}>
           <Select
             value={scene.kind}
-            options={SCENE_KINDS.map((k) => ({ value: k, label: KIND_META[k].label }))}
+            options={SCENE_KINDS.map((k) => ({ value: k, label: t(`kind.${k}`) }))}
             onChange={(kind) => updateScene(id, { kind })}
           />
         </Field>
-        <Field label="Duration (s)">
+        <Field label={t('field.duration')}>
           <NumberInput value={scene.duration} min={1} onChange={(duration) => updateScene(id, { duration })} />
         </Field>
       </div>
       <button className={`btn${isStart ? ' active' : ''}`} onClick={() => setStart(id)} disabled={isStart}>
-        <Flag size={14} /> {isStart ? 'Start scene' : 'Set as start scene'}
+        <Flag size={14} /> {isStart ? t('btn.isStart') : t('btn.setStart')}
       </button>
-      <Field label="Description / beats">
+      <Field label={t('field.description')}>
         <TextArea value={scene.description} rows={4} onChange={(description) => updateScene(id, { description })} />
       </Field>
-      <Field label="Unreal level / asset path" hint="e.g. /Game/Maps/L_Hallway">
+      <Field label={t('field.unrealLevel')} hint={t('hint.unrealLevel')}>
         <TextInput value={scene.unrealLevel} onChange={(unrealLevel) => updateScene(id, { unrealLevel })} />
       </Field>
-      <Field label="Ambience / sound">
+      <Field label={t('field.ambience')}>
         <TextInput value={scene.ambience} onChange={(ambience) => updateScene(id, { ambience })} />
       </Field>
 
-      <div className="section-title">Looping</div>
+      <div className="section-title">{t('section.looping')}</div>
       <label className="check">
         <input
           type="checkbox"
           checked={scene.loop.enabled}
           onChange={(e) => updateScene(id, { loop: { ...scene.loop, enabled: e.target.checked } })}
         />
-        This scene can repeat
+        {t('check.canLoop')}
       </label>
       {scene.loop.enabled && (
         <>
-          <Field label="Max iterations" hint="0 = unlimited">
+          <Field label={t('field.maxIterations')} hint={t('hint.unlimited')}>
             <NumberInput
               value={scene.loop.maxIterations}
               min={0}
               onChange={(maxIterations) => updateScene(id, { loop: { ...scene.loop, maxIterations: Math.round(maxIterations) } })}
             />
           </Field>
-          <Field label="Exit condition">
+          <Field label={t('field.exitCondition')}>
             <TextInput
               value={scene.loop.exitCondition}
               onChange={(exitCondition) => updateScene(id, { loop: { ...scene.loop, exitCondition } })}
@@ -79,8 +80,8 @@ function SceneInspector({ id }: { id: string }) {
         </>
       )}
 
-      <div className="section-title">Character states</div>
-      {project.characters.length === 0 && <p className="muted">No characters yet. Add some in the Characters tab.</p>}
+      <div className="section-title">{t('section.charStates')}</div>
+      {project.characters.length === 0 && <p className="muted">{t('empty.noCharsInspector')}</p>}
       {project.characters.map((c) => (
         <Field key={c.id} label={c.name}>
           <select
@@ -88,7 +89,7 @@ function SceneInspector({ id }: { id: string }) {
             value={scene.characterStates[c.id] ?? ''}
             onChange={(e) => setCharState(id, c.id, e.target.value || null)}
           >
-            <option value="">— not present —</option>
+            <option value="">{t('opt.notPresent')}</option>
             {c.states.map((st) => (
               <option key={st.id} value={st.id}>
                 {st.name}
@@ -98,7 +99,7 @@ function SceneInspector({ id }: { id: string }) {
         </Field>
       ))}
 
-      <div className="section-title">Triggers ({scene.triggers.length})</div>
+      <div className="section-title">{t('section.triggers', { n: scene.triggers.length })}</div>
       <button
         className="btn"
         onClick={() => {
@@ -106,33 +107,37 @@ function SceneInspector({ id }: { id: string }) {
           setView('timeline')
         }}
       >
-        Edit on timeline
+        {t('btn.editTimeline')}
       </button>
     </>
   )
 }
 
 function EdgeInspector({ id }: { id: string }) {
+  const { t } = useT()
   const project = useStore((s) => s.project)
-  const t = project.transitions.find((x) => x.id === id)
+  const tr = project.transitions.find((x) => x.id === id)
   const update = useStore((s) => s.updateTransition)
   const del = useStore((s) => s.deleteTransition)
-  if (!t) return null
-  const a = project.scenes.find((s) => s.id === t.source)
-  const b = project.scenes.find((s) => s.id === t.target)
+  if (!tr) return null
+  const a = project.scenes.find((s) => s.id === tr.source)
+  const b = project.scenes.find((s) => s.id === tr.target)
   const crossing = a && b ? crossingOf(a.kind, b.kind) : 'same-layer'
-  const crossingLabel = {
-    'reality->dream': 'Reality → Dream (descent)',
-    'dream->reality': 'Dream → Reality (awakening)',
-    'same-layer': t.source === t.target ? 'Self loop' : 'Same layer',
-  }[crossing]
+  const crossingLabel =
+    crossing === 'reality->dream'
+      ? t('crossing.downLong')
+      : crossing === 'dream->reality'
+        ? t('crossing.upLong')
+        : tr.source === tr.target
+          ? t('crossing.self')
+          : t('crossing.same')
 
   return (
     <>
       <div className="insp-head">
-        <h3>Transition</h3>
+        <h3>{t('insp.transition')}</h3>
         <button className="btn small danger" onClick={() => del(id)}>
-          <Trash2 size={14} /> Delete
+          <Trash2 size={14} /> {t('btn.delete')}
         </button>
       </div>
       <p className="muted">
@@ -140,56 +145,55 @@ function EdgeInspector({ id }: { id: string }) {
         <br />
         <span className={`crossing ${crossing.replace('->', '-to-')}`}>{crossingLabel}</span>
       </p>
-      <Field label="Label">
-        <TextInput value={t.label} onChange={(label) => update(id, { label })} />
+      <Field label={t('field.label')}>
+        <TextInput value={tr.label} onChange={(label) => update(id, { label })} />
       </Field>
       <div className="row">
-        <Field label="Style">
+        <Field label={t('field.style')}>
           <Select
-            value={t.style}
-            options={TRANSITION_STYLES.map((s) => ({ value: s, label: STYLE_LABEL[s] }))}
+            value={tr.style}
+            options={TRANSITION_STYLES.map((s) => ({ value: s, label: t(`style.${s}`) }))}
             onChange={(style) => update(id, { style })}
           />
         </Field>
-        <Field label="Duration (s)">
-          <NumberInput value={t.duration} min={0} step={0.5} onChange={(duration) => update(id, { duration })} />
+        <Field label={t('field.duration')}>
+          <NumberInput value={tr.duration} min={0} step={0.5} onChange={(duration) => update(id, { duration })} />
         </Field>
       </div>
-      <Field label="Condition" hint="Gameplay condition required to take this transition">
-        <TextArea value={t.condition} rows={3} onChange={(condition) => update(id, { condition })} />
+      <Field label={t('field.condition')} hint={t('hint.transitionCondition')}>
+        <TextArea value={tr.condition} rows={3} onChange={(condition) => update(id, { condition })} />
       </Field>
     </>
   )
 }
 
 function ProjectInspector() {
+  const { t } = useT()
   const project = useStore((s) => s.project)
   const update = useStore((s) => s.updateProject)
   return (
     <>
       <div className="insp-head">
-        <h3>Project</h3>
+        <h3>{t('insp.project')}</h3>
       </div>
-      <Field label="Name">
+      <Field label={t('field.name')}>
         <TextInput value={project.name} onChange={(name) => update({ name })} />
       </Field>
-      <Field label="Premise / notes">
+      <Field label={t('field.premise')}>
         <TextArea value={project.description} rows={5} onChange={(description) => update({ description })} />
       </Field>
-      <p className="muted">
-        Click a scene or transition to edit it. Drag from a node’s right handle to another node’s left handle to
-        connect scenes; connect a node to itself to create a loop. Press <kbd>Del</kbd> to delete the selection.
-      </p>
+      <p className="muted">{t('help.graph')}</p>
     </>
   )
 }
 
 export function Inspector({ onClose }: { onClose?: () => void }) {
+  const { t } = useT()
   const selection = useStore((s) => s.selection)
   return (
-    <aside className="inspector" aria-label="Inspector">
+    <aside className="inspector" aria-label={t('insp.aria')}>
       {onClose && (
-        <button className="btn icon sheet-close" onClick={onClose} aria-label="Close inspector">
+        <button className="btn icon sheet-close" onClick={onClose} aria-label={t('insp.close')}>
           <X size={16} />
         </button>
       )}

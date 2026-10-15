@@ -7,10 +7,12 @@ export const CORRUPT_PREFIX = 'horror-director:unreadable:'
 
 /* ---------- save status ---------- */
 
+export type SaveErrorReason = 'full' | 'unavailable'
+
 export type SaveStatus =
   | { state: 'saved'; at: number | null }
   | { state: 'pending' }
-  | { state: 'error'; message: string }
+  | { state: 'error'; reason: SaveErrorReason }
 
 export const useSaveStatus = create<{ status: SaveStatus }>(() => ({
   status: { state: 'saved', at: null },
@@ -25,11 +27,9 @@ export interface Backend {
   removeItem(key: string): void
 }
 
-function describe(e: unknown): string {
+function describe(e: unknown): SaveErrorReason {
   const name = (e as { name?: string })?.name ?? ''
-  if (/quota/i.test(name) || (e as { code?: number })?.code === 22)
-    return 'Browser storage is full.'
-  return 'Browser storage is unavailable.'
+  return /quota/i.test(name) || (e as { code?: number })?.code === 22 ? 'full' : 'unavailable'
 }
 
 /**
@@ -55,7 +55,7 @@ export function createSafeStorage(
       setStatus({ state: 'saved', at: now() })
     } catch (e) {
       // keep `pending` so a later flush retries
-      setStatus({ state: 'error', message: describe(e) })
+      setStatus({ state: 'error', reason: describe(e) })
     }
   }
 

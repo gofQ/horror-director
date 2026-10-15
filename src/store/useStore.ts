@@ -1,6 +1,8 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
-import { emptyProject, newCharacter, newScene, newTransition, newTrigger } from '../lib/factory'
+import { emptyProject, newCharacter, newScene, newTransition, newTrigger, type DefaultNames } from '../lib/factory'
+import { getLang } from '../i18n/store'
+import { translate } from '../i18n'
 import { uid } from '../lib/id'
 import { createSafeStorage, hydrate, preserveUnreadable, STORAGE_KEY } from '../lib/persist'
 import type {
@@ -19,6 +21,21 @@ export type Selection = { type: 'scene' | 'edge'; id: string } | null
 
 export const HISTORY_LIMIT = 50
 
+/** Names for newly created items follow the current UI language; existing items are never renamed. */
+function defaultNames(): DefaultNames {
+  const l = getLang()
+  return {
+    project: translate(l, 'default.project'),
+    opening: translate(l, 'default.opening'),
+    scene: translate(l, 'default.scene'),
+    ending: translate(l, 'default.ending'),
+    trigger: translate(l, 'default.trigger'),
+    character: translate(l, 'default.character'),
+    state: translate(l, 'default.state'),
+    stateIdle: translate(l, 'default.stateIdle'),
+  }
+}
+
 interface State {
   project: Project
   selection: Selection
@@ -29,7 +46,7 @@ interface State {
   past: Project[]
   future: Project[]
   /** Set when stored data existed but could not be read at startup. */
-  loadNotice: { message: string; raw: string | null } | null
+  loadNotice: { backedUp: boolean; raw: string | null } | null
 
   undo: () => void
   redo: () => void
@@ -147,13 +164,9 @@ function unreadableNotice(raw: string | null): NonNullable<State['loadNotice']> 
   } catch {
     /* storage unavailable */
   }
-  return {
-    message: key
-      ? 'Your saved project could not be read. The raw data was kept in browser storage and can be downloaded.'
-      : 'Your saved project could not be read and could not be backed up. Download the raw data before making changes.',
-    raw,
-  }
+  return { backedUp: key !== null, raw }
 }
+
 
 export const useStore = create<State>()(
   persist(
@@ -205,13 +218,13 @@ export const useStore = create<State>()(
             selectedTriggerId: null,
             timelineSceneId: project.startSceneId ?? project.scenes[0]?.id ?? null,
           }),
-        resetProject: () => get().loadProject(emptyProject()),
+        resetProject: () => get().loadProject(emptyProject(defaultNames())),
         loadSample: () => get().loadProject(sampleProject()),
         updateProject: (patch) =>
           set((s) => ({ project: { ...s.project, ...patch } }), { key: `project:${keysOf(patch)}` }),
 
         addScene: (kind, position) => {
-          const scene = newScene(kind, position)
+          const scene = newScene(kind, position, defaultNames())
           set((s) => ({
             project: {
               ...s.project,
@@ -295,7 +308,7 @@ export const useStore = create<State>()(
         setTimelineScene: (id) => rawSet({ timelineSceneId: id, selectedTriggerId: null }),
         selectTrigger: (id) => rawSet({ selectedTriggerId: id }),
         addTrigger: (sceneId, time) => {
-          const t = newTrigger(Math.max(0, Math.round(time)))
+          const t = newTrigger(Math.max(0, Math.round(time)), defaultNames())
           set((s) => ({
             project: mapScene(s.project, sceneId, (sc) => ({ ...sc, triggers: [...sc.triggers, t] })),
             selectedTriggerId: t.id,
@@ -322,7 +335,7 @@ export const useStore = create<State>()(
           })),
 
         addCharacter: () => {
-          const c = newCharacter()
+          const c = newCharacter(defaultNames())
           set((s) => ({ project: { ...s.project, characters: [...s.project.characters, c] } }))
           return c.id
         },
@@ -356,7 +369,7 @@ export const useStore = create<State>()(
                 c.id === charId
                   ? {
                       ...c,
-                      states: [...c.states, { id: uid('st'), name: 'New state', behavior: '', aggression: 0 }],
+                      states: [...c.states, { id: uid('st'), name: defaultNames().state, behavior: '', aggression: 0 }],
                     }
                   : c,
               ),

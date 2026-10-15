@@ -51,7 +51,7 @@ describe('safe storage', () => {
     b.failWrites = true
     s.setItem('k', 'v')
     vi.advanceTimersByTime(10)
-    expect(status()).toEqual({ state: 'error', message: 'Browser storage is full.' })
+    expect(status()).toEqual({ state: 'error', reason: 'full' })
     expect(b.data.has('k')).toBe(false)
     b.failWrites = false
     s.flush()

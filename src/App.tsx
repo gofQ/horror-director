@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { Download, FilePlus2, Sparkles, Upload, Eye, Workflow, Activity, Users, ShieldCheck, Undo2, Redo2, Save } from 'lucide-react'
 import { flushSave, useStore, type View } from './store/useStore'
-import { useSaveStatus } from './lib/persist'
+import { useSaveStatus, type SaveStatus } from './lib/persist'
+import { useLang, useT } from './i18n/store'
+import { LANGS, type Lang } from './i18n'
 import { downloadText } from './lib/download'
 import { ImportDialog, type ImportState } from './components/ImportDialog'
 import { GraphView } from './components/GraphView'
@@ -12,30 +14,56 @@ import { AnalysisView } from './components/AnalysisView'
 import { exportFileName, parseProject, serializeProject } from './lib/io'
 import { validateProject } from './lib/validate'
 
-const TABS: { id: View; label: string; Icon: typeof Workflow }[] = [
-  { id: 'graph', label: 'Scene Graph', Icon: Workflow },
-  { id: 'timeline', label: 'Timeline', Icon: Activity },
-  { id: 'characters', label: 'Characters', Icon: Users },
-  { id: 'analysis', label: 'Analysis', Icon: ShieldCheck },
-]
+const TABS = [
+  { id: 'graph', Icon: Workflow },
+  { id: 'timeline', Icon: Activity },
+  { id: 'characters', Icon: Users },
+  { id: 'analysis', Icon: ShieldCheck },
+] as const satisfies readonly { id: View; Icon: typeof Workflow }[]
 
-function SaveBadge({ status }: { status: ReturnType<typeof useSaveStatus.getState>['status'] }) {
+const LANG_NAMES: Record<Lang, string> = { tr: 'Türkçe', en: 'English' }
+
+function SaveBadge({ status }: { status: SaveStatus }) {
+  const { t, formatTime } = useT()
   const text =
     status.state === 'pending'
-      ? 'Saving…'
+      ? t('save.pending')
       : status.state === 'error'
-        ? 'Not saved'
+        ? t('save.error')
         : status.at
-          ? `Saved ${new Date(status.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
-          : 'Saved'
+          ? t('save.savedAt', { time: formatTime(status.at) })
+          : t('save.saved')
   return (
-    <span className={`save-badge ${status.state}`} role="status" aria-live="polite" title="Projects are saved in this browser only">
+    <span className={`save-badge ${status.state}`} role="status" aria-live="polite" title={t('save.tip')}>
       <Save size={13} /> {text}
     </span>
   )
 }
 
+function LanguageSwitch() {
+  const { t, lang } = useT()
+  const setLang = useLang((s) => s.setLang)
+  return (
+    <div className="lang-switch" role="group" aria-label={t('lang.aria')}>
+      {LANGS.map((l) => (
+        <button
+          key={l}
+          lang={l}
+          className={l === lang ? 'active' : ''}
+          aria-pressed={l === lang}
+          title={LANG_NAMES[l]}
+          aria-label={LANG_NAMES[l]}
+          onClick={() => setLang(l)}
+        >
+          {l.toUpperCase()}
+        </button>
+      ))}
+    </div>
+  )
+}
+
 export function App() {
+  const { t } = useT()
   const view = useStore((s) => s.view)
   const setView = useStore((s) => s.setView)
   const project = useStore((s) => s.project)
@@ -65,8 +93,8 @@ export function App() {
     const check = validateProject(project)
     downloadText(exportFileName(project), serializeProject(project))
     if (check.errors.length)
-      flash(`Backup downloaded, but the project has ${check.errors.length} integrity problem(s).`, true)
-    else flash('JSON backup downloaded.')
+      flash(t('toast.backupIssues', { n: check.errors.length }), true)
+    else flash(t('toast.backupOk'))
   }
 
   const doImport = async (file: File) => {
@@ -99,8 +127,8 @@ export function App() {
     return () => window.removeEventListener('keydown', onKey)
   })
 
-  const confirmThen = (fn: () => void, what: string) => {
-    if (window.confirm(`${what} This replaces the current project (export first if you need a backup).`)) fn()
+  const confirmThen = (fn: () => void, message: string) => {
+    if (window.confirm(message)) fn()
   }
 
   return (
@@ -108,12 +136,12 @@ export function App() {
       <header className="topbar">
         <div className="brand">
           <Eye size={20} />
-          <span className="brand-name">Horror Director</span>
+          <span className="brand-name" lang="en">Horror Director</span>
         </div>
-        <nav className="tabs" aria-label="Views">
-          {TABS.map(({ id, label, Icon }) => (
+        <nav className="tabs" aria-label={t('nav.aria')}>
+          {TABS.map(({ id, Icon }) => (
             <button key={id} className={`tab${view === id ? ' active' : ''}`} onClick={() => setView(id)}>
-              <Icon size={16} /> <span>{label}</span>
+              <Icon size={16} /> <span>{t(`tab.${id}`)}</span>
             </button>
           ))}
         </nav>
@@ -121,24 +149,25 @@ export function App() {
           <span className="project-name" title={project.name}>
             {project.name}
           </span>
-          <button className="btn icon" onClick={undo} disabled={!canUndo} title="Undo (Ctrl/Cmd+Z)" aria-label="Undo">
+          <button className="btn icon" onClick={undo} disabled={!canUndo} title={t('tip.undo')} aria-label={t('btn.undo')}>
             <Undo2 size={15} />
           </button>
-          <button className="btn icon" onClick={redo} disabled={!canRedo} title="Redo (Ctrl/Cmd+Shift+Z)" aria-label="Redo">
+          <button className="btn icon" onClick={redo} disabled={!canRedo} title={t('tip.redo')} aria-label={t('btn.redo')}>
             <Redo2 size={15} />
           </button>
           <SaveBadge status={saveStatus} />
-          <button className="btn" onClick={() => confirmThen(resetProject, 'Start a new empty project?')} title="New project">
-            <FilePlus2 size={15} /> <span>New</span>
+          <LanguageSwitch />
+          <button className="btn" onClick={() => confirmThen(resetProject, t('confirm.new'))} title={t('tip.new')}>
+            <FilePlus2 size={15} /> <span>{t('btn.new')}</span>
           </button>
-          <button className="btn" onClick={() => confirmThen(loadSample, 'Load the sample project?')} title="Load sample">
-            <Sparkles size={15} /> <span>Sample</span>
+          <button className="btn" onClick={() => confirmThen(loadSample, t('confirm.sample'))} title={t('tip.sample')}>
+            <Sparkles size={15} /> <span>{t('btn.sample')}</span>
           </button>
-          <button className="btn" onClick={() => fileRef.current?.click()} title="Import JSON">
-            <Upload size={15} /> <span>Import</span>
+          <button className="btn" onClick={() => fileRef.current?.click()} title={t('tip.import')}>
+            <Upload size={15} /> <span>{t('btn.import')}</span>
           </button>
-          <button className="btn primary" onClick={doExport} title="Download JSON backup (Ctrl/Cmd+S)" aria-label="Download JSON backup">
-            <Download size={15} /> <span>Backup</span>
+          <button className="btn primary" onClick={doExport} title={t('tip.backup')} aria-label={t('aria.backup')}>
+            <Download size={15} /> <span>{t('btn.backup')}</span>
           </button>
           <input
             ref={fileRef}
@@ -156,22 +185,22 @@ export function App() {
 
       {loadNotice && (
         <div className="banner error" role="alert">
-          <span>{loadNotice.message}</span>
+          <span>{loadNotice.backedUp ? t('banner.unreadableBackedUp') : t('banner.unreadableNotBackedUp')}</span>
           {loadNotice.raw && (
             <button className="btn small" onClick={() => downloadText('horror-director-unreadable.json', loadNotice.raw!)}>
-              Download raw data
+              {t('btn.downloadRaw')}
             </button>
           )}
           <button className="btn small" onClick={dismissNotice}>
-            Dismiss
+            {t('btn.dismiss')}
           </button>
         </div>
       )}
       {saveStatus.state === 'error' && (
         <div className="banner error" role="alert">
-          <span>Changes are not being saved: {saveStatus.message} Download a backup so work is not lost.</span>
+          <span>{t('banner.saveFailed', { reason: t(`save.reason.${saveStatus.reason}`) })}</span>
           <button className="btn small" onClick={doExport}>
-            Download backup
+            {t('btn.downloadBackup')}
           </button>
         </div>
       )}
@@ -184,7 +213,7 @@ export function App() {
           onConfirm={(p) => {
             loadProject(p)
             setImportState(null)
-            flash(`Imported “${p.name}”. Undo is available.`)
+            flash(t('toast.imported', { name: p.name }))
           }}
         />
       )}

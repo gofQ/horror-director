@@ -2,10 +2,12 @@ import { useState } from 'react'
 import { Plus, Trash2 } from 'lucide-react'
 import { useStore } from '../store/useStore'
 import { CHARACTER_ROLES } from '../lib/schema'
-import { KIND_META } from '../lib/theme'
+import { KIND_COLOR } from '../lib/theme'
+import { useT } from '../i18n/store'
 import { Field, NumberInput, Select, TextArea, TextInput } from './fields'
 
 export function CharactersView() {
+  const { t } = useT()
   const project = useStore((s) => s.project)
   const add = useStore((s) => s.addCharacter)
   const update = useStore((s) => s.updateCharacter)
@@ -23,12 +25,12 @@ export function CharactersView() {
       <div className="characters-top">
         <div className="card char-list">
           <div className="insp-head">
-            <h3>Characters</h3>
+            <h3>{t('chars.title')}</h3>
             <button className="btn small primary" onClick={() => setSelId(add())}>
-              <Plus size={14} /> Add
+              <Plus size={14} /> {t('btn.add')}
             </button>
           </div>
-          {project.characters.length === 0 && <p className="muted">No characters yet.</p>}
+          {project.characters.length === 0 && <p className="muted">{t('chars.empty')}</p>}
           {project.characters.map((c) => (
             <button
               key={c.id}
@@ -37,7 +39,7 @@ export function CharactersView() {
             >
               <i style={{ background: c.color }} />
               <span>{c.name}</span>
-              <small>{c.role}</small>
+              <small>{t(`role.${c.role}`)}</small>
             </button>
           ))}
         </div>
@@ -54,21 +56,21 @@ export function CharactersView() {
                     setSelId(null)
                   }}
                 >
-                  <Trash2 size={14} /> Delete
+                  <Trash2 size={14} /> {t('btn.delete')}
                 </button>
               </div>
               <div className="row">
-                <Field label="Name">
+                <Field label={t('field.name')}>
                   <TextInput value={chr.name} onChange={(name) => update(chr.id, { name })} />
                 </Field>
-                <Field label="Role">
+                <Field label={t('field.role')}>
                   <Select
                     value={chr.role}
-                    options={CHARACTER_ROLES.map((r) => ({ value: r, label: r }))}
+                    options={CHARACTER_ROLES.map((r) => ({ value: r, label: t(`role.${r}`) }))}
                     onChange={(role) => update(chr.id, { role })}
                   />
                 </Field>
-                <Field label="Color">
+                <Field label={t('field.color')}>
                   <input
                     className="input color"
                     type="color"
@@ -77,22 +79,22 @@ export function CharactersView() {
                   />
                 </Field>
               </div>
-              <Field label="Description">
+              <Field label={t('field.description')}>
                 <TextArea value={chr.description} onChange={(description) => update(chr.id, { description })} />
               </Field>
               <div className="insp-head">
-                <div className="section-title">Behavior states</div>
+                <div className="section-title">{t('section.behaviorStates')}</div>
                 <button className="btn small" onClick={() => addState(chr.id)}>
-                  <Plus size={14} /> State
+                  <Plus size={14} /> {t('btn.addState')}
                 </button>
               </div>
               {chr.states.map((st) => (
                 <div key={st.id} className="state-card">
                   <div className="row">
-                    <Field label="State">
+                    <Field label={t('field.state')}>
                       <TextInput value={st.name} onChange={(name) => updateState(chr.id, st.id, { name })} />
                     </Field>
-                    <Field label="Aggression (0–10)">
+                    <Field label={t('field.aggression')}>
                       <NumberInput
                         value={st.aggression}
                         min={0}
@@ -100,30 +102,30 @@ export function CharactersView() {
                         onChange={(v) => updateState(chr.id, st.id, { aggression: Math.min(10, Math.max(0, v)) })}
                       />
                     </Field>
-                    <button className="btn icon danger" aria-label="Delete state" onClick={() => delState(chr.id, st.id)}>
+                    <button className="btn icon danger" aria-label={t('aria.deleteState')} onClick={() => delState(chr.id, st.id)}>
                       <Trash2 size={14} />
                     </button>
                   </div>
-                  <Field label="Behavior">
+                  <Field label={t('field.behavior')}>
                     <TextArea rows={2} value={st.behavior} onChange={(behavior) => updateState(chr.id, st.id, { behavior })} />
                   </Field>
                 </div>
               ))}
             </>
           ) : (
-            <p className="muted">Create a character to track its states across scenes.</p>
+            <p className="muted">{t('chars.createHint')}</p>
           )}
         </div>
       </div>
 
       {project.characters.length > 0 && (
         <div className="card matrix-card">
-          <div className="section-title">State tracking across scenes</div>
+          <div className="section-title">{t('section.matrix')}</div>
           <div className="matrix-scroll">
             <table className="matrix">
               <thead>
                 <tr>
-                  <th>Scene</th>
+                  <th>{t('th.scene')}</th>
                   {project.characters.map((c) => (
                     <th key={c.id}>
                       <i style={{ background: c.color }} /> {c.name}
@@ -136,14 +138,14 @@ export function CharactersView() {
                   <tr key={s.id}>
                     <td>
                       <button className="link" onClick={() => focusScene(s.id)}>
-                        <i style={{ background: KIND_META[s.kind].color }} /> {s.title}
+                        <i style={{ background: KIND_COLOR[s.kind] }} /> {s.title}
                       </button>
                     </td>
                     {project.characters.map((c) => (
                       <td key={c.id}>
                         <select
                           className="input compact"
-                          aria-label={`${c.name} state in ${s.title}`}
+                          aria-label={t('aria.matrixCell', { character: c.name, scene: s.title })}
                           value={s.characterStates[c.id] ?? ''}
                           onChange={(e) => setCharState(s.id, c.id, e.target.value || null)}
                         >
