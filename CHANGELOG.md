@@ -13,7 +13,7 @@ Every future feature or fix milestone must add an entry here (see `CLAUDE.md`).
 
 ## v0.7E — Ordered Sequence
 
-Pull request: _link added when the pull request is opened_
+Pull request: [#17](https://github.com/gofQ/horror-director/pull/17)
 
 ### Added
 - **Sequence node**: a Blueprint-style ordered-execution node with one input and three outputs, **Then 0**, **Then 1** and **Completed** (stable id, title, description). Entering it runs the connected Then 0 subflow, returns to the Sequence, runs the Then 1 subflow, returns again and only then follows Completed into the normal narrative graph. The Then outputs are stages that run one after the other — never alternative branches. Exactly two stages (the data model keeps the stage as an index); no dynamic output counts, no nesting, no parallel execution.
