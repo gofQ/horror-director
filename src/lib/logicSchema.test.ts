@@ -24,10 +24,10 @@ const full = (): Project => {
 
 describe('schema 5 export and round trip', () => {
   it('writes schemaVersion 5 and round-trips branches, comments, scene types and ports exactly', () => {
-    expect(SCHEMA_VERSION).toBe(5)
+    expect(SCHEMA_VERSION).toBe(6)
     const p = full()
     const text = serializeProject(p)
-    expect(exportOf(p).schemaVersion).toBe(5)
+    expect(exportOf(p).schemaVersion).toBe(6)
     const r = parseProject(text)
     expect(r.ok).toBe(true)
     if (!r.ok) return
@@ -68,7 +68,7 @@ describe('older files import into v5 without changes', () => {
     if (v >= 3) expect(r.project.transitions.map((t) => t.direction)).toEqual(base.transitions.map((t) => t.direction))
     if (v >= 2) expect(r.project.scenes.map((s) => s.shots)).toEqual(base.scenes.map((s) => s.shots))
     if (v >= 4) expect(r.project.scenes.map((s) => s.audioCues)).toEqual(base.scenes.map((s) => s.audioCues))
-    expect(exportOf(r.project).schemaVersion).toBe(5)
+    expect(exportOf(r.project).schemaVersion).toBe(6)
     expect(r.warnings.some((w) => w.code === 'diag.migratedV1')).toBe(v === 1)
   })
   it('a bare legacy project imports with empty collections', () => {
@@ -91,7 +91,7 @@ describe('malformed v5 data is rejected without repair', () => {
     return e
   }
   const tr = (e: Raw, id: string) => e.project.transitions.find((t) => t.id === id)!
-  it('schema versions newer than 5', () => expect(errorsOf(mutate((e) => (e.schemaVersion = 6)))).toMatch(/schema version 6/))
+  it('schema versions newer than 6', () => expect(errorsOf(mutate((e) => (e.schemaVersion = 7)))).toMatch(/schema version 7/))
   it('unknown fields on nodes, comments, types and links', () => {
     expect(errorsOf(mutate((e) => (e.project.logicNodes![0].script = 'x = 1')))).toMatch(/script/)
     expect(errorsOf(mutate((e) => (e.project.comments![0].shape = 'box')))).toMatch(/shape/)

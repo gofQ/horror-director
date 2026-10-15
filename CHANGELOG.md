@@ -3,13 +3,34 @@
 Version history of Horror Director, newest first. This file is the canonical user-facing history; the READMEs describe
 the current product only and `progress.md` tracks engineering status.
 
-The labels below (MVP/v0.1 through v0.7A) are **development milestones**, not published releases: the project has no
+The labels below (MVP/v0.1 through v0.7B) are **development milestones**, not published releases: the project has no
 tagged releases and `package.json` stays at `0.1.0`. Each milestone after the MVP was developed on its own branch and
 merged through a pull request into the integration branch (`claude/optimistic-tesla-r2v8g6`). The JSON schema was
 `schemaVersion: 1` until v0.6A introduced `schemaVersion: 2` (scene shots) and v0.6B `schemaVersion: 3`
-(transition direction) v0.6C `schemaVersion: 4` (scene audio cues) and v0.7A `schemaVersion: 5` (IF nodes, comments, custom scene types, branch-port links); files of every earlier version, and bare project files, are still imported.
+(transition direction) v0.6C `schemaVersion: 4` (scene audio cues) v0.7A `schemaVersion: 5` (IF nodes, comments, custom scene types, branch-port links) and v0.7B `schemaVersion: 6` (narrative flags, Set Flag nodes, structured IF conditions); files of every earlier version, and bare project files, are still imported.
 
 Every future feature or fix milestone must add an entry here (see `CLAUDE.md`).
+
+## v0.7B — Narrative state & logic
+
+Pull request: [#13](https://github.com/gofQ/horror-director/pull/13)
+
+### Added
+- **Narrative flags**: per-project Boolean flags (stable id, name, optional description, default TRUE/FALSE) with a localized **Flag manager** in the project inspector (add, rename, edit, delete). Everything references flags by id, so renaming never breaks a node; empty and duplicate names (compared ignoring case) are refused with an explanation.
+- **Safe flag deletion**: deleting a used flag lists the affected Set Flag nodes and IF conditions and needs an explicit "clear references and delete" confirmation; the clean-up (Set Flag nodes become unassigned, checks are removed from conditions) and the deletion are one undo step. No dangling references are left behind.
+- **Set Flag node** (one execution input, one output, flag, TRUE/FALSE value, editable title; compact teal Blueprint node): graph context menu and node menu, searchable picker, drag-to-create from any output pin (one undo step), duplicate, delete, undo/redo, Auto Arrange, connection validation (single output, no pin id, no self-link, no logic-only cycle) and structural analysis (unreachable, unassigned, no output, flags tested but never set). A zero-time planning node: no scene visit, no trigger occurrence, no scene time.
+- **Structured IF conditions** (optional, additive to the unchanged free-text condition): Check Flag (is TRUE / is FALSE), AND, OR, NOT, nested (depth ≤ 6, ≤ 32 nodes), edited in the Branch inspector with a keyboard-accessible builder and a readable preview. No scripting, no `eval`, no raw JSON editing.
+- **State-aware simulator**: flags start from their defaults and change in route order when a Set Flag node is passed; only structured conditions are evaluated; free text is never parsed. A **State inspector** shows current values, changes versus defaults and the last setter; the pending banner and the TRUE/FALSE options show the evaluated result — the matching output is *valid*, the contradicting one stays selectable as an explicit *override (what-if)*. The route is never changed silently; state is recomputed from the start on every replay, Back, Restart and graph edit, and is never persisted. Set Flag and IF links still count toward the step cap.
+- **Compare / pacing**: overrides are counted per route (`overrides` in the comparison summary), a row and a note mark a comparison that contains what-if choices as not validated logic; event timing and pacing statistics are unchanged by flag nodes.
+
+### Changed
+- **JSON schema 6**: exports are written as `schemaVersion: 6` with `project.flags`, `logicNodes` of type `setFlag` (`flagId`, `value`) and an optional `expression` on `branch` nodes. Schema 1–5 and bare project files are still imported (flags start empty; existing scenes, shots, audio cues, transition designs, scene types, comments, IF nodes and all links are untouched). Unknown fields, unknown flag references, duplicate flag ids/names, malformed or oversized expressions, fields that do not belong to the node type, a pin id on a Set Flag link, more than one Set Flag output and logic-only cycles through Set Flag nodes are blocking import errors; unassigned Set Flag nodes and IF nodes without any condition only warn.
+- Library project records are now written as `{ v: 6, project }`. Records with `v: 1`–`v: 5` are still read, normalized in memory only and not rewritten until the project is edited; the legacy single-project key is never modified. An older build reading a `v: 6` record treats it as damaged and preserves it.
+- `LogicNode` is one schema with a `type` of `branch` or `setFlag`; `canConnect` gains the `outputTaken` reason. Free-text wording in the simulator and README now says that only *free-text* conditions are never evaluated.
+- `CLAUDE.md` compatibility rules now state schema 6 and records `{ v: 6 }`. `package.json` version metadata is unchanged.
+
+### Not included
+Event and Delay nodes, Random Branch, Reroute, separate AND/OR/NOT nodes, numeric/string variables, clipboard paste, gameplay execution and Unreal integration.
 
 ## v0.7A — Blueprint-inspired narrative graph editor
 
@@ -35,8 +56,8 @@ Pull request: [#12](https://github.com/gofQ/horror-director/pull/12)
 ### Fixed
 - The minimap showed no nodes: React Flow's measured node sizes were never fed back into the controlled nodes. They are now kept in session state (never in the project), so the minimap draws scenes, IF nodes and comments.
 
-### Not included (candidates for v0.7B)
-Reroute nodes, clipboard paste, Set Variable, AND/OR, Event and Delay nodes.
+### Not included
+Reroute nodes, clipboard paste, Set Variable, AND/OR, Event and Delay nodes (Set Flag and structured conditions arrived in v0.7B).
 
 ## v0.6D — Cinematic sequence overview
 

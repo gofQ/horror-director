@@ -17,9 +17,14 @@ documentation: [README.tr.md](README.tr.md).
 - **Blueprint-style editor:** scene nodes with typed In/Out pins, clear directional wires, hover and selection feedback, a
   connection preview that shows whether a target is valid before you drop, minimap, pan/zoom and Undo/Redo. **IF / Branch**
   nodes have one input and TRUE / FALSE outputs with an editable, human-readable condition: they take part in navigation, the
-  simulator, analysis and Auto Arrange, but the condition is a preproduction note and is **never evaluated**. **Comments**
+  simulator, analysis and Auto Arrange; their free-text condition is a preproduction note and is **never evaluated**. **Comments**
   are non-executable frames for organizing areas. Dragging an output pin onto empty canvas opens a searchable node picker
   that creates and connects the node in one undoable step.
+- **Narrative state:** per-project Boolean **flags** (name, description, default TRUE/FALSE, referenced by id so renaming is
+  safe) managed in the project inspector. A **Set Flag** node (one input, one output) assigns TRUE or FALSE to a flag. An IF
+  node can additionally carry a **structured condition** (check a flag is TRUE/FALSE, combined with AND, OR and NOT, nested)
+  built with an accessible form, no scripting. The Simulator tracks flag state along the route, evaluates only structured
+  conditions, and shows a State inspector. Set Flag and IF nodes are zero-time planning logic, not scenes.
 - **Custom scene types:** per-project, reusable scene types (name, curated colour and icon, base kind, default description
   and duration). A custom scene is a normal scene whose base kind (reality, dream, nightmare, memory, ending) still drives
   crossings, simulation and analysis.
@@ -78,7 +83,9 @@ npm run preview    # serve the production build
    pick a new node that is connected automatically. Right-click a connection to insert an IF node into it. An **IF / Branch**
    node has a TRUE and a FALSE output (one connection each): write the condition in your own words, connect the outputs to
    scenes, and use it in the Simulator, where you choose TRUE or FALSE yourself — the choice is shown as an assumption, the
-   IF node takes no scene time and adds no extra visit or trigger. Define reusable **Scene types** in the project inspector
+   IF node takes no scene time and adds no extra visit or trigger. To model story state, create **flags** in the project
+   inspector (nothing selected), add a **Set Flag** node (**Add Set Flag**, the picker, or drag from a pin), choose its flag and
+   TRUE/FALSE, and give an IF node a **structured condition** in its inspector. Define reusable **Scene types** in the project inspector
    (nothing selected). Select an item and press `Del` to delete it (connections go with it in one undo step).
    Set the start scene in the scene inspector. **Sample** loads "The Hollow Apartment", a demo with dream layers, a loop
    and two endings.
@@ -89,8 +96,13 @@ npm run preview    # serve the production build
    scene end stay where you authored them (the axis is extended and a note is shown); triggers with a condition are marked
    as conditional because they may never fire in play. Layered audio and silence are normal, not errors.
 3. **Track characters** in **Characters** and check the structure in **Analysis**.
-4. **Simulate a route** in **Simulator:** pick transitions from the current scene. Transition conditions are *never
-   evaluated*; they are shown as assumptions you make by choosing that transition.
+4. **Simulate a route** in **Simulator:** pick transitions from the current scene. Free-text conditions (on transitions, triggers and
+   IF nodes) are *never evaluated*; they are shown as assumptions you make by choosing that transition.
+   - Flags start from their defaults and change when the route passes a Set Flag node, in route order; the State inspector
+     lists the current values. An IF node with a structured condition shows its evaluated result: the matching output is
+     marked *matches condition*, the other stays selectable as an explicit *override (what-if)* that is counted and flagged
+     (also in route comparison). Your route is never changed silently. Flag state is recomputed from the start on every
+     replay, Back, Restart and graph edit, and is never saved.
    - Loop `Max iterations` counts *additional repeat visits after the first* (4 ⇒ up to 5 visits). `0` (unlimited) is
      bounded by a configurable safety limit (default 5); other cycles by a hard step cap (default 40, 1–200).
    - A scene visit lasts the scene's `duration`, followed by the transition's `duration`; a trigger's time is *scene
@@ -148,13 +160,13 @@ library or undo history, it is not exported, and it resets when you switch proje
 - **Storage** (browser `localStorage`): `horror-director:library:v1` (index), `horror-director:proj:<id>` (one record per
   project), `horror-director:lang` (language). Ids are internal and independent of names. Library data (ids,
   timestamps, active project) is never written into project JSON.
-- **Backup** downloads the *active* project in the schema-5 export format. Importing validates strictly (duplicate ids,
+- **Backup** downloads the *active* project in the schema-6 export format. Importing validates strictly (duplicate ids,
   dangling references, invalid values, unrecognised fields, newer schema versions are errors shown before anything is replaced). A file
   can be imported as a new project or, with confirmation, replace the active project.
-- **Older files and data:** schema-1 to schema-4 exports and bare project files are still imported; missing shots, audio
-  cues, IF nodes, comments and scene types start as empty lists and missing transition directions stay absent (an informational notice appears for
-  schema-1/bare files), and the next backup is schema 5 with all other fields unchanged. Stored projects from earlier versions are read the
-  same way and are only rewritten when you edit them. Project records are stored as `{ v: 5, project }` (earlier `v: 1`–`v: 4`
+- **Older files and data:** schema-1 to schema-5 exports and bare project files are still imported; missing shots, audio
+  cues, IF nodes, comments, scene types and flags start as empty lists and missing transition directions stay absent (an informational notice appears for
+  schema-1/bare files), and the next backup is schema 6 with all other fields unchanged. Stored projects from earlier versions are read the
+  same way and are only rewritten when you edit them. Project records are stored as `{ v: 6, project }` (earlier `v: 1`–`v: 5`
   records are still read); an older build that cannot read the new fields shows such a record as damaged and preserves it
   rather than dropping data. Downgrading is not supported.
 - **Migration:** the single-project storage of early versions is validated, copied into the library under the id
@@ -167,7 +179,7 @@ library or undo history, it is not exported, and it resets when you switch proje
 ```jsonc
 {
   "format": "horror-director",
-  "schemaVersion": 5,
+  "schemaVersion": 6,
   "exportedAt": "ISO-8601",
   "project": {
     "name": "", "description": "", "startSceneId": "scene id | null",
@@ -185,7 +197,10 @@ library or undo history, it is not exported, and it resets when you switch proje
                                  "level": "0–10 planning value","fadeIn","fadeOut","loop","asset","notes","prompt" }],
                  "typeId": "custom scene type id (optional; kind equals its baseKind)",
                  "characterStates": { "<characterId>": "<stateId>" } }],
-    "logicNodes": [{ "id", "type": "branch", "title", "description", "condition": "free text, never evaluated", "position": {"x","y"} }],
+    "flags": [{ "id","name","description","defaultValue": true }],
+    "logicNodes": [{ "id", "type": "branch", "title", "description", "condition": "free text, never evaluated", "position": {"x","y"},
+                     "expression": "optional structured condition: {op:'flag',flagId,is} | {op:'not',arg} | {op:'and'|'or',args:[…]}" },
+                   { "id", "type": "setFlag", "title", "description", "flagId": "flag id | null", "value": true, "position": {"x","y"} }],
     "comments": [{ "id","title","text","color","position": {"x","y"},"width","height" }],
     "sceneTypes": [{ "id","name","color","icon","baseKind": "reality|dream|nightmare|memory|ending","description","duration?" }],
     "transitions": [{ "id","source": "scene or IF node id","target": "scene or IF node id","label","style","condition","duration",
@@ -229,7 +244,7 @@ Chromium and uses test ids and DOM geometry rather than screenshot comparisons.
 
 ## Known limitations
 
-- Simulation is manual: no automatic route enumeration, probabilities or "best path"; conditions are display-only text.
+- Simulation is manual: no automatic route enumeration, probabilities or "best path"; free-text conditions are display-only; only structured flag conditions are evaluated, and only inside the simulator.
 - Timing assumes the full scene duration is spent in every scene; real gameplay timing will differ.
 - Pacing thresholds are fixed heuristics (only the repeated-type window and trigger-free minimum are adjustable), not tuned
   to an audience or validated against player behaviour. Intensity is authored design intent, not measured fear.
@@ -240,8 +255,10 @@ Chromium and uses test ids and DOM geometry rather than screenshot comparisons.
   keeps authored order; sorting by time is an explicit action.
 - The Sequence view is a derived overview: it has no playback, waveform or simulation, cannot edit items itself, keeps its
   selection, zoom and cursor only for the session, and shows triggers with a condition as conditional rather than evaluating them.
-- IF nodes are planning notes: conditions are free text and are never evaluated; there are no variables, AND/OR logic, events,
-  delays, reroute nodes or clipboard paste yet. Connections touching an IF node cannot carry a transition design.
+- Free-text conditions are planning notes and are never parsed or evaluated. Only structured IF conditions on Boolean flags are
+  evaluated, and only inside the simulator (nothing is executed in a game); there are no numeric variables, scripting, separate
+  AND/OR/NOT nodes, events, delays, random branches, reroute nodes or clipboard paste yet. A Set Flag node has one input and one
+  output, and connections touching an IF or Set Flag node cannot carry a transition design.
 - Audio cues are planning notes: no playback, waveform, 3D spatialization, AI generation or engine/Unreal runtime
   instructions, and no asset library. Cues are independent of triggers and do not affect pacing statistics.
 - Transition directions are planning notes: no generated images, animation or 3D preview, and no Unreal execution. Stored

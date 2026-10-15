@@ -207,6 +207,8 @@ describe('switching language does not touch project data', () => {
       shot: en['default.shot'],
       audioCue: en['default.audioCue'],
       branch: en['default.branch'],
+      setFlag: en['default.setFlag'],
+      flag: en['default.flag'],
       comment: en['default.comment'],
       sceneType: en['default.sceneType'],
       character: en['default.character'],
@@ -287,9 +289,9 @@ describe('localized diagnostics', () => {
   it('structured parse errors for file-level problems', () => {
     expect(parseProject('{nope')).toEqual({ ok: false, errors: [diag('diag.json')] })
     const wrapped = JSON.parse(serializeProject(sampleProject()))
-    const r = parseProject(JSON.stringify({ ...wrapped, schemaVersion: 6 }))
-    expect(r).toEqual({ ok: false, errors: [diag('diag.newerSchema', { found: '6', supported: '5' })] })
-    expect(formatDiagnostics('tr', (r as unknown as { errors: never[] }).errors)[0]).toContain('6 şema sürümünü')
+    const r = parseProject(JSON.stringify({ ...wrapped, schemaVersion: 7 }))
+    expect(r).toEqual({ ok: false, errors: [diag('diag.newerSchema', { found: '7', supported: '6' })] })
+    expect(formatDiagnostics('tr', (r as unknown as { errors: never[] }).errors)[0]).toContain('7 şema sürümünü')
   })
 })
 
@@ -312,7 +314,7 @@ describe('JSON compatibility', () => {
     const b = JSON.stringify(buildExport(turkish(), when))
     vi.unstubAllGlobals()
     expect(a).toBe(b)
-    expect(JSON.parse(a).schemaVersion).toBe(5)
+    expect(JSON.parse(a).schemaVersion).toBe(6)
     expect(a).not.toMatch(/"lang"|"language"|"locale"/)
   })
   it('Turkish project text round-trips through export/import unchanged', () => {

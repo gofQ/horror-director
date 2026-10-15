@@ -13,7 +13,7 @@ const proj = (scenes: Scene[], transitions: Transition[], start: string | null =
   startSceneId: start,
   scenes,
   transitions,
-  logicNodes: [], comments: [], sceneTypes: [], characters: [],
+  logicNodes: [], comments: [], sceneTypes: [], flags: [], characters: [],
 })
 
 // s ─e1→ x ─e3→ z(ending)      x is reached in 1 s,  y in 5 s

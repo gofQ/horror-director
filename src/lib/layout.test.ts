@@ -12,7 +12,7 @@ const graph = (ids: string[], edges: [string, string][], opts: { start?: string 
   startSceneId: opts.start === undefined ? (ids[0] ?? null) : opts.start,
   scenes: ids.map((id) => scene(id, opts.kinds?.[id])),
   transitions: edges.map(([s, t]) => edge(s, t)),
-  logicNodes: [], comments: [], sceneTypes: [], characters: [],
+  logicNodes: [], comments: [], sceneTypes: [], flags: [], characters: [],
 })
 
 const overlaps = (pos: Positions) => {

@@ -28,6 +28,8 @@ export interface RouteSummary {
   events: number
   hypothetical: number
   assumedTransitions: number
+  /** IF outputs taken against their structured condition: the route is a what-if, not validated logic. */
+  overrides: number
   eventsPerMinute: number | null
   avgIntensity: number | null
   peakIntensity: number | null
@@ -186,6 +188,7 @@ function summarize(sim: SimResult, analysis: PacingAnalysis, requested: number):
     events: sim.stats.occurrences,
     hypothetical: sim.stats.hypothetical,
     assumedTransitions: sim.steps.filter((s) => s.via && s.via.condition.trim() !== '').length,
+    overrides: sim.stats.overrides,
     eventsPerMinute: analysis.overview.eventsPerMinute,
     avgIntensity: sim.stats.avgIntensity,
     peakIntensity: sim.stats.peakIntensity,

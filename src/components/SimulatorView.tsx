@@ -7,6 +7,7 @@ import { formatDiagnostic } from '../lib/diagnostics'
 import { formatClock, simulateRoute, type SimEvent, type SimOption, type SimStatus } from '../lib/simulate'
 import { KIND_COLOR, TRIGGER_COLOR } from '../lib/theme'
 import { NumberInput } from './fields'
+import { useExprText } from './useExprText'
 import { PacingPanel } from './PacingPanel'
 import { ComparePanel } from './ComparePanel'
 import { analyzePacing } from '../lib/pacing'
@@ -37,6 +38,8 @@ export function SimulatorView() {
 
   const selected = result.events.find((e) => e.key === selectedEventKey) ?? null
   const cur = result.current
+  const pendingExpr = project.logicNodes.find((n) => n.id === result.pending?.nodeId)?.expression
+  const exprText = useExprText()
   const label = (o: { label: string; style: SimOption['style'] }) => o.label || t(`style.${o.style}`)
 
   const statusClass: Record<SimStatus, string> = {
@@ -101,8 +104,18 @@ export function SimulatorView() {
               )}
 
               {result.pending && (
-                <p className="issue warning" role="status" data-testid="sim-pending">
-                  {t('sim.pending', { title: result.pending.title || t('default.branch'), condition: result.pending.condition.trim() || t('branch.noCondition') })}
+                <p className="issue warning" role="status" data-testid="sim-pending" data-kind={result.pending.kind}>
+                  <span>
+                    {result.pending.kind === 'setFlag'
+                      ? t('sim.pendingSet', { title: result.pending.title || t('default.setFlag') })
+                      : t('sim.pending', { title: result.pending.title || t('default.branch'), condition: result.pending.condition.trim() || (pendingExpr ? exprText(pendingExpr) : t('branch.noCondition')) })}
+                    {result.pending.evaluated !== null && (
+                      <strong data-testid="sim-evaluated" data-value={String(result.pending.evaluated)}>
+                        {' '}
+                        {t('sim.evaluated', { value: result.pending.evaluated ? t('bool.true') : t('bool.false') })}
+                      </strong>
+                    )}
+                  </span>
                 </p>
               )}
               <div className="section-title">{t('sim.options')}</div>
@@ -115,6 +128,7 @@ export function SimulatorView() {
                     data-testid="sim-option"
                     data-blocked={o.blocked ?? ''}
                     data-port={o.port ?? ''}
+                    data-logic={o.logic ?? ''}
                     data-target-type={o.targetType}
                     disabled={o.blocked !== null}
                     onClick={() => choose(o.transitionId)}
@@ -122,9 +136,10 @@ export function SimulatorView() {
                     <span className="sim-option-title">
                       {o.port && <strong style={{ color: o.port === 'true' ? '#6ee7a1' : '#ff6b7d' }}>{t(`pin.${o.port}`)} </strong>}
                       {o.port ? (o.label ? `${o.label} ` : '') : `${label(o)} `}→{' '}
-                      {o.targetType === 'branch' ? (
+                      {o.targetType === 'branch' || o.targetType === 'setFlag' ? (
                         <>
-                          <span className="badge">{t('branch.badge')}</span> <strong>{o.targetTitle || t('default.branch')}</strong>
+                          <span className="badge">{t(o.targetType === 'setFlag' ? 'setflag.badge' : 'branch.badge')}</span>{' '}
+                          <strong>{o.targetTitle || t(o.targetType === 'setFlag' ? 'default.setFlag' : 'default.branch')}</strong>
                         </>
                       ) : (
                         <>
@@ -153,9 +168,14 @@ export function SimulatorView() {
                         {t('sim.assumption', { text: o.condition.trim() })}
                       </span>
                     )}
-                    {o.fromBranch && o.port && (
+                    {o.fromBranch && o.port && o.logic !== 'valid' && (
                       <span className="sim-assumption" title={t('sim.assumptionHint')} data-testid="sim-branch-assumption">
                         {t('sim.branchAssumption', { condition: o.fromBranch.condition.trim() || o.fromBranch.title || t('default.branch'), port: t(`pin.${o.port}`) })}
+                      </span>
+                    )}
+                    {o.logic && o.logic !== 'manual' && (
+                      <span className={`sim-logic ${o.logic}`} data-testid="sim-logic" data-logic={o.logic} title={t(`sim.logic.${o.logic}.hint`)}>
+                        {t(`sim.logic.${o.logic}`)}
                       </span>
                     )}
                     {o.blocked && <span className="sim-blocked">{t(`sim.blocked.${o.blocked}`)}</span>}
@@ -217,6 +237,33 @@ export function SimulatorView() {
                 </div>
               )}
 
+              {project.flags.length > 0 && (
+                <div className="card" data-testid="sim-state">
+                  <div className="section-title">{t('sim.state')}</div>
+                  <ul className="state-list">
+                    {project.flags.map((f) => {
+                      const now = result.state[f.id] === true
+                      const last = [...result.changes].reverse().find((c) => c.flagId === f.id)
+                      return (
+                        <li key={f.id} data-testid="sim-flag" data-flag={f.name} data-value={String(now)} data-changed={String(now !== f.defaultValue)}>
+                          <span className="state-name">{f.name}</span>
+                          <span className={`bp-bool ${now ? 'on' : 'off'}`}>{now ? t('bool.true') : t('bool.false')}</span>
+                          <span className="muted">
+                            {now !== f.defaultValue ? t('sim.state.changed', { value: f.defaultValue ? t('bool.true') : t('bool.false') }) : t('sim.state.default')}
+                            {last ? ` · ${t('sim.state.last', { node: last.nodeTitle || t('default.setFlag') })}` : ''}
+                          </span>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                  {result.stats.overrides > 0 && (
+                    <p className="issue warning" role="note" data-testid="sim-overrides">
+                      {t('sim.overrides', { n: result.stats.overrides })}
+                    </p>
+                  )}
+                  <p className="muted">{t('sim.state.note')}</p>
+                </div>
+              )}
               <div className="card">
                 <div className="section-title">{t('sim.route')}</div>
                 <ol className="sim-route" data-testid="sim-route">
@@ -237,7 +284,16 @@ export function SimulatorView() {
                             {s.via.branches.map((b) => (
                               <span key={b.nodeId + b.port} className="sim-assumption" data-testid="sim-branch-pass">
                                 {' '}
-                                {t('sim.branchAssumption', { condition: b.condition.trim() || b.title || t('default.branch'), port: t(`pin.${b.port}`) })}
+                                {b.logic === 'valid'
+                                  ? t('sim.branchLogic', { title: b.title || t('default.branch'), port: t(`pin.${b.port}`) })
+                                  : t('sim.branchAssumption', { condition: b.condition.trim() || b.title || t('default.branch'), port: t(`pin.${b.port}`) })}
+                                {b.logic === 'override' && <span className="sim-logic override"> {t('sim.logic.override')}</span>}
+                              </span>
+                            ))}
+                            {s.via.changes.map((c) => (
+                              <span key={c.nodeId + c.flagId} className="sim-change" data-testid="sim-route-change">
+                                {' '}
+                                {t('sim.change', { flag: c.flagName, value: c.after ? t('bool.true') : t('bool.false') })}
                               </span>
                             ))}
                           </span>
