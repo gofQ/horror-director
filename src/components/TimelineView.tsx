@@ -4,6 +4,7 @@ import { useStore } from '../store/useStore'
 import { TRIGGER_KINDS } from '../lib/schema'
 import { TRIGGER_COLOR } from '../lib/theme'
 import { useT } from '../i18n/store'
+import { SequenceView } from './SequenceView'
 import { Field, NumberInput, Select, TextArea, TextInput } from './fields'
 
 const W = 1000
@@ -22,6 +23,8 @@ export function TimelineView() {
   const deleteTrigger = useStore((s) => s.deleteTrigger)
   const svgRef = useRef<SVGSVGElement>(null)
   const [drag, setDrag] = useState<string | null>(null)
+  // Session-only view mode; the Sequence overview is a derived, read-only view.
+  const [mode, setMode] = useState<'triggers' | 'sequence'>('triggers')
 
   const scene = project.scenes.find((s) => s.id === sceneId) ?? project.scenes[0]
   const sorted = useMemo(() => (scene ? [...scene.triggers].sort((a, b) => a.time - b.time) : []), [scene])
@@ -60,14 +63,36 @@ export function TimelineView() {
           options={project.scenes.map((s) => ({ value: s.id, label: `${s.title} · ${T(`kind.${s.kind}`)}` }))}
           onChange={setScene}
         />
-        <button className="btn primary" onClick={() => addTrigger(scene.id, maxT / 2)}>
-          <Plus size={14} /> {T('tl.addTrigger')}
-        </button>
-        <span className="muted">
-          {T('tl.summary', { seconds: scene.duration, n: scene.triggers.length })}
-        </span>
+        <div className="seg" role="tablist" aria-label={T('tl.mode.aria')}>
+          {(['triggers', 'sequence'] as const).map((m) => (
+            <button key={m} role="tab" aria-selected={mode === m} className={`btn small${mode === m ? ' active' : ''}`} data-testid={`tl-mode-${m}`} onClick={() => setMode(m)}>
+              {T(`tl.mode.${m}`)}
+            </button>
+          ))}
+        </div>
+        {mode === 'triggers' && (
+          <>
+            <button className="btn primary" onClick={() => addTrigger(scene.id, maxT / 2)}>
+              <Plus size={14} /> {T('tl.addTrigger')}
+            </button>
+            <span className="muted">
+              {T('tl.summary', { seconds: scene.duration, n: scene.triggers.length })}
+            </span>
+          </>
+        )}
       </div>
 
+      {mode === 'sequence' ? (
+        <SequenceView
+          key={scene.id}
+          scene={scene}
+          onEditTrigger={(id) => {
+            selectTrigger(id)
+            setMode('triggers')
+          }}
+        />
+      ) : (
+        <>
       <div className="card timeline-card">
         <svg
           ref={svgRef}
@@ -207,6 +232,8 @@ export function TimelineView() {
           )}
         </div>
       </div>
+        </>
+      )}
     </div>
   )
 }

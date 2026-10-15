@@ -12,14 +12,14 @@ import { Field, NumberInput, Select, TextArea, TextInput } from './fields'
  * normal layers, silence is an authored intention (it mutes nothing), and authored timing is never
  * modified automatically.
  */
-export function AudioPlannerDialog({ sceneId, onClose }: { sceneId: string; onClose: () => void }) {
+export function AudioPlannerDialog({ sceneId, onClose, focusId: initialFocus }: { sceneId: string; onClose: () => void; /** Cue whose title field is focused on open. */ focusId?: string }) {
   const { t, formatNumber } = useT()
   const scene = useStore((s) => s.project.scenes.find((x) => x.id === sceneId))
   const canUndo = useStore((s) => s.past.length > 0)
   const canRedo = useStore((s) => s.future.length > 0)
   const { addAudioCue, updateAudioCue, deleteAudioCue, duplicateAudioCue, moveAudioCue, undo, redo } = useStore.getState()
   const ref = useRef<HTMLDivElement>(null)
-  const [focusId, setFocusId] = useState<string | null>(null)
+  const [focusId, setFocusId] = useState<string | null>(initialFocus ?? null)
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()

@@ -11,7 +11,7 @@ import { Field, NumberInput, Select, TextArea, TextInput } from './fields'
  * Shot planner for one scene: an ordered list of cinematic planning notes. Timing warnings are
  * informational — authored timing is never modified automatically.
  */
-export function ShotPlannerDialog({ sceneId, onClose }: { sceneId: string; onClose: () => void }) {
+export function ShotPlannerDialog({ sceneId, onClose, focusId: initialFocus }: { sceneId: string; onClose: () => void; /** Shot whose title field is focused on open. */ focusId?: string }) {
   const { t, formatNumber } = useT()
   const scene = useStore((s) => s.project.scenes.find((x) => x.id === sceneId))
   const canUndo = useStore((s) => s.past.length > 0)
@@ -20,7 +20,7 @@ export function ShotPlannerDialog({ sceneId, onClose }: { sceneId: string; onClo
   const transitions = useStore((s) => s.project.transitions)
   const scenes = useStore((s) => s.project.scenes)
   const ref = useRef<HTMLDivElement>(null)
-  const [focusId, setFocusId] = useState<string | null>(null)
+  const [focusId, setFocusId] = useState<string | null>(initialFocus ?? null)
   const [confirmId, setConfirmId] = useState<string | null>(null)
 
   useEffect(() => {

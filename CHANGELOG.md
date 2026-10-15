@@ -3,13 +3,27 @@
 Version history of Horror Director, newest first. This file is the canonical user-facing history; the READMEs describe
 the current product only and `progress.md` tracks engineering status.
 
-The labels below (MVP/v0.1 through v0.6C) are **development milestones**, not published releases: the project has no
+The labels below (MVP/v0.1 through v0.6D) are **development milestones**, not published releases: the project has no
 tagged releases and `package.json` stays at `0.1.0`. Each milestone after the MVP was developed on its own branch and
 merged through a pull request into the integration branch (`claude/optimistic-tesla-r2v8g6`). The JSON schema was
 `schemaVersion: 1` until v0.6A introduced `schemaVersion: 2` (scene shots) and v0.6B `schemaVersion: 3`
 (transition direction) and v0.6C `schemaVersion: 4` (scene audio cues); files of every earlier version, and bare project files, are still imported.
 
 Every future feature or fix milestone must add an entry here (see `CLAUDE.md`).
+
+## v0.6D — Cinematic sequence overview
+
+Pull request: PR_LINK_PLACEHOLDER
+
+### Added
+- **Sequence mode** inside the Timeline tab (segmented control next to the scene selector; the trigger editor stays as its own mode and there is no new top-level tab). For the selected scene it shows three coordinated tracks — Camera (shots), Audio (cues) and Horror events (triggers) — on one scene-relative time axis with aligned ticks, a scene-end boundary, layered audio, overlapping shots in lanes, a vertical time cursor (set by selecting an item or with a keyboard-operable slider), Fit / zoom with horizontal scrolling, a detail panel and a compact time-ordered event list. Items are accessible buttons (Tab, Enter/Space) and categories are distinguished by label, shape and pattern as well as colour.
+- **Derived model** `src/lib/sequence.ts`: pure `buildSequence(scene)` with stable `kind:id` keys, original references, deterministic ordering (start, then shot < audio < trigger, then authored order) and the displayed range extended — never clamped or retimed — for items past the scene duration. Reuses the shot and audio analysis helpers.
+- **Planning notes**: informational warnings for shots/cues beyond the scene duration, triggers after the scene end, fades longer than their cue, and empty or partially planned scenes. Layered audio and silence are not errors; triggers with a free-text condition are marked conditional (they may never fire in play); the view states that it shows authored planning timing, not a simulation.
+- **Open in editor** from the details: Shot planner or Audio planner focused on the selected item, or the existing trigger editor with that trigger selected. The overview itself is read-only; edits use the existing editors with their Undo/Redo and autosave, and selections never go stale after deletions or project switches.
+
+### Changed
+- `ShotPlannerDialog` and `AudioPlannerDialog` accept an optional `focusId` (focus that item's title on open); `assignLanes` accepts any `{ id, start, duration }` list.
+- No schema change: JSON stays `schemaVersion: 4`, records stay `{ v: 4 }`; nothing new is persisted. `package.json` version metadata is unchanged.
 
 ## v0.6C — Audio & atmosphere planner
 
