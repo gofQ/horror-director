@@ -200,12 +200,14 @@ test.describe('multi-selection and batch actions', () => {
     await node(page, ids[2]).click({ position: { x: 30, y: 20 } })
     await node(page, ids[3]).click({ position: { x: 30, y: 20 }, modifiers: ['Control'] })
     await expect(count(page)).toContainText('2 selected')
+    await settle(page)
     const before = await positions(page)
     const start = await centre(node(page, ids[2]))
     await page.mouse.move(start.x, start.y)
     await page.mouse.down()
     await page.mouse.move(start.x + 60, start.y + 110, { steps: 12 })
     await page.mouse.up()
+    await expect.poll(async () => (await positions(page))[ids[2]].x - before[ids[2]].x).toBeGreaterThan(40) // the committed move is rendered asynchronously
     const moved = await positions(page)
     const d2 = { x: moved[ids[2]].x - before[ids[2]].x, y: moved[ids[2]].y - before[ids[2]].y }
     const d3 = { x: moved[ids[3]].x - before[ids[3]].x, y: moved[ids[3]].y - before[ids[3]].y }
