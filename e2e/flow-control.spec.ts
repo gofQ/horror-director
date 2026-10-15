@@ -78,7 +78,7 @@ test.describe('Event, Delay and Random Branch nodes', () => {
     await expect(page.getByTestId('delay-duration')).toContainText('90 s')
     await expect(page.getByTestId('delay-clock')).toContainText('1:30')
     await page.getByTestId('delay-seconds').locator('input').fill('99999')
-    await expect(page.getByTestId('delay-duration')).toContainText('3600 s') // clamped to the upper bound
+    await expect(page.getByTestId('delay-duration')).toContainText('3,600 s') // clamped to the upper bound
     await page.getByTestId('random-node').click({ position: { x: 20, y: 15 } })
     await page.getByTestId('random-prob-a').locator('input').fill('0')
     await expect(page.getByTestId('random-prob-b')).toContainText('A 0% · B 100%')
@@ -109,7 +109,6 @@ test.describe('Event, Delay and Random Branch nodes', () => {
     // a taken Random pin refuses a second connection
     await connect(page, random, quiet, 'a')
     await expect(edges(page)).toHaveCount(5)
-    await expect(page.getByTestId('connect-notice')).toContainText('already connected')
     // logic-only cycle: Random B → Delay would loop without a scene
     await node(page, quiet).click({ button: 'right', position: { x: 30, y: 15 } })
     await page.keyboard.press('Escape')

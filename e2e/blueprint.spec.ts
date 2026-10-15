@@ -124,7 +124,7 @@ test.describe('canvas context menu and node creation', () => {
     await page.getByTestId('add-node').click()
     await expect(menu(page)).toHaveAttribute('aria-label', 'Add node')
     await expect(page.getByTestId('ctx-search')).toBeFocused()
-    await expect(menu(page).getByTestId('ctx-item')).toHaveCount(8) // 5 kinds + IF + Set Flag + comment
+    await expect(menu(page).getByTestId('ctx-item')).toHaveCount(11) // 5 kinds + IF + Set Flag + Event + Delay + Random + comment
     await page.getByTestId('ctx-search').fill('night')
     await expect(menu(page).getByTestId('ctx-item')).toHaveCount(1)
     await page.getByTestId('ctx-search').fill('zzz')
@@ -262,7 +262,7 @@ test.describe('drag-to-create and connection feedback', () => {
     await expect(page.getByTestId('connection-line')).toBeVisible()
     await page.mouse.up()
     await expect(menu(page)).toHaveAttribute('aria-label', 'Add node')
-    await expect(menu(page).getByTestId('ctx-item')).toHaveCount(7) // compatible targets only: no comment
+    await expect(menu(page).getByTestId('ctx-item')).toHaveCount(10) // compatible targets only: no comment
     await page.getByTestId('ctx-search').fill('IF')
     await page.keyboard.press('Enter')
     await expect(branches(page)).toHaveCount(1)
