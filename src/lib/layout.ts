@@ -18,12 +18,13 @@ export const PITCH_X = NODE_W + GAP_X
 export const PITCH_Y = NODE_H + GAP_Y
 
 export type Positions = Record<string, { x: number; y: number }>
-type LayoutInput = Pick<Project, 'scenes' | 'transitions' | 'startSceneId'>
+/** Scenes and IF nodes are laid out together; comments are free-floating annotations and are never moved. */
+type LayoutInput = Pick<Project, 'scenes' | 'transitions' | 'startSceneId'> & { logicNodes?: Project['logicNodes'] }
 
 const SWEEPS = 4
 
 export function computeLayout(p: LayoutInput): Positions {
-  const ids = p.scenes.map((s) => s.id)
+  const ids = [...p.scenes.map((s) => s.id), ...(p.logicNodes ?? []).map((n) => n.id)]
   const index = new Map(ids.map((id, i) => [id, i]))
   const kind = new Map(p.scenes.map((s) => [s.id, s.kind]))
 

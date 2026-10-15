@@ -8,6 +8,7 @@ import { downloadText } from '../lib/download'
 import { sampleProject } from '../lib/sample'
 import type { LibError, LibResult } from '../lib/library'
 import { libErrorText } from './ImportDialog'
+import { ContextMenu, isEditableTarget, useContextMenu, type MenuItem } from './ContextMenu'
 
 interface Props {
   onClose: () => void
@@ -26,6 +27,7 @@ export function LibraryDialog({ onClose, onPickImport, onBackup }: Props) {
   const [status, setStatus] = useState('')
   const [renaming, setRenaming] = useState<{ id: string; value: string } | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
+  const { menu, open: openMenu, close: closeMenu } = useContextMenu()
 
   useEffect(() => {
     ref.current?.querySelector<HTMLElement>('button')?.focus()
@@ -43,6 +45,23 @@ export function LibraryDialog({ onClose, onPickImport, onBackup }: Props) {
   }
   const when = (ms: number) => new Date(ms).toLocaleString(locale, { dateStyle: 'medium', timeStyle: 'short' })
 
+  const doOpen = (m: { id: string; name: string }) => finish(openProject(m.id), t('lib.status.opened', { name: m.name }), true)
+  const doDuplicate = (m: { id: string }) => {
+    const copy = t('lib.copyName', { name: nameOf(m.id) })
+    finish(duplicateProject(m.id, copy), t('lib.status.duplicated', { name: copy }))
+  }
+  /** Context menu for a project row: only the actions the row buttons already offer. */
+  const rowMenu = (x: number, y: number, m: { id: string; name: string }, isActive: boolean, bad: boolean) => {
+    const items: MenuItem[] = bad
+      ? [{ id: 'delete', label: t('lib.removeDamaged'), icon: <Trash2 size={13} />, danger: true, onSelect: () => setConfirmDelete(m.id) }]
+      : [
+          { id: 'open', label: t('lib.openBtn'), disabled: isActive || externalChange, onSelect: () => doOpen(m) },
+          { id: 'rename', label: t('lib.rename'), icon: <Pencil size={13} />, disabled: externalChange, onSelect: () => setRenaming({ id: m.id, value: m.name }) },
+          { id: 'duplicate', label: t('lib.duplicate'), icon: <Copy size={13} />, disabled: externalChange, onSelect: () => doDuplicate(m) },
+          { id: 'delete', label: t('lib.delete'), icon: <Trash2 size={13} />, danger: true, disabled: externalChange, separatorBefore: true, onSelect: () => setConfirmDelete(m.id) },
+        ]
+    openMenu({ x, y, items, ariaLabel: `${t('ctx.libraryMenu')}: ${m.name}` })
+  }
   const create = (project = emptyProject(defaultNames())) => {
     const r = addAndOpen(project)
     finish(r, t('lib.status.created', { name: project.name }), true)
@@ -102,7 +121,23 @@ export function LibraryDialog({ onClose, onPickImport, onBackup }: Props) {
             const isActive = m.id === library.activeId
             const bad = damaged[m.id]
             return (
-              <li key={m.id} data-testid="library-row" data-active={isActive} className={`library-row${isActive ? ' active' : ''}`}>
+              <li
+                key={m.id}
+                data-testid="library-row"
+                data-active={isActive}
+                className={`library-row${isActive ? ' active' : ''}`}
+                onContextMenu={(e) => {
+                  if (isEditableTarget(e.target)) return // keep the native menu in the rename field
+                  e.preventDefault()
+                  rowMenu(e.clientX, e.clientY, m, isActive, !!bad)
+                }}
+                onKeyDown={(e) => {
+                  if (!((e.shiftKey && e.key === 'F10') || e.key === 'ContextMenu') || isEditableTarget(e.target)) return
+                  e.preventDefault()
+                  const r = e.currentTarget.getBoundingClientRect()
+                  rowMenu(r.left + 24, r.top + 24, m, isActive, !!bad)
+                }}
+              >
                 <div className="library-main">
                   {renaming?.id === m.id ? (
                     <form
@@ -180,7 +215,7 @@ export function LibraryDialog({ onClose, onPickImport, onBackup }: Props) {
                             className="btn small primary"
                             data-testid="library-open"
                             disabled={externalChange}
-                            onClick={() => finish(openProject(m.id), t('lib.status.opened', { name: m.name }), true)}
+                            onClick={() => doOpen(m)}
                           >
                             {t('lib.openBtn')}
                           </button>
@@ -196,11 +231,7 @@ export function LibraryDialog({ onClose, onPickImport, onBackup }: Props) {
                         <button
                           className="btn small"
                           disabled={externalChange}
-                          onClick={() => {
-                            const copy = t('lib.copyName', { name: nameOf(m.id) })
-                            const r = duplicateProject(m.id, copy)
-                            finish(r, t('lib.status.duplicated', { name: copy }))
-                          }}
+                          onClick={() => doDuplicate(m)}
                           aria-label={`${t('lib.duplicate')}: ${m.name}`}
                         >
                           <Copy size={14} /> {t('lib.duplicate')}
@@ -222,6 +253,7 @@ export function LibraryDialog({ onClose, onPickImport, onBackup }: Props) {
           })}
         </ul>
 
+        {menu && <ContextMenu state={menu} onClose={closeMenu} />}
         <div className="modal-actions">
           <button className="btn" onClick={onBackup}>
             {t('btn.backup')}

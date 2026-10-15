@@ -14,6 +14,18 @@ documentation: [README.tr.md](README.tr.md).
 - **Scene graph:** drag-and-drop scenes (Reality / Dream / Nightmare / Memory / Ending) connected by typed transitions
   (cut, fade, glitch, blackout, morph, loop-back) with conditions and durations. Dream ⇄ reality crossings are drawn as
   dashed, colour-coded edges. Reciprocal edges, backward edges and self-loops are routed so paths and labels stay readable.
+- **Blueprint-style editor:** scene nodes with typed In/Out pins, clear directional wires, hover and selection feedback, a
+  connection preview that shows whether a target is valid before you drop, minimap, pan/zoom and Undo/Redo. **IF / Branch**
+  nodes have one input and TRUE / FALSE outputs with an editable, human-readable condition: they take part in navigation, the
+  simulator, analysis and Auto Arrange, but the condition is a preproduction note and is **never evaluated**. **Comments**
+  are non-executable frames for organizing areas. Dragging an output pin onto empty canvas opens a searchable node picker
+  that creates and connects the node in one undoable step.
+- **Custom scene types:** per-project, reusable scene types (name, curated colour and icon, base kind, default description
+  and duration). A custom scene is a normal scene whose base kind (reality, dream, nightmare, memory, ending) still drives
+  crossings, simulation and analysis.
+- **Context menus:** accessible right-click menus on the graph canvas, scenes, IF nodes, comments and connections, and on
+  Timeline/Sequence items and project rows (also Shift+F10 / the menu key, and long-press on touch). Native right-click is
+  kept in inputs and text fields.
 - **Auto Arrange:** a deterministic left-to-right layout of the scenes. It runs only when you press the button, changes
   only scene positions and is a single undo/redo step.
 - **Loops:** self-loops, per-scene loop settings (max iterations, exit condition) and automatic cycle detection.
@@ -60,8 +72,14 @@ npm run preview    # serve the production build
 
 ## How to use
 
-1. **Build the graph.** Add scenes from the toolbar over the graph. Drag from a node's **right** handle to another
-   node's **left** handle to connect; connect a node to itself for a loop. Select an item and press `Del` to delete it.
+1. **Build the graph.** Add scenes from the toolbar over the graph or right-click the canvas (**Add Scene**, **Add Custom
+   Scene**, **Add IF / Branch**, **Add Comment / Note**, **Add node…** for a searchable list). Drag from a node's **right**
+   pin to another node's **left** pin to connect; connect a node to itself for a loop. Drag from a pin onto empty canvas to
+   pick a new node that is connected automatically. Right-click a connection to insert an IF node into it. An **IF / Branch**
+   node has a TRUE and a FALSE output (one connection each): write the condition in your own words, connect the outputs to
+   scenes, and use it in the Simulator, where you choose TRUE or FALSE yourself — the choice is shown as an assumption, the
+   IF node takes no scene time and adds no extra visit or trigger. Define reusable **Scene types** in the project inspector
+   (nothing selected). Select an item and press `Del` to delete it (connections go with it in one undo step).
    Set the start scene in the scene inspector. **Sample** loads "The Hollow Apartment", a demo with dream layers, a loop
    and two endings.
 2. **Plan scares.** In **Timeline**, double-click the track to add a trigger at that time and intensity; drag markers to retime.
@@ -130,13 +148,13 @@ library or undo history, it is not exported, and it resets when you switch proje
 - **Storage** (browser `localStorage`): `horror-director:library:v1` (index), `horror-director:proj:<id>` (one record per
   project), `horror-director:lang` (language). Ids are internal and independent of names. Library data (ids,
   timestamps, active project) is never written into project JSON.
-- **Backup** downloads the *active* project in the schema-4 export format. Importing validates strictly (duplicate ids,
+- **Backup** downloads the *active* project in the schema-5 export format. Importing validates strictly (duplicate ids,
   dangling references, invalid values, unrecognised fields, newer schema versions are errors shown before anything is replaced). A file
   can be imported as a new project or, with confirmation, replace the active project.
-- **Older files and data:** schema-1, schema-2 and schema-3 exports and bare project files are still imported; missing shots
-  and audio cues start as empty lists and missing transition directions stay absent (an informational notice appears for
-  schema-1/bare files), and the next backup is schema 4 with all other fields unchanged. Stored projects from earlier versions are read the
-  same way and are only rewritten when you edit them. Project records are stored as `{ v: 4, project }` (earlier `v: 1`–`v: 3`
+- **Older files and data:** schema-1 to schema-4 exports and bare project files are still imported; missing shots, audio
+  cues, IF nodes, comments and scene types start as empty lists and missing transition directions stay absent (an informational notice appears for
+  schema-1/bare files), and the next backup is schema 5 with all other fields unchanged. Stored projects from earlier versions are read the
+  same way and are only rewritten when you edit them. Project records are stored as `{ v: 5, project }` (earlier `v: 1`–`v: 4`
   records are still read); an older build that cannot read the new fields shows such a record as damaged and preserves it
   rather than dropping data. Downgrading is not supported.
 - **Migration:** the single-project storage of early versions is validated, copied into the library under the id
@@ -149,7 +167,7 @@ library or undo history, it is not exported, and it resets when you switch proje
 ```jsonc
 {
   "format": "horror-director",
-  "schemaVersion": 4,
+  "schemaVersion": 5,
   "exportedAt": "ISO-8601",
   "project": {
     "name": "", "description": "", "startSceneId": "scene id | null",
@@ -165,8 +183,13 @@ library or undo history, it is not exported, and it resets when you switch proje
                                  "origin": "diegetic|non-diegetic|ambiguous",
                                  "direction": "nonspatial|front|behind|left|right|above|moving",
                                  "level": "0–10 planning value","fadeIn","fadeOut","loop","asset","notes","prompt" }],
+                 "typeId": "custom scene type id (optional; kind equals its baseKind)",
                  "characterStates": { "<characterId>": "<stateId>" } }],
-    "transitions": [{ "id","source","target","label","style","condition","duration",
+    "logicNodes": [{ "id", "type": "branch", "title", "description", "condition": "free text, never evaluated", "position": {"x","y"} }],
+    "comments": [{ "id","title","text","color","position": {"x","y"},"width","height" }],
+    "sceneTypes": [{ "id","name","color","icon","baseKind": "reality|dream|nightmare|memory|ending","description","duration?" }],
+    "transitions": [{ "id","source": "scene or IF node id","target": "scene or IF node id","label","style","condition","duration",
+                      "sourcePort": "true|false (only for connections leaving an IF node)",
                       "direction": { "technique": "none|match-cut|impossible-space|identity-discontinuity|false-awakening|reality-reveal",
                                      "playerBelief","reality","visualContinuity","audioContinuity","reveal","unrealNotes",
                                      "sourceShotId": "shot id of the source scene | null",
@@ -217,6 +240,8 @@ Chromium and uses test ids and DOM geometry rather than screenshot comparisons.
   keeps authored order; sorting by time is an explicit action.
 - The Sequence view is a derived overview: it has no playback, waveform or simulation, cannot edit items itself, keeps its
   selection, zoom and cursor only for the session, and shows triggers with a condition as conditional rather than evaluating them.
+- IF nodes are planning notes: conditions are free text and are never evaluated; there are no variables, AND/OR logic, events,
+  delays, reroute nodes or clipboard paste yet. Connections touching an IF node cannot carry a transition design.
 - Audio cues are planning notes: no playback, waveform, 3D spatialization, AI generation or engine/Unreal runtime
   instructions, and no asset library. Cues are independent of triggers and do not affect pacing statistics.
 - Transition directions are planning notes: no generated images, animation or 3D preview, and no Unreal execution. Stored

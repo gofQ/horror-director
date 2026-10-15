@@ -22,19 +22,48 @@ export interface Analysis {
     dreamScenes: number
     realityScenes: number
     crossings: number
+    branches: number
     loops: number
     endings: number
     avgIntensity: number
   }
 }
 
+/** Adjacency over scenes **and** branch nodes (comments are not part of the narrative graph). */
 function adjacency(p: Project): Map<string, string[]> {
   const adj = new Map<string, string[]>()
   for (const s of p.scenes) adj.set(s.id, [])
+  for (const n of p.logicNodes) adj.set(n.id, [])
   for (const t of p.transitions) {
     if (adj.has(t.source) && adj.has(t.target)) adj.get(t.source)!.push(t.target)
   }
   return adj
+}
+
+/** A scene-to-scene hop, possibly through one or more IF nodes. */
+export interface Hop {
+  from: string
+  to: string
+  /** Transition ids in order (a plain scene-to-scene transition has exactly one). */
+  links: string[]
+  /** Branch node ids passed through. */
+  via: string[]
+}
+
+/** Effective narrative hops between scenes (IF nodes are traversed, never counted as scenes). */
+export function effectiveHops(p: Pick<Project, 'scenes' | 'logicNodes' | 'transitions'>): Hop[] {
+  const scenes = new Set(p.scenes.map((s) => s.id))
+  const branches = new Set(p.logicNodes.map((n) => n.id))
+  const out: Hop[] = []
+  const walk = (from: string, at: string, links: string[], via: string[]) => {
+    for (const t of p.transitions) {
+      if (t.source !== at) continue
+      if (scenes.has(t.target)) out.push({ from, to: t.target, links: [...links, t.id], via })
+      else if (branches.has(t.target) && !via.includes(t.target)) walk(from, t.target, [...links, t.id], [...via, t.target])
+    }
+  }
+  for (const s of p.scenes) walk(s.id, s.id, [], [])
+  return out
 }
 
 export function reachableFrom(adj: Map<string, string[]>, start: string | null): Set<string> {
@@ -93,6 +122,8 @@ export function analyze(p: Project): Analysis {
   const issues: Issue[] = []
   const adj = adjacency(p)
   const byId = new Map(p.scenes.map((s) => [s.id, s]))
+  const titleOf = new Map<string, string>([...p.scenes.map((s) => [s.id, s.title] as const), ...p.logicNodes.map((n) => [n.id, n.title || n.id] as const)])
+  const known = (id: string) => adj.has(id)
   const reachable = reachableFrom(adj, p.startSceneId)
   const loops = findLoops(adj)
   const add = (severity: Severity, diagnostic: Diagnostic, sceneId?: string) =>
@@ -103,13 +134,13 @@ export function analyze(p: Project): Analysis {
     add('error', diag('diag.noStartSet'))
 
   for (const t of p.transitions) {
-    if (!byId.has(t.source) || !byId.has(t.target))
+    if (!known(t.source) || !known(t.target))
       add('error', diag('diag.transitionMissingScene', { name: t.label || t.id }))
   }
 
   const hasStart = !!p.startSceneId && byId.has(p.startSceneId)
   for (const s of p.scenes) {
-    const out = p.transitions.filter((t) => t.source === s.id && byId.has(t.target))
+    const out = p.transitions.filter((t) => t.source === s.id && known(t.target))
     if (hasStart && !reachable.has(s.id))
       add('warning', diag('diag.unreachable', { scene: s.title }), s.id)
     if (s.kind !== 'ending' && out.length === 0)
@@ -142,17 +173,22 @@ export function analyze(p: Project): Analysis {
     const set = new Set(comp)
     const exits = comp.some((id) => (adj.get(id) ?? []).some((n) => !set.has(n)))
     if (!exits) {
-      const titles = comp.map((id) => byId.get(id)?.title ?? id).join(' → ')
+      const titles = comp.map((id) => titleOf.get(id) ?? id).join(' → ')
       add('warning', diag('diag.closedLoop', { path: titles }), comp[0])
     }
   }
 
+  for (const n of p.logicNodes) {
+    const label = n.title || n.id
+    if (hasStart && !reachable.has(n.id)) add('warning', diag('diag.branchUnreachable', { node: label }))
+    for (const port of ['true', 'false'] as const)
+      if (!p.transitions.some((t) => t.source === n.id && t.sourcePort === port && known(t.target)))
+        add('warning', diag('diag.branchOpenOutput', { node: label, port: port.toUpperCase() }))
+    if (!n.condition.trim()) add('info', diag('diag.branchNoCondition', { node: label }))
+  }
+
   const triggers = p.scenes.flatMap((s) => s.triggers)
-  const crossings = p.transitions.filter((t) => {
-    const a = byId.get(t.source)
-    const b = byId.get(t.target)
-    return a && b && crossingOf(a.kind, b.kind) !== 'same-layer'
-  }).length
+  const crossings = effectiveHops(p).filter((h) => crossingOf(byId.get(h.from)!.kind, byId.get(h.to)!.kind) !== 'same-layer').length
   const dream = p.scenes.filter((s) => isDreamLayer(s.kind)).length
 
   const order = { error: 0, warning: 1, info: 2 }
@@ -169,6 +205,7 @@ export function analyze(p: Project): Analysis {
       dreamScenes: dream,
       realityScenes: p.scenes.filter((s) => !isDreamLayer(s.kind) && s.kind !== 'ending').length,
       crossings,
+      branches: p.logicNodes.length,
       loops: loops.length,
       endings: p.scenes.filter((s) => s.kind === 'ending').length,
       avgIntensity: triggers.length

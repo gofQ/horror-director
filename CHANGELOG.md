@@ -3,13 +3,40 @@
 Version history of Horror Director, newest first. This file is the canonical user-facing history; the READMEs describe
 the current product only and `progress.md` tracks engineering status.
 
-The labels below (MVP/v0.1 through v0.6D) are **development milestones**, not published releases: the project has no
+The labels below (MVP/v0.1 through v0.7A) are **development milestones**, not published releases: the project has no
 tagged releases and `package.json` stays at `0.1.0`. Each milestone after the MVP was developed on its own branch and
 merged through a pull request into the integration branch (`claude/optimistic-tesla-r2v8g6`). The JSON schema was
 `schemaVersion: 1` until v0.6A introduced `schemaVersion: 2` (scene shots) and v0.6B `schemaVersion: 3`
-(transition direction) and v0.6C `schemaVersion: 4` (scene audio cues); files of every earlier version, and bare project files, are still imported.
+(transition direction) v0.6C `schemaVersion: 4` (scene audio cues) and v0.7A `schemaVersion: 5` (IF nodes, comments, custom scene types, branch-port links); files of every earlier version, and bare project files, are still imported.
 
 Every future feature or fix milestone must add an entry here (see `CLAUDE.md`).
+
+## v0.7A — Blueprint-inspired narrative graph editor
+
+Pull request: [#12](https://github.com/gofQ/horror-director/pull/12)
+
+### Added
+- **Blueprint-style Scene Graph**: category headers (reality/dream/nightmare/memory/ending stay recognizable), compact metadata, typed In/Out execution pins, directional wires with hover/selection feedback, a **connection preview coloured by validity** (checked before you drop) and rejected-drop explanations. Pan, zoom, minimap, selection, drag, Delete and Undo/Redo keep working.
+- **IF / Branch node** with one input and TRUE / FALSE outputs (distinct colours and pin ids), an editable condition and optional title/description. It is a real node of the narrative graph: connections follow pin direction and cardinality (one connection per output, no duplicates, no self-link, no IF-only cycle without a scene), cycles through scenes stay allowed within the existing safety limits. Conditions are preproduction descriptions and are **never evaluated**.
+- **Simulator integration**: choosing the link into an IF node leaves the route *pending* at it; the user explicitly picks TRUE or FALSE, the condition is shown as an assumption, the IF node takes zero scene time and creates no extra visit or trigger occurrence. Loop limits, the step cap (counts links), route revalidation, A/B route comparison and pacing analysis work for branch paths (hops through an IF node count as assumed transitions).
+- **Analysis and Auto Arrange** understand IF nodes: reachability and loops run over scenes and IF nodes (no false "unreachable" scenes), crossings are counted per effective scene-to-scene hop, unconnected TRUE/FALSE outputs and unreachable IF nodes are reported, and layout places scenes and IF nodes together without overlaps.
+- **Custom scene types** per project (name, curated colour and icon, base kind, default description/duration): create and edit them in the project inspector, add scenes from them via the node picker/menus, apply them in the scene inspector. A custom scene keeps its base kind for crossings, simulation and analysis; the base kind is locked while scenes use the type; deleting a used type needs an explicit confirmation and only detaches the scenes (undoable).
+- **Comments**: titled, coloured, resizable frames for organizing areas; never part of simulation, reachability or statistics.
+- **Context menus** (new reusable accessible component with keyboard navigation, search, submenus, viewport clamping, Esc/outside close, Shift+F10 / menu key and touch long-press; native menus stay on inputs): graph canvas (Add Scene ▸, Add Custom Scene ▸, IF/Branch, Comment, Add node… picker, Auto Arrange, Fit View), scenes (Edit/Focus, Duplicate, Set as Start, Open Timeline/Sequence, Shot/Audio Planner, Delete), IF nodes (Edit condition, Duplicate, Delete), connections (Select/Edit, **Insert IF node**, Delete), plus Timeline trigger rows, Sequence items and library project rows (only existing actions).
+- **Drag-to-create**: dropping an output wire on empty canvas opens a searchable picker at the drop position (compatible targets only); the new node and its connection are one undo step, cancelling changes nothing.
+- Store: scene duplication, node duplication, generalized delete (scenes, IF nodes, comments and their connections in one undo step).
+
+### Changed
+- **JSON schema 5**: exports are written as `schemaVersion: 5` with `project.logicNodes`, `project.comments`, `project.sceneTypes`, optional `scene.typeId` and optional `transition.sourcePort`. A branch connection is a normal transition whose source/target may be an IF node, so ids, shot links and transition directions of existing transitions are untouched. Schema 1–4 and bare project files are still imported (new collections start empty). Unknown fields, duplicate ids (scenes, IF nodes and comments share one id space), comment endpoints, missing/unexpected pins, two connections on one pin, duplicate connections, IF-only cycles, designs on IF connections and scene type mismatches are blocking import errors; IF nodes without condition or with open outputs only warn.
+- Library project records are now written as `{ v: 5, project }`. Records with `v: 1`–`v: 4` are still read, normalized in memory only and not rewritten until the project is edited; the legacy single-project key is never modified. An older build reading a `v: 5` record treats it as damaged and preserves it.
+- `updateTransition` ignores endpoint/pin changes at runtime; `addTransition` validates every connection (`canConnect`).
+- `CLAUDE.md` compatibility rules now state schema 5 and records `{ v: 5 }`. `package.json` version metadata is unchanged.
+
+### Fixed
+- The minimap showed no nodes: React Flow's measured node sizes were never fed back into the controlled nodes. They are now kept in session state (never in the project), so the minimap draws scenes, IF nodes and comments.
+
+### Not included (candidates for v0.7B)
+Reroute nodes, clipboard paste, Set Variable, AND/OR, Event and Delay nodes.
 
 ## v0.6D — Cinematic sequence overview
 

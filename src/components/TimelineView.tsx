@@ -5,6 +5,7 @@ import { TRIGGER_KINDS } from '../lib/schema'
 import { TRIGGER_COLOR } from '../lib/theme'
 import { useT } from '../i18n/store'
 import { SequenceView } from './SequenceView'
+import { ContextMenu, isEditableTarget, useContextMenu, type MenuItem } from './ContextMenu'
 import { Field, NumberInput, Select, TextArea, TextInput } from './fields'
 
 const W = 1000
@@ -24,7 +25,9 @@ export function TimelineView() {
   const svgRef = useRef<SVGSVGElement>(null)
   const [drag, setDrag] = useState<string | null>(null)
   // Session-only view mode; the Sequence overview is a derived, read-only view.
-  const [mode, setMode] = useState<'triggers' | 'sequence'>('triggers')
+  const { menu, open: openMenu, close: closeMenu } = useContextMenu()
+  const mode = useStore((s) => s.timelineMode)
+  const setMode = useStore((s) => s.setTimelineMode)
 
   const scene = project.scenes.find((s) => s.id === sceneId) ?? project.scenes[0]
   const sorted = useMemo(() => (scene ? [...scene.triggers].sort((a, b) => a.time - b.time) : []), [scene])
@@ -46,6 +49,28 @@ export function TimelineView() {
       time: Math.min(maxT, Math.max(0, Math.round(time * 2) / 2)),
       intensity: Math.min(10, Math.max(0, Math.round(intensity))),
     }
+  }
+
+  /** Context menu for a trigger (marker or list row): only the editor's existing select/delete actions. */
+  const openTriggerMenu = (x: number, y: number, id: string) => {
+    selectTrigger(id)
+    const items: MenuItem[] = [
+      { id: 'select', label: T('ctx.select'), onSelect: () => selectTrigger(id) },
+      { id: 'delete', label: T('btn.delete'), danger: true, separatorBefore: true, onSelect: () => deleteTrigger(scene.id, id) },
+    ]
+    openMenu({ x, y, items, ariaLabel: T('ctx.itemMenu') })
+  }
+  const triggerMenu = (e: React.MouseEvent, id: string) => {
+    if (isEditableTarget(e.target)) return
+    e.preventDefault()
+    e.stopPropagation()
+    openTriggerMenu(e.clientX, e.clientY, id)
+  }
+  const triggerKey = (e: React.KeyboardEvent, id: string) => {
+    if (!((e.shiftKey && e.key === 'F10') || e.key === 'ContextMenu')) return
+    e.preventDefault()
+    const r = e.currentTarget.getBoundingClientRect()
+    openTriggerMenu(r.left + 24, r.top + r.height, id)
   }
 
   const path = sorted.map((t, i) => `${i ? 'L' : 'M'}${x(t.time)},${y(t.intensity)}`).join(' ')
@@ -156,6 +181,7 @@ export function TimelineView() {
                 setDrag(t.id)
               }}
               onDoubleClick={(e) => e.stopPropagation()}
+              onContextMenu={(e) => triggerMenu(e, t.id)}
             >
               <line x1={x(t.time)} x2={x(t.time)} y1={y(t.intensity)} y2={y(0)} stroke={TRIGGER_COLOR[t.kind]} strokeOpacity={0.5} />
               <circle cx={x(t.time)} cy={y(t.intensity)} r={t.id === selId ? 9 : 7} fill={TRIGGER_COLOR[t.kind]} />
@@ -181,6 +207,8 @@ export function TimelineView() {
               key={t.id}
               className={`trigger-row${t.id === selId ? ' selected' : ''}`}
               onClick={() => selectTrigger(t.id)}
+              onContextMenu={(e) => triggerMenu(e, t.id)}
+              onKeyDown={(e) => triggerKey(e, t.id)}
             >
               <span className="trigger-time">{T('unit.seconds', { n: t.time })}</span>
               <i style={{ background: TRIGGER_COLOR[t.kind] }} />
@@ -234,6 +262,7 @@ export function TimelineView() {
       </div>
         </>
       )}
+      {menu && <ContextMenu state={menu} onClose={closeMenu} />}
     </div>
   )
 }

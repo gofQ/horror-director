@@ -1,5 +1,5 @@
 import { uid } from './id'
-import type { AudioCue, Character, Project, Scene, SceneKind, Shot, Transition, Trigger } from './schema'
+import type { AudioCue, Character, GraphComment, LogicNode, SceneType, Project, Scene, SceneKind, Shot, Transition, Trigger } from './schema'
 
 /** Display names given to newly created items. The UI passes the current language's set. */
 export interface DefaultNames {
@@ -10,6 +10,9 @@ export interface DefaultNames {
   trigger: string
   shot: string
   audioCue: string
+  branch: string
+  comment: string
+  sceneType: string
   character: string
   state: string
   stateIdle: string
@@ -22,6 +25,9 @@ export const ENGLISH_NAMES: DefaultNames = {
   trigger: 'New trigger',
   shot: 'New shot',
   audioCue: 'New audio cue',
+  branch: 'IF',
+  comment: 'Comment',
+  sceneType: 'New scene type',
   character: 'New Character',
   state: 'New state',
   stateIdle: 'Idle',
@@ -99,6 +105,18 @@ export function newAudioCue(start = 0, names: DefaultNames = ENGLISH_NAMES): Aud
   }
 }
 
+export function newLogicNode(position = { x: 0, y: 0 }, names: DefaultNames = ENGLISH_NAMES): LogicNode {
+  return { id: uid('if'), type: 'branch', title: names.branch, description: '', condition: '', position }
+}
+
+export function newComment(position = { x: 0, y: 0 }, names: DefaultNames = ENGLISH_NAMES): GraphComment {
+  return { id: uid('note'), title: names.comment, text: '', color: '#9aa0b4', position, width: 280, height: 160 }
+}
+
+export function newSceneType(baseKind: SceneKind = 'reality', names: DefaultNames = ENGLISH_NAMES): SceneType {
+  return { id: uid('stype'), name: names.sceneType, color: '#c4263d', icon: 'Skull', baseKind, description: '' }
+}
+
 export function newTransition(source: string, target: string): Transition {
   return {
     id: uid('tr'),
@@ -132,6 +150,9 @@ export function emptyProject(names: DefaultNames = ENGLISH_NAMES, name = names.p
     startSceneId: start.id,
     scenes: [start],
     transitions: [],
+    logicNodes: [],
+    comments: [],
+    sceneTypes: [],
     characters: [],
   }
 }

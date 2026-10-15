@@ -206,6 +206,9 @@ describe('switching language does not touch project data', () => {
       trigger: en['default.trigger'],
       shot: en['default.shot'],
       audioCue: en['default.audioCue'],
+      branch: en['default.branch'],
+      comment: en['default.comment'],
+      sceneType: en['default.sceneType'],
       character: en['default.character'],
       state: en['default.state'],
       stateIdle: en['default.stateIdle'],
@@ -284,9 +287,9 @@ describe('localized diagnostics', () => {
   it('structured parse errors for file-level problems', () => {
     expect(parseProject('{nope')).toEqual({ ok: false, errors: [diag('diag.json')] })
     const wrapped = JSON.parse(serializeProject(sampleProject()))
-    const r = parseProject(JSON.stringify({ ...wrapped, schemaVersion: 5 }))
-    expect(r).toEqual({ ok: false, errors: [diag('diag.newerSchema', { found: '5', supported: '4' })] })
-    expect(formatDiagnostics('tr', (r as unknown as { errors: never[] }).errors)[0]).toContain('5 şema sürümünü')
+    const r = parseProject(JSON.stringify({ ...wrapped, schemaVersion: 6 }))
+    expect(r).toEqual({ ok: false, errors: [diag('diag.newerSchema', { found: '6', supported: '5' })] })
+    expect(formatDiagnostics('tr', (r as unknown as { errors: never[] }).errors)[0]).toContain('6 şema sürümünü')
   })
 })
 
@@ -300,7 +303,7 @@ describe('JSON compatibility', () => {
     p.characters[0].name = 'Şule'
     return p
   }
-  it('export bytes do not depend on the UI language and keep schemaVersion 4', () => {
+  it('export bytes do not depend on the UI language and keep schemaVersion 5', () => {
     vi.stubGlobal('localStorage', memoryStorage())
     vi.stubGlobal('document', { documentElement: { lang: '' } })
     useLang.setState({ lang: 'en' })
@@ -309,7 +312,7 @@ describe('JSON compatibility', () => {
     const b = JSON.stringify(buildExport(turkish(), when))
     vi.unstubAllGlobals()
     expect(a).toBe(b)
-    expect(JSON.parse(a).schemaVersion).toBe(4)
+    expect(JSON.parse(a).schemaVersion).toBe(5)
     expect(a).not.toMatch(/"lang"|"language"|"locale"/)
   })
   it('Turkish project text round-trips through export/import unchanged', () => {

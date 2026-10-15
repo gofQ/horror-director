@@ -100,6 +100,11 @@ export function SimulatorView() {
                 </>
               )}
 
+              {result.pending && (
+                <p className="issue warning" role="status" data-testid="sim-pending">
+                  {t('sim.pending', { title: result.pending.title || t('default.branch'), condition: result.pending.condition.trim() || t('branch.noCondition') })}
+                </p>
+              )}
               <div className="section-title">{t('sim.options')}</div>
               {result.options.length === 0 && <p className="muted">{t('sim.noOptions')}</p>}
               <div className="sim-options">
@@ -109,12 +114,24 @@ export function SimulatorView() {
                     className="sim-option"
                     data-testid="sim-option"
                     data-blocked={o.blocked ?? ''}
+                    data-port={o.port ?? ''}
+                    data-target-type={o.targetType}
                     disabled={o.blocked !== null}
                     onClick={() => choose(o.transitionId)}
                   >
                     <span className="sim-option-title">
-                      {label(o)} → <strong>{o.targetTitle || t('scene.untitled')}</strong>
-                      <span className="muted"> ({t(`kind.${o.targetKind}`)})</span>
+                      {o.port && <strong style={{ color: o.port === 'true' ? '#6ee7a1' : '#ff6b7d' }}>{t(`pin.${o.port}`)} </strong>}
+                      {o.port ? (o.label ? `${o.label} ` : '') : `${label(o)} `}→{' '}
+                      {o.targetType === 'branch' ? (
+                        <>
+                          <span className="badge">{t('branch.badge')}</span> <strong>{o.targetTitle || t('default.branch')}</strong>
+                        </>
+                      ) : (
+                        <>
+                          <strong>{o.targetTitle || t('scene.untitled')}</strong>
+                          <span className="muted"> ({t(`kind.${o.targetKind}`)})</span>
+                        </>
+                      )}
                     </span>
                     <span className="muted">
                       {t(`style.${o.style}`)} · {t('unit.seconds', { n: o.duration })}
@@ -134,6 +151,11 @@ export function SimulatorView() {
                     {o.condition.trim() && (
                       <span className="sim-assumption" title={t('sim.assumptionHint')}>
                         {t('sim.assumption', { text: o.condition.trim() })}
+                      </span>
+                    )}
+                    {o.fromBranch && o.port && (
+                      <span className="sim-assumption" title={t('sim.assumptionHint')} data-testid="sim-branch-assumption">
+                        {t('sim.branchAssumption', { condition: o.fromBranch.condition.trim() || o.fromBranch.title || t('default.branch'), port: t(`pin.${o.port}`) })}
                       </span>
                     )}
                     {o.blocked && <span className="sim-blocked">{t(`sim.blocked.${o.blocked}`)}</span>}
@@ -211,7 +233,13 @@ export function SimulatorView() {
                         {s.via && (
                           <span className="muted sim-via">
                             {t('sim.via', { label: label(s.via) })} · {t(`style.${s.via.style}`)} · {t('unit.seconds', { n: s.via.duration })}
-                            {s.via.condition.trim() && <span className="sim-assumption"> {t('sim.assumption', { text: s.via.condition.trim() })}</span>}
+                            {s.via.linkCondition.trim() && <span className="sim-assumption"> {t('sim.assumption', { text: s.via.linkCondition.trim() })}</span>}
+                            {s.via.branches.map((b) => (
+                              <span key={b.nodeId + b.port} className="sim-assumption" data-testid="sim-branch-pass">
+                                {' '}
+                                {t('sim.branchAssumption', { condition: b.condition.trim() || b.title || t('default.branch'), port: t(`pin.${b.port}`) })}
+                              </span>
+                            ))}
                           </span>
                         )}
                       </span>

@@ -1,7 +1,10 @@
 import { z } from 'zod'
 
-/** 2 added `scene.shots`; 3 the optional `transition.direction`; 4 adds `scene.audioCues`. Older files and bare projects are still imported. */
-export const SCHEMA_VERSION = 4
+/**
+ * 2 added `scene.shots`; 3 the optional `transition.direction`; 4 `scene.audioCues`; 5 adds logic (branch) nodes,
+ * graph comments, custom scene types and branch-port links. Older files and bare projects are still imported.
+ */
+export const SCHEMA_VERSION = 5
 export const FORMAT_ID = 'horror-director'
 
 export const SCENE_KINDS = ['reality', 'dream', 'nightmare', 'memory', 'ending'] as const
@@ -22,6 +25,11 @@ export const DIRECTION_TECHNIQUES = [...SHOT_TECHNIQUES, 'reality-reveal'] as co
 export const AUDIO_CUE_TYPES = ['ambience', 'music', 'sfx', 'voice', 'whisper', 'stinger', 'silence'] as const
 export const AUDIO_ORIGINS = ['diegetic', 'non-diegetic', 'ambiguous'] as const
 export const AUDIO_DIRECTIONS = ['nonspatial', 'front', 'behind', 'left', 'right', 'above', 'moving'] as const
+export const LOGIC_NODE_TYPES = ['branch'] as const
+export const BRANCH_PORTS = ['true', 'false'] as const
+/** Curated, safe presentation sets for custom scene types and comments (hex colors / lucide icon names). */
+export const TYPE_COLORS = ['#c4263d', '#d98cff', '#7dcfff', '#9ece6a', '#e0af68', '#ff9e64', '#bb9af7', '#9aa0b4'] as const
+export const TYPE_ICONS = ['Skull', 'Ghost', 'Eye', 'Moon', 'Flame', 'Footprints', 'Bell', 'Radio', 'Brain', 'Church', 'Siren', 'Wind'] as const
 export const CHARACTER_ROLES = ['player', 'entity', 'npc'] as const
 
 export type SceneKind = (typeof SCENE_KINDS)[number]
@@ -34,6 +42,8 @@ export type DirectionTechnique = (typeof DIRECTION_TECHNIQUES)[number]
 export type AudioCueType = (typeof AUDIO_CUE_TYPES)[number]
 export type AudioOrigin = (typeof AUDIO_ORIGINS)[number]
 export type AudioDirection = (typeof AUDIO_DIRECTIONS)[number]
+export type LogicNodeType = (typeof LOGIC_NODE_TYPES)[number]
+export type BranchPort = (typeof BRANCH_PORTS)[number]
 export type CharacterRole = (typeof CHARACTER_ROLES)[number]
 
 const id = z.string().min(1)
@@ -106,6 +116,8 @@ export const sceneSchema = z.object({
   shots: z.array(shotSchema).default([]),
   /** Ordered audio cues (authored order; independent of triggers, ambience and shot sound notes). */
   audioCues: z.array(audioCueSchema).default([]),
+  /** Optional custom scene type; `kind` always equals that type's `baseKind`. */
+  typeId: id.optional(),
   /** characterId -> characterStateId */
   characterStates: z.record(z.string(), z.string()).default({}),
 })
@@ -139,6 +151,41 @@ export const transitionSchema = z.object({
   duration: z.number().min(0).default(1),
   /** Optional psychological direction; absent for transitions that have not been designed. */
   direction: transitionDirectionSchema.optional(),
+  /** Output pin of the branch node this link leaves (only for links whose source is a branch). */
+  sourcePort: z.enum(BRANCH_PORTS).optional(),
+})
+
+const position = z.object({ x: z.number(), y: z.number() })
+
+/** Narrative IF node: `condition` is a human-readable preproduction description, never evaluated. */
+export const logicNodeSchema = z.object({
+  id,
+  type: z.enum(LOGIC_NODE_TYPES),
+  title: z.string().default(''),
+  description: z.string().default(''),
+  condition: z.string().default(''),
+  position,
+})
+
+/** Non-executable note frame for organizing narrative areas. */
+export const graphCommentSchema = z.object({
+  id,
+  title: z.string().default(''),
+  text: z.string().default(''),
+  color: z.enum(TYPE_COLORS).default(TYPE_COLORS[7]),
+  position,
+  width: z.number().min(80).max(4000).default(280),
+  height: z.number().min(60).max(4000).default(160),
+})
+
+export const sceneTypeSchema = z.object({
+  id,
+  name: z.string().min(1),
+  color: z.enum(TYPE_COLORS),
+  icon: z.enum(TYPE_ICONS),
+  baseKind: z.enum(SCENE_KINDS),
+  description: z.string().default(''),
+  duration: z.number().positive().optional(),
 })
 
 export const characterStateSchema = z.object({
@@ -163,6 +210,9 @@ export const projectSchema = z.object({
   startSceneId: z.string().nullable().default(null),
   scenes: z.array(sceneSchema),
   transitions: z.array(transitionSchema).default([]),
+  logicNodes: z.array(logicNodeSchema).default([]),
+  comments: z.array(graphCommentSchema).default([]),
+  sceneTypes: z.array(sceneTypeSchema).default([]),
   characters: z.array(characterSchema).default([]),
 })
 
@@ -177,6 +227,9 @@ export const exportSchema = z.object({
 
 export type TransitionDirection = z.infer<typeof transitionDirectionSchema>
 export type AudioCue = z.infer<typeof audioCueSchema>
+export type LogicNode = z.infer<typeof logicNodeSchema>
+export type GraphComment = z.infer<typeof graphCommentSchema>
+export type SceneType = z.infer<typeof sceneTypeSchema>
 export type Shot = z.infer<typeof shotSchema>
 export type Trigger = z.infer<typeof triggerSchema>
 export type Scene = z.infer<typeof sceneSchema>
