@@ -17,7 +17,7 @@ import type {
 import { sampleProject } from '../lib/sample'
 import { computeLayout } from '../lib/layout'
 
-export type View = 'graph' | 'timeline' | 'characters' | 'analysis'
+export type View = 'graph' | 'timeline' | 'characters' | 'analysis' | 'simulator'
 export type Selection = { type: 'scene' | 'edge'; id: string } | null
 
 export const HISTORY_LIMIT = 50

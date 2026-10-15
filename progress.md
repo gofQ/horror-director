@@ -145,3 +145,32 @@ Unreal importer plugin / DataTable CSV export, audio cue library, scene thumbnai
 - Fit-to-view after arranging reserves fixed margins for arcs; the viewport is not restored on undo.
 - E2E covers Chromium only and runs against the production build; there are no touch-gesture or mobile-viewport E2E tests, and no screenshot/visual-regression tests.
 - `@playwright/test` requires a Chromium binary (`npx playwright install chromium` or `PW_CHROMIUM_PATH`).
+
+## V0.5A — Story path simulator
+
+### Delivered
+- **Simulator tab** (`tab.simulator`, localized TR/EN): manual, read-only walk through the scene graph from `startSceneId` — current scene, selectable outgoing transitions (label, style, duration, dream/reality crossing, condition), **Back**, **Restart**, and a clear status (ending reached / dead end / incomplete / stopped by limit).
+- **Pure engine** (`src/lib/simulate.ts`): `simulateRoute(project, choices, options)` replays the chosen transition ids deterministically, so the route is revalidated against the live graph (invalid suffix dropped, counted and reported). Free-text transition conditions are **never evaluated**; they are shown as assumptions on options and route steps.
+- **Safe loops:** `loop.maxIterations` = additional repeat visits after the first (4 ⇒ up to 5 visits), applied to scenes with `loop.enabled`; `0` is bounded by a separate configurable safety limit (default 5, 1–20); other cycles by a hard step cap (default 40, clamped 1–200, = transitions taken). Every limit yields an explicit warning and disabled options with a reason; ending scenes are terminal.
+- **Absolute timeline:** scene durations + transition durations; trigger time = scene start + local time per visit; `once` triggers only on the first visit (repeats counted as skipped); conditional triggers marked **hypothetical**; triggers past the scene duration flagged, **not shifted**, warned about, and excluded from statistics.
+- **Route statistics:** total duration, visits, unique scenes, planned occurrences (+ hypothetical / beyond-duration / once-skipped counts), average and peak intensity, reality↔dream transitions, repeat visits, status.
+- **Chart:** SVG over absolute time with scene bands, hatched transition gaps and trigger markers at their authored 0–10 intensity (hollow = hypothetical, red ring = beyond duration); deliberately **no connecting curve/area** and an on-screen disclaimer that intensity is a planning number, not a measured fear/tension score. Markers/events open a details panel and are keyboard-operable.
+- **State isolation** (`src/store/simulator.ts`): separate non-persisted store (choices + limits). Never touches project data, autosave, library storage or undo/redo (tested incl. storage writes); resets on active-project change; the view prunes the route and shows a notice when graph edits invalidate it.
+- Side fix: `.timeline-lower` grid items could overflow on narrow screens (long event names); now `minmax(0, 1fr)`.
+
+### Changed files
+- New: `src/lib/simulate.ts`, `src/lib/simulate.test.ts`, `src/store/simulator.ts`, `src/store/simulator.test.ts`, `src/components/SimulatorView.tsx`, `e2e/simulator.spec.ts`.
+- Modified: `src/App.tsx`, `src/store/useStore.ts` (`View` type), `src/i18n/{en,tr}.ts`, `src/styles.css`, `README.md`, `README.tr.md`.
+
+### Test results (all executed in this Cloud Session)
+- `npm run typecheck` clean; `npm test`: 14 files, **211 tests** (+34: 28 engine incl. hand-verified sample routes 11:05 / 10:50, 6 store); `npm run build` passes.
+- `npm run test:e2e`: **17/17** passed (8 existing + 9 new simulator tests: both endings, assumptions, loop limit + Back/Restart, step cap, markers/details, TR/EN, project isolation, graph-edit revalidation). Chromium via `PW_CHROMIUM_PATH=/opt/pw-browsers/chromium`.
+
+### Known limitations
+- Manual routes only: no automatic route enumeration, probabilities, or "best path"; no AI/psychological scoring.
+- Assumes the player spends the **full** scene duration in every scene; real gameplay timing will differ.
+- Loop settings apply only to scenes with looping enabled; cycles through other scenes are limited only by the step cap. Lowering the step cap shortens the current route.
+- Conditions (transition and trigger) are display-only text; nothing is validated or executed (no Unreal logic).
+- Simulation state and limits are session-only (not saved, not exported); per-project routes are not remembered across switches or reloads.
+- The chart shows planned trigger markers, not continuous "intensity"; very long routes make scene labels illegible (labels are hidden when bands are narrow).
+- E2E covers Chromium desktop; the mobile layout was checked manually (no automated mobile E2E).

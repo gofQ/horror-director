@@ -19,6 +19,31 @@ projeler tarayıcınızın `localStorage` alanında saklanır.
 - **İçe / dışa aktarma**: şema doğrulamalı (zod), sürümlü JSON biçimi (`schemaVersion: 1`).
 - **Türkçe / İngilizce arayüz** (aşağıya bakın).
 
+## Hikâye rotası simülatörü (v0.5A)
+
+**Simülatör** sekmesi, sahne grafınızda salt okunur ve elle seçerek bir rota yürütür:
+
+- Projenin başlangıç sahnesinden başlar; geçerli sahneyi ve çıkış geçişlerini (etiket, stil, süre, rüya/gerçeklik
+  geçişi, koşul) gösterir, sıradakini siz seçersiniz. **Geri** ve **Baştan başlat** vardır; durum rotanın bir **finale**
+  ulaştığını, **çıkmaza** girdiğini, **tamamlanmamış** olduğunu veya **bir sınırda durdurulduğunu** söyler.
+- **Geçiş koşulları asla değerlendirilmez.** O geçişi seçerek yaptığınız *varsayım* olarak gösterilir.
+- **Döngüler:** döngülü sahnedeki `En fazla tekrar`, ilk ziyaretten sonraki *ek tekrar ziyaretlerini* sayar (4 ⇒ en fazla
+  5 ziyaret). `0` (sınırsız) ayrı, ayarlanabilir bir **güvenlik sınırıyla** (varsayılan 5 tekrar ziyaret) sınırlanır.
+  Döngü ayarı olmayan sahnelerden geçen döngüler sert bir **adım üst sınırıyla** (alınan geçiş sayısı; varsayılan 40,
+  1–200 arası ayarlanabilir) sınırlanır. Sınırlar her zaman açık bir uyarı üretir; engellenen seçenekler devre dışı bırakılır ve nedeni gösterilir.
+- **Mutlak zaman çizelgesi:** sahne ziyareti sahnenin `süresi` kadar sürer, ardından geçişin `süresi` gelir; tetikleyicinin
+  mutlak zamanı *sahne başlangıcı + yerel zamanı*dır (tekrar ziyaretler ayrı hesaplanır). `Yalnızca bir kez` tetikleyiciler
+  yalnızca ilk ziyarette görünür. **Koşullu** tetikleyiciler *varsayımsal* olarak içi boş çizilir (doğrulanmış oynanış değil).
+  Sahne süresinden **sonra** gelen tetikleyiciler işaretlenir (kırmızı çerçeve), gerçek zamanında gösterilir
+  (kaydırılmaz) ve istatistiklerden hariç tutulur.
+- **İstatistikler:** toplam süre, sahne ziyareti, benzersiz sahne, planlanan tetikleyici sayısı, ortalama/en yüksek
+  yoğunluk, gerçeklik→rüya ve rüya→gerçeklik geçişleri, döngü tekrarları (tekrar ziyaret) ve rota durumu.
+- Grafik, tetikleyicileri yazdığınız 0–10 yoğunlukta ve sahne sınırlarıyla gösterir; bilerek eğri çizmez çünkü yoğunluk
+  değerleri tasarımcı planlama sayılarıdır, ölçülmüş bir korku/gerilim puanı **değildir**. İşaretler ve olaylar ayrıntı için
+  tıklanabilir/klavyeyle seçilebilir.
+- Simülasyon durumu projeden ayrıdır: proje verisini, otomatik kaydı, kütüphaneyi veya geri al geçmişini asla değiştirmez,
+  proje değiştirince sıfırlanır; graf düzenlemeleri rotayı geçersiz kılarsa rota doğrulanır (bildirimle kısaltılır).
+
 ## Graf kullanılabilirliği (v0.4B)
 
 - **Otomatik Düzenle** (graf araç çubuğu): sahneleri hikâye akışına göre soldan sağa katmanlar halinde yerleştirir;

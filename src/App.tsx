@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Download, FolderOpen, Eye, Workflow, Activity, Users, ShieldCheck, Undo2, Redo2, Save } from 'lucide-react'
+import { Download, FolderOpen, Route, Eye, Workflow, Activity, Users, ShieldCheck, Undo2, Redo2, Save } from 'lucide-react'
 import { useStore, type View } from './store/useStore'
 import { addAndOpen, flushNow } from './store/library'
 import { LibraryDialog } from './components/LibraryDialog'
@@ -14,6 +14,8 @@ import { Inspector } from './components/Inspector'
 import { TimelineView } from './components/TimelineView'
 import { CharactersView } from './components/CharactersView'
 import { AnalysisView } from './components/AnalysisView'
+import { SimulatorView } from './components/SimulatorView'
+import './store/simulator'
 import { exportFileName, parseProject, serializeProject } from './lib/io'
 import type { Project } from './lib/schema'
 import { validateProject } from './lib/validate'
@@ -23,6 +25,7 @@ const TABS = [
   { id: 'timeline', Icon: Activity },
   { id: 'characters', Icon: Users },
   { id: 'analysis', Icon: ShieldCheck },
+  { id: 'simulator', Icon: Route },
 ] as const satisfies readonly { id: View; Icon: typeof Workflow }[]
 
 const LANG_NAMES: Record<Lang, string> = { tr: 'Türkçe', en: 'English' }
@@ -276,6 +279,7 @@ export function App() {
         {view === 'timeline' && <TimelineView />}
         {view === 'characters' && <CharactersView />}
         {view === 'analysis' && <AnalysisView />}
+        {view === 'simulator' && <SimulatorView />}
       </main>
     </div>
   )

@@ -1,0 +1,44 @@
+import { create } from 'zustand'
+import { useStore } from './useStore'
+import { clampOptions, defaultOptions, type SimOptions } from '../lib/simulate'
+
+/**
+ * Simulator session state. Deliberately separate from the project store: it is never persisted,
+ * never part of autosave/undo history, and holds only the chosen transition ids and the limits.
+ * The route is replayed (and revalidated) against the live project by `simulateRoute`.
+ */
+interface SimState {
+  choices: string[]
+  options: SimOptions
+  selectedEventKey: string | null
+  /** How many chosen steps were dropped because graph edits invalidated them (0 = none). */
+  invalidatedNotice: number
+  choose: (transitionId: string) => void
+  back: () => void
+  restart: () => void
+  setOptions: (o: Partial<SimOptions>) => void
+  /** Replaces the route with its still-valid prefix. */
+  prune: (validChoices: string[], invalidated: number) => void
+  selectEvent: (key: string | null) => void
+  reset: () => void
+}
+
+export const useSim = create<SimState>((set) => ({
+  choices: [],
+  options: defaultOptions(),
+  selectedEventKey: null,
+  invalidatedNotice: 0,
+  choose: (id) => set((s) => ({ choices: [...s.choices, id], invalidatedNotice: 0, selectedEventKey: null })),
+  back: () => set((s) => ({ choices: s.choices.slice(0, -1), invalidatedNotice: 0, selectedEventKey: null })),
+  restart: () => set({ choices: [], invalidatedNotice: 0, selectedEventKey: null }),
+  setOptions: (o) => set((s) => ({ options: clampOptions({ ...s.options, ...o }) })),
+  prune: (validChoices, invalidated) =>
+    set((s) => ({ choices: validChoices, invalidatedNotice: invalidated > 0 ? invalidated : s.invalidatedNotice })),
+  selectEvent: (key) => set({ selectedEventKey: key }),
+  reset: () => set({ choices: [], invalidatedNotice: 0, selectedEventKey: null }),
+}))
+
+// The route belongs to one project: switching projects starts over (limits are kept).
+useStore.subscribe((s, prev) => {
+  if (s.library.activeId !== prev.library.activeId) useSim.getState().reset()
+})
