@@ -12,7 +12,7 @@ Every future feature or fix milestone must add an entry here (see `CLAUDE.md`).
 
 ## v0.6A — Cinematic shot planner
 
-Pull request: _link added when the pull request is opened_.
+Pull request: [#8](https://github.com/gofQ/horror-director/pull/8)
 
 ### Added
 - **Cinematic shots** per scene: ordered planning notes with a stable id, title, start and duration (seconds relative to the scene), framing (wide, medium, close-up, extreme close-up, POV), camera movement (static, pan, tilt, tracking, handheld), psychological technique (none, match cut, impossible space, identity discontinuity, false awakening), sound cue notes and visual/action notes. They are independent of triggers and transitions and are not engine commands.
