@@ -20,6 +20,31 @@ everything as JSON for later Unreal Engine import. No backend, no paid APIs — 
 - Undo/redo (50 steps, Ctrl/Cmd+Z), strict import validation, save-status indicator and one-click JSON backup (Ctrl/Cmd+S).
 - Auto-save to `localStorage`, responsive dark UI (inspector becomes a bottom sheet on small screens).
 
+## Story path simulator (v0.5A)
+
+The **Simulator** tab walks a route through your scene graph, read-only, by manual choice:
+
+- Starts at the project's start scene, shows the current scene and its outgoing transitions (label, style, duration,
+  dream/reality crossing, condition), and lets you pick the next one. **Back** and **Restart** are available; the
+  status says whether the route reached an **ending**, a **dead end**, is **incomplete**, or was **stopped by a limit**.
+- **Transition conditions are never evaluated.** They are shown as *assumptions* you make by choosing that transition.
+- **Loops:** `Max iterations` on a looping scene counts *additional repeat visits after the first* (4 ⇒ up to 5 visits).
+  `0` (unlimited) is bounded by a separate configurable **safety limit** (default 5 repeat visits). Cycles through
+  scenes without loop settings are bounded by a hard **step cap** (transitions taken; default 40, configurable 1–200).
+  Limits always produce an explicit warning; blocked options are disabled with the reason.
+- **Absolute timeline:** scene visits run for the scene's `duration`, followed by the transition's `duration`; a
+  trigger's absolute time is *scene start + its local time* (repeat visits handled per visit). `Fire only once`
+  triggers appear on the first visit only. Triggers with a **condition** are drawn hollow as *hypothetical* (not
+  verified gameplay events). Triggers **after their scene's duration** are flagged (red outline), shown at their true
+  time (never shifted) and excluded from the statistics.
+- **Statistics:** total duration, scene visits, unique scenes, planned trigger occurrences, average/peak intensity,
+  reality→dream and dream→reality transitions, loop repetitions (repeat visits) and the route status.
+- The chart plots trigger markers at their authored 0–10 intensity with scene boundaries; it deliberately draws no
+  curve, because intensity values are designer planning numbers, **not** a measured fear/tension score. Markers and
+  events are clickable/keyboard-selectable for details.
+- Simulation state is separate from the project: it never changes project data, autosave, the library or undo history,
+  resets when you switch projects, and the route is revalidated (shortened with a notice) if graph edits invalidate it.
+
 ## Graph usability (v0.4B)
 
 - **Auto Arrange** (graph toolbar): lays scenes out left to right in layers following the story flow — branching,
