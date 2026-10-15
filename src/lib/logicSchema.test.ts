@@ -116,7 +116,7 @@ describe('malformed v5 data is rejected without repair', () => {
   it('dangling endpoints, comment endpoints and ports', () => {
     expect(errorsOf(mutate((e) => (tr(e, 'into').target = 'ghost')))).toMatch(/ghost/)
     expect(errorsOf(mutate((e) => (tr(e, 'into').target = 'note1')))).toMatch(/comment/)
-    expect(errorsOf(mutate((e) => delete tr(e, 'yes').sourcePort))).toMatch(/without a TRUE\/FALSE output/)
+    expect(errorsOf(mutate((e) => delete tr(e, 'yes').sourcePort))).toMatch(/without an output pin/)
     expect(errorsOf(mutate((e) => (tr(e, 'c_end').sourcePort = 'true')))).toMatch(/does not start at an IF or Random Branch node/)
   })
   it('two connections on one output pin, duplicate links and self-links', () => {

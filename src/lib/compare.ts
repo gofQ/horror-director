@@ -30,6 +30,14 @@ export interface RouteSummary {
   assumedTransitions: number
   /** IF outputs taken against their structured condition: the route is a what-if, not validated logic. */
   overrides: number
+  /** Seconds of Delay nodes on the route (already part of `duration` once a later scene is entered). */
+  delayTotal: number
+  /** Event nodes passed (authored milestones; separate from scene trigger `events`). */
+  eventNodes: number
+  /** Random Branch outputs chosen, split by how they were picked (provenance is session-only; `unknown` when absent). */
+  randomDecisions: number
+  randomManual: number
+  randomRolled: number
   eventsPerMinute: number | null
   avgIntensity: number | null
   peakIntensity: number | null
@@ -167,7 +175,10 @@ function plannedEvents(sim: SimResult): CompareEvent[] {
     })
 }
 
-function summarize(sim: SimResult, analysis: PacingAnalysis, requested: number): RouteSummary {
+/** How each Random Branch decision (by choice index) was made; supplied by the session store when known. */
+export type RandomProvenance = Record<number, { mode: 'manual' | 'rolled' }>
+
+function summarize(sim: SimResult, analysis: PacingAnalysis, requested: number, marks: RandomProvenance = {}): RouteSummary {
   const perKind = Object.fromEntries(TRIGGER_KINDS.map((k) => [k, analysis.overview.perKind[k]])) as Record<TriggerKind, number>
   const findingsByCategory = Object.fromEntries(PACING_CATEGORIES.map((c) => [c, 0])) as Record<PacingCategory, number>
   const findingsBySeverity: Record<PacingSeverity, number> = { informational: 0, caution: 0 }
@@ -189,6 +200,11 @@ function summarize(sim: SimResult, analysis: PacingAnalysis, requested: number):
     hypothetical: sim.stats.hypothetical,
     assumedTransitions: sim.steps.filter((s) => s.via && s.via.condition.trim() !== '').length,
     overrides: sim.stats.overrides,
+    delayTotal: sim.stats.delayTotal,
+    eventNodes: sim.stats.eventCount,
+    randomDecisions: sim.stats.randomDecisions,
+    randomManual: sim.flow.filter((f) => f.kind === 'random' && f.choiceIndex !== undefined && marks[f.choiceIndex]?.mode === 'manual').length,
+    randomRolled: sim.flow.filter((f) => f.kind === 'random' && f.choiceIndex !== undefined && marks[f.choiceIndex]?.mode === 'rolled').length,
     eventsPerMinute: analysis.overview.eventsPerMinute,
     avgIntensity: sim.stats.avgIntensity,
     peakIntensity: sim.stats.peakIntensity,
@@ -268,11 +284,12 @@ export function compareRoutes(
   choicesB: readonly string[],
   simOptions: Partial<SimOptions> = {},
   pacingOptions: Partial<PacingOptions> = {},
+  marks: { a?: RandomProvenance; b?: RandomProvenance } = {},
 ): RouteComparison {
   const simA = simulateRoute(project, choicesA, simOptions)
   const simB = simulateRoute(project, choicesB, simOptions)
-  const a = summarize(simA, analyzePacing(simA, pacingOptions), choicesA.length)
-  const b = summarize(simB, analyzePacing(simB, pacingOptions), choicesB.length)
+  const a = summarize(simA, analyzePacing(simA, pacingOptions), choicesA.length, marks.a)
+  const b = summarize(simB, analyzePacing(simB, pacingOptions), choicesB.length, marks.b)
   const unavailable = a.unavailable || b.unavailable
   const divergence: Divergence = unavailable ? { kind: 'unavailable' } : divergenceOf(simA, simB)
 
