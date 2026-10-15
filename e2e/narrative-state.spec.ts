@@ -245,7 +245,7 @@ test.describe('persistence, backup and localization', () => {
     await expect(page.getByTestId('expr-preview')).toContainText('VillagerWasInsulted is TRUE')
     const [dl] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: /backup/i }).first().click()])
     const exported = JSON.parse(readFileSync((await dl.path())!, 'utf8')) as { schemaVersion: number; project: { flags: { name: string; defaultValue: boolean }[]; logicNodes: { type: string }[] } }
-    expect(exported.schemaVersion).toBe(7)
+    expect(exported.schemaVersion).toBe(8)
     expect(exported.project.flags.map((f) => [f.name, f.defaultValue])).toEqual([['VillagerWasInsulted', false], ['RitualCompleted', true]])
     expect(exported.project.logicNodes.map((n) => n.type).sort()).toEqual(['branch', 'setFlag'])
   })
@@ -265,7 +265,7 @@ test.describe('persistence, backup and localization', () => {
     await page.locator('.react-flow__pane').click({ position: { x: 300, y: 760 } })
     await expect(page.getByTestId('flags-empty')).toBeVisible()
     const migrated = await page.evaluate(() => Object.entries(localStorage).filter(([k]) => k.includes('proj:')).map(([, v]) => JSON.parse(v).v))
-    expect(migrated).toContain(7)
+    expect(migrated).toContain(8)
   })
 
   test('Turkish interface and a 390 px viewport', async ({ page }) => {

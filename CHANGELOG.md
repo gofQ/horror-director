@@ -3,13 +3,32 @@
 Version history of Horror Director, newest first. This file is the canonical user-facing history; the READMEs describe
 the current product only and `progress.md` tracks engineering status.
 
-The labels below (MVP/v0.1 through v0.7C) are **development milestones**, not published releases: the project has no
+The labels below (MVP/v0.1 through v0.7D) are **development milestones**, not published releases: the project has no
 tagged releases and `package.json` stays at `0.1.0`. Each milestone after the MVP was developed on its own branch and
 merged through a pull request into the integration branch (`claude/optimistic-tesla-r2v8g6`). The JSON schema was
 `schemaVersion: 1` until v0.6A introduced `schemaVersion: 2` (scene shots) and v0.6B `schemaVersion: 3`
-(transition direction) v0.6C `schemaVersion: 4` (scene audio cues) v0.7A `schemaVersion: 5` (IF nodes, comments, custom scene types, branch-port links) v0.7B `schemaVersion: 6` (narrative flags, Set Flag nodes, structured IF conditions) and v0.7C `schemaVersion: 7` (reroute points); files of every earlier version, and bare project files, are still imported.
+(transition direction) v0.6C `schemaVersion: 4` (scene audio cues) v0.7A `schemaVersion: 5` (IF nodes, comments, custom scene types, branch-port links) v0.7B `schemaVersion: 6` (narrative flags, Set Flag nodes, structured IF conditions) v0.7C `schemaVersion: 7` (reroute points) and v0.7D `schemaVersion: 8` (Event, Delay and Random Branch nodes); files of every earlier version, and bare project files, are still imported.
 
 Every future feature or fix milestone must add an entry here (see `CLAUDE.md`).
+
+## v0.7D — Event & flow control
+
+Pull request: _link added when the pull request is opened_
+
+### Added
+- **Event node**: an authored narrative milestone (stable id, title, description, category: story beat / reveal / threat / relief / decision / custom; one input, one output). When the simulated route passes it, an entry with the absolute route time is appended to the chronological flow trace. Events are planning milestones, not gameplay callbacks: they are separate from scene triggers and audio cues and never change trigger counts, pacing intensity, scene timelines or authored scene data.
+- **Delay node**: one input, one output, a finite duration from 0 to 3600 seconds and planning notes, with the duration shown on the node. A traversed Delay adds its seconds to the route clock exactly once, in traversal order; scene durations and connection durations are unchanged, later scenes start later and their scene-local triggers shift with them. The flow trace shows when a delay starts and ends. Delay is time *between* scene visits, not an in-scene timeline editor.
+- **Random Branch node**: one input, two typed outputs **A** and **B** with editable outcome labels and a probability of A from 0 to 100 % (B is 100 − A). In the Simulator you either pick A or B by hand (marked as a *what-if*) or press **Roll outcome**: a deterministic, seeded draw (pure `mulberry32` helper; the seed is a session-only field) that only previews its result until you commit it. The same seed and decision context always give the same draw, nothing is rerolled by Back, replay, project edits or reload, a missing output connection is reported, and 0 % / 100 % are handled explicitly. The chosen connection is stored as a normal route choice; the roll provenance stays session-only (never in project JSON, autosave, undo history or exports). The UI states that one simulated route does not verify the probabilities.
+- **Flow trace** in the Simulator: a compact chronological list of events, delay start/end, IF choices (with assumption/override), Set Flag assignments and Random decisions (hand-picked what-if versus rolled with its seed, or source unknown). Route comparison gains rows for delay seconds, Event nodes and Random decisions with the correct duration shifts and a note counting hand-picked versus rolled outcomes.
+- All three nodes work like the existing logic nodes: right-click menu and searchable picker, palette buttons, drag-to-create from an output pin (including Random A/B), typed validated connections, Inspector editing, copy/paste/duplicate, multi-selection, batch delete, undo/redo, Auto Arrange, reroute points, reachability analysis, minimap, Turkish/English and keyboard operation.
+
+### Changed
+- **JSON schema 8**: logic nodes may be `event` (`eventCategory`), `delay` (`seconds`, 0–3600) or `random` (`probabilityA` 0–100, `labelA`, `labelB` ≤ 40 characters); `sourcePort` additionally accepts `a`/`b` (only for connections leaving a Random Branch). Malformed values, fields that belong to another node type, wrong pin types, more than one connection per output, extra outputs on Event/Delay and logic-only cycles are rejected rather than repaired. Schema 1–7 and bare project files are still imported unchanged; library records are written as `{ v: 8, project }`; `v: 1`–`v: 7` are still read and never rewritten at boot; an older build treats `v: 8` records as damaged and preserves them.
+- `graphRules.ts` stays the single source of connection semantics (pin types per node kind, single-output nodes, logic-only cycle check); the simulator keeps one pure traversal (`simulateRoute`) for Scene, IF, Set Flag, Event, Delay and Random Branch with the same link-count step cap, loop protections and deterministic replay; invalidated tails (including a pin that no longer fits) are reported, never repaired.
+- The connection and validation messages mention Random Branch pins; `CLAUDE.md` compatibility rules now state schema 8 and records `{ v: 8 }`. `package.json` version metadata is unchanged.
+
+### Not included
+Sequence or parallel nodes, automatic traversal, runtime randomness, new variable types, Unreal integration.
 
 ## v0.7C — Graph productivity & reliability
 

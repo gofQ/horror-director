@@ -26,6 +26,16 @@ korku ritmini planlamak isteyen bağımsız geliştiriciler ve küçük ekipler.
   olduğunu denetle; VE, VEYA ve DEĞİL ile birleştirilir, iç içe olabilir); koşul erişilebilir bir formla kurulur, betik yoktur.
   Simülatör bayrak durumunu rota boyunca izler, yalnızca yapılandırılmış koşulları değerlendirir ve bir Durum denetçisi
   gösterir. Bayrak Ata ve EĞER düğümleri sıfır süreli planlama mantığıdır, sahne değildir.
+- **Akış kontrolü:** üç düğüm daha sahne değildir ve aynı bağlantı kurallarını paylaşır. **Olay** düğümü (başlık, açıklama,
+  kategori: hikâye anı, ortaya çıkış, tehdit, rahatlama, karar, özel; bir giriş, bir çıkış) yazılmış bir anlatı kilometre
+  taşıdır: simüle edilen rota ondan geçince rota saatine damgalanır. **Bekleme** düğümü (bir giriş, bir çıkış, 0 ile 3600
+  saniye arası süre, planlama notları) sahne ziyaretleri *arasına* bekleme süresi ekler. **Rastgele Dal** düğümünün bir girişi
+  ve düzenlenebilir sonuç etiketleri olan **A** ve **B** adlı iki çıkışı ile %0–%100 arası A olasılığı vardır (B, 100 − A).
+  Olaylar oynanış geri çağrısı değildir: sahne tetikleyicilerinden ve ses ipuçlarından ayrıdır, tetikleyici sayılarını, ritim
+  yoğunluğunu ya da sahne verisini asla değiştirmez. Olay ve Bekleme çıkışları tek bağlantı kabul eder, Rastgele Dal çıkışlarının
+  her biri bir bağlantı; yalnızca mantık düğümlerinden geçen ve sahneye uğramayan döngüler reddedilir. Üçü de bağlam menüsü
+  ve seçici, pinden sürükleyerek oluşturma, Denetçi, kopyala/yapıştır/çoğalt, çoklu seçim, geri al/yinele, Otomatik Düzenle,
+  yönlendirme noktaları, erişilebilirlik analizi ve mini harita ile çalışır.
 - **Özel sahne türleri:** proje başına, yeniden kullanılabilir sahne türleri (ad, seçilmiş renk ve simge, temel tür,
   varsayılan açıklama ve süre). Özel bir sahne, temel türü (gerçeklik, rüya, kâbus, anı, son) geçişleri, simülasyonu ve
   analizi yönlendirmeye devam eden normal bir sahnedir.
@@ -98,7 +108,7 @@ npm run preview    # üretim derlemesini sun
    çıkışları sahnelere bağlayın ve Simülatörde kullanın; DOĞRU ya da YANLIŞ'ı kendiniz seçersiniz — seçim bir varsayım olarak
    gösterilir, EĞER düğümü sahne süresi harcamaz ve fazladan ziyaret ya da tetikleyici eklemez. Hikâye durumunu modellemek için proje denetçisinde (hiçbir şey seçili değilken)
    **bayrak** oluşturun, bir **Bayrak Ata** düğümü ekleyin (**Bayrak Ata ekle**, seçici ya da pinden sürükleme), bayrağını ve
-   DOĞRU/YANLIŞ değerini seçin, EĞER düğümünün denetçisinde ona **yapılandırılmış koşul** verin. Yeniden kullanılabilir
+   DOĞRU/YANLIŞ değerini seçin, EĞER düğümünün denetçisinde ona **yapılandırılmış koşul** verin. **Olay ekle**, **Bekleme ekle** ve **Rastgele Dal ekle** (menü, seçici, palet ya da pinden sürükleme) akış kontrolü düğümlerini oluşturur; kategori, süre, etiket ve olasılığı denetçide düzenleyin. Yeniden kullanılabilir
    **Sahne türleri**ni proje denetçisinde (hiçbir şey seçili değilken) tanımlayın. Bir öğeyi seçip `Del` ile silin
    (bağlantıları tek bir geri alma adımında onunla gider). Başlangıç sahnesini sahne denetçisinden belirleyin. **Örnek**, rüya katmanları, bir döngü ve iki final
    içeren "The Hollow Apartment" demo projesini yükler (İngilizce yazılmıştır).
@@ -117,6 +127,15 @@ npm run preview    # üretim derlemesini sun
      işaretlenir, diğeri açık bir *geçersiz kılma (ya şöyle olsaydı)* olarak seçilebilir kalır; sayılır ve işaretlenir
      (rota karşılaştırmasında da). Rotanız asla sessizce değiştirilmez. Bayrak durumu her yeniden oynatmada, Geri'de,
      Yeniden başlat'ta ve grafik düzenlemesinde baştan hesaplanır ve asla kaydedilmez.
+   - Bir **Bekleme** saniyelerini rota saatine tam olarak bir kez, geçiş sırasıyla ekler: sonraki sahne yalnızca daha geç
+     başlar (sahne ve bağlantı süreleri değişmez) ve sahne-yerel tetikleyicileri onunla kayar. Bir **Olay**, mutlak rota
+     zamanıyla damgalanır. İkisi de sahne ziyareti ya da tetikleyici oluşumu değildir. **Akış izi** olayları, bekleme
+     başlangıç/bitişini, EĞER seçimlerini, Bayrak Ata atamalarını ve Rastgele kararları kronolojik listeler.
+   - **Rastgele Dal**'da A ya da B'yi kendiniz seçersiniz (*ya olursa* olarak işaretlenir) ya da **Sonuç çek**'e basarsınız:
+     tohumlu bir çekiliş (tohum yalnızca oturumluk bir alandır) sonucu siz onaylayana kadar yalnızca önizler. Aynı tohum ve karar her
+     zaman aynı çekilişi verir; Geri, yeniden oynatma, proje düzenlemesi ya da yeniden yükleme hiçbir şeyi yeniden çekmez.
+     Seçilen bağlantı rotada diğer seçimler gibi saklanır; çekilişin tohumu oturumluk kaynak bilgisidir (kaydedilmez, dışa
+     aktarılmaz) ve rota karşılaştırması çekilen ile elle seçilen sonuçları ayrı sayar. Tek bir simüle rota yazılmış olasılığı doğrulamaz.
    - Döngüdeki `En çok yineleme`, ilk ziyaretten *sonraki ek tekrar ziyaretleri* sayar (4 ⇒ en fazla 5 ziyaret). `0`
      (sınırsız) ayarlanabilir bir güvenlik sınırıyla (varsayılan 5); diğer döngüler ise sabit bir adım sınırıyla
      (varsayılan 40, 1–200) kısıtlanır.
@@ -177,14 +196,14 @@ geçmişini değiştirmez, dışa aktarılmaz ve proje değiştirdiğinizde sıf
 - **Depolama** (tarayıcı `localStorage`): `horror-director:library:v1` (dizin), `horror-director:proj:<id>` (proje başına
   bir kayıt), `horror-director:lang` (dil). Kimlikler dahilidir ve adlardan bağımsızdır. Kütüphane verisi (kimlikler,
   zaman damgaları, etkin proje) proje JSON'una asla yazılmaz.
-- **Yedek**, *etkin* projeyi şema 7 dışa aktarma biçiminde indirir. İçe aktarma katı doğrulama yapar (yinelenen
+- **Yedek**, *etkin* projeyi şema 8 dışa aktarma biçiminde indirir. İçe aktarma katı doğrulama yapar (yinelenen
   kimlikler, boşta kalan referanslar, geçersiz değerler, tanınmayan alanlar, daha yeni şema sürümleri hatadır ve hiçbir şey
   değiştirilmeden önce gösterilir). Bir dosya yeni proje olarak ya da onayla etkin projenin yerine aktarılabilir.
-- **Eski dosyalar ve veriler:** şema 1'den şema 6'ya kadar dışa aktarmalar ile yalın proje dosyaları hâlâ içe aktarılır; eksik
+- **Eski dosyalar ve veriler:** şema 1'den şema 7'ye kadar dışa aktarmalar ile yalın proje dosyaları hâlâ içe aktarılır; eksik
   çekim planları, ses ipuçları, EĞER düğümleri, yorumlar, sahne türleri ve bayraklar boş liste olarak başlar, eksik geçiş yönlendirmeleri yok olarak kalır (şema 1/yalın dosyalar
-  için bilgilendirici bir not çıkar) ve sonraki yedek, diğer tüm alanlar değişmeden şema 7 olur. Önceki sürümlerden kalan kayıtlı projeler aynı
-  şekilde okunur ve yalnızca siz düzenleyince yeniden yazılır. Proje kayıtları `{ v: 7, project }` olarak saklanır (eski
-  `v: 1`–`v: 6` kayıtlar hâlâ okunur); yeni alanları okuyamayan eski bir sürüm böyle bir kaydı hasarlı gösterir ve veriyi
+  için bilgilendirici bir not çıkar) ve sonraki yedek, diğer tüm alanlar değişmeden şema 8 olur. Önceki sürümlerden kalan kayıtlı projeler aynı
+  şekilde okunur ve yalnızca siz düzenleyince yeniden yazılır. Proje kayıtları `{ v: 8, project }` olarak saklanır (eski
+  `v: 1`–`v: 7` kayıtlar hâlâ okunur); yeni alanları okuyamayan eski bir sürüm böyle bir kaydı hasarlı gösterir ve veriyi
   atmak yerine korur. Sürüm düşürme desteklenmez.
 - **Taşıma:** erken sürümlerin tek projelik depolaması doğrulanır, `legacy` kimliğiyle kütüphaneye kopyalanır, kontrol
   edilir ve ancak ondan sonra dizine eklenir. Özgün anahtar (`horror-director:project:v1`) asla değiştirilmez ya da silinmez.
@@ -193,7 +212,7 @@ geçmişini değiştirmez, dışa aktarılmaz ve proje değiştirdiğinizde sıf
 - **Birden çok sekme birleştirilmez** (son yazan kazanır); başka bir sekmeden gelen değişiklik algılanır, bir başlık
   gösterilir ve yeniden yükleyene kadar kütüphane işlemleri engellenir.
 
-JSON şeması `README.md` içinde belgelenmiştir ve dilden bağımsızdır (`format: "horror-director"`, `schemaVersion: 7`, geçişlerde isteğe bağlı `waypoints` (yönlendirme noktaları), sahnelerde `shots` ve `audioCues` dizileri, projede `logicNodes` (`branch` ve `setFlag`; EĞER'de isteğe bağlı `expression`), `flags`, `comments` ve `sceneTypes`, bağlantılarda isteğe bağlı `sourcePort`, geçişlerde isteğe bağlı `direction` nesnesi;
+JSON şeması `README.md` içinde belgelenmiştir ve dilden bağımsızdır (`format: "horror-director"`, `schemaVersion: 8`, geçişlerde isteğe bağlı `waypoints` (yönlendirme noktaları), sahnelerde `shots` ve `audioCues` dizileri, projede `logicNodes` (`branch`, `setFlag`, `event`, `delay` ve `random`; EĞER'de isteğe bağlı `expression`, Olay'da `eventCategory`, Bekleme'de `seconds`, Rastgele Dal'da `probabilityA`/`labelA`/`labelB`), `flags`, `comments` ve `sceneTypes`, bağlantılarda isteğe bağlı `sourcePort` (`true`/`false` ya da Rastgele Dal için `a`/`b`), geçişlerde isteğe bağlı `direction` nesnesi;
 `derived` bloğu içe aktarmada yok sayılır). Türkçe metin (ç, ğ, ı, İ, ö, ş, ü) UTF-8 olarak aynen korunur.
 
 ## Dil
@@ -222,7 +241,7 @@ derlemesine karşı Chromium'da çalışır; ekran görüntüsü karşılaştır
 
 ## Bilinen sınırlamalar
 
-- Simülasyon elle yapılır: otomatik rota sıralaması, olasılık ya da "en iyi yol" yoktur; serbest metin koşulları yalnızca görüntülenir; yalnızca yapılandırılmış bayrak koşulları ve yalnızca simülatörde değerlendirilir.
+- Simülasyon elle yapılır: otomatik rota sıralaması ya da "en iyi yol" yoktur; Rastgele Dal olasılıkları yazılmış niyettir ve tek bir rota bunları doğrulayamaz; serbest metin koşulları yalnızca görüntülenir; yalnızca yapılandırılmış bayrak koşulları ve yalnızca simülatörde değerlendirilir.
 - Zamanlama, her sahnede sahne süresinin tamamının geçirildiğini varsayar; gerçek oynanış zamanlaması farklı olur.
 - Ritim eşikleri sabit sezgisel değerlerdir (yalnızca tekrarlanan tür penceresi ve tetikleyicisiz asgari süre ayarlanabilir);
   belirli bir kitleye göre ayarlanmamış ya da oyuncu davranışıyla doğrulanmamıştır. Yoğunluk, ölçülmüş korku değil, yazılmış tasarım niyetidir.
@@ -233,9 +252,10 @@ derlemesine karşı Chromium'da çalışır; ekran görüntüsü karşılaştır
   motor/Unreal içe aktarımı henüz yoktur. Liste yazılış sırasını korur; zamana göre sıralama açık bir eylemdir.
 - Serbest metin koşulları planlama notlarıdır ve asla ayrıştırılmaz ya da değerlendirilmez. Yalnızca Doğru/Yanlış bayraklar
   üzerindeki yapılandırılmış EĞER koşulları ve yalnızca simülatörde değerlendirilir (bir oyunda hiçbir şey çalıştırılmaz);
-  sayısal değişken, betik, ayrı VE/VEYA/DEĞİL düğümleri, olay, gecikme, rastgele dal, yönlendirme (reroute) düğümü ya da
-  panodan yapıştırma yoktur. Bayrak Ata düğümünün bir girişi ve bir çıkışı vardır; EĞER ya da Bayrak Ata düğümüne dokunan
-  bağlantılar geçiş tasarımı taşıyamaz.
+  sayısal değişken, betik, ayrı VE/VEYA/DEĞİL düğümleri, Sekans ya da paralel düğümler veya çalışma anı yürütmesi yoktur.
+  Bayrak Ata, Olay ve Bekleme düğümlerinin bir girişi ve bir çıkışı vardır; herhangi bir mantık düğümüne dokunan bağlantılar
+  geçiş tasarımı taşıyamaz. Bekleme, sahne ziyaretleri arasındaki ek süredir, sahne içi zaman çizelgesi düzenleyicisi değildir;
+  sahneler yine yazılmış sürelerinin tamamını harcar.
 - Sekans görünümü türetilmiş bir özettir: çalma, dalga biçimi ya da simülasyon yoktur, öğeleri kendisi düzenleyemez, seçim, yakınlık
   ve imleci yalnızca oturum boyunca tutar ve koşullu tetikleyicileri değerlendirmek yerine koşullu olarak işaretler.
 - Ses ipuçları planlama notlarıdır: çalma, dalga biçimi, 3B uzamsallaştırma, yapay zekâ üretimi ya da motor/Unreal çalışma
