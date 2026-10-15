@@ -1,6 +1,7 @@
 import { diag, type Diagnostic } from './diagnostics'
 import { evalExpr, initialFlagState, type FlagState } from './flags'
-import { crossingOf, type BranchPort, type CrossingType, type Project, type SceneKind, type Transition, type TransitionStyle, type TriggerKind } from './schema'
+import { portsOf } from './graphRules'
+import { crossingOf, BRANCH_PORTS, type BranchPort, type CrossingType, type EventCategory, type Port, type RandomPort, type Project, type SceneKind, type Transition, type TransitionStyle, type TriggerKind } from './schema'
 
 /**
  * Read-only story path simulation.
@@ -14,6 +15,12 @@ import { crossingOf, type BranchPort, type CrossingType, type Project, type Scen
  * conditions are never parsed. A structured IF still lets the user pick either output: the one matching the
  * evaluation is `valid`, the other is an explicit hypothetical `override` (never changed silently). State lives
  * only in the replay result: it is recomputed from the start every time and never persisted.
+ *
+ * Event, Delay and Random Branch nodes (schema 8) are zero-scene logic nodes too. Every link is still an explicit
+ * choice. A traversed Event appends a `FlowEntry` stamped with the absolute route clock; a Delay adds its seconds to
+ * the route clock exactly once (scene durations and link durations are untouched, so a later scene starts later and
+ * its triggers shift with it); a Random Branch waits for the user's explicit A/B choice (any draw happens in the
+ * session store, never here). None of them creates a scene visit or a horror trigger occurrence.
  *
  * IF (branch) nodes: every link is an explicit choice, so a branch hop is two choices — the link into the
  * branch (the route is then *pending* at the branch) and the TRUE or FALSE output the user picks. The branch
@@ -63,14 +70,16 @@ export interface SimOption {
   targetId: string
   targetTitle: string
   targetKind: SceneKind
-  /** `branch`/`setFlag` options lead to a zero-time logic node (no visit); `scene` options enter a scene. */
-  targetType: 'scene' | 'branch' | 'setFlag'
+  /** Every type but `scene` leads to a logic node (no visit); `scene` options enter a scene. */
+  targetType: 'scene' | 'branch' | 'setFlag' | 'event' | 'delay' | 'random'
   /** Only for options leaving an IF node: how the output relates to the structured condition. */
   logic?: BranchLogic
-  /** Output pin of the branch node this option leaves (only for options taken while pending at a branch). */
-  port?: BranchPort
+  /** Output pin of the IF / Random node this option leaves (only for options taken while pending at one). */
+  port?: Port
   /** Branch whose output this option is (assumption text, never evaluated). */
   fromBranch?: { nodeId: string; title: string; condition: string }
+  /** Random Branch whose output this option is: authored probability of this output and its outcome label. */
+  fromRandom?: { nodeId: string; title: string; probability: number; label: string }
   blocked: BlockReason | null
 }
 
@@ -86,6 +95,35 @@ export interface BranchPass {
   logic: BranchLogic
   /** Result of the structured condition at that moment (null when the IF has none). */
   evaluated: boolean | null
+}
+
+/** One chronological entry of the flow trace (narrative events, delays, decisions, flag assignments). */
+export type FlowKind = 'event' | 'delayStart' | 'delayEnd' | 'if' | 'flag' | 'random'
+export interface FlowEntry {
+  key: string
+  kind: FlowKind
+  nodeId: string
+  title: string
+  /** Absolute route time in seconds. */
+  time: number
+  /** Index of the scene step the route was at while this node was passed. */
+  stepIndex: number
+  /** Index in the requested choices of the choice leaving the node (decisions only: `if`, `random`). */
+  choiceIndex?: number
+  category?: EventCategory
+  description?: string
+  seconds?: number
+  port?: Port
+  /** Random: the outcome label of the chosen output and the authored probability of A in percent. */
+  label?: string
+  probabilityA?: number
+  logic?: BranchLogic
+  evaluated?: boolean | null
+  /** IF: free-text assumption shown, never evaluated. */
+  condition?: string
+  flagName?: string
+  before?: boolean
+  after?: boolean
 }
 
 /** A Set Flag assignment applied while walking the route. */
@@ -113,8 +151,10 @@ export interface SimStep {
     transitionId: string
     label: string
     style: TransitionStyle
-    /** Sum of the durations of all links of the hop (an IF node itself takes no time). */
+    /** Gap before this scene: the sum of the link durations of the hop plus its Delay nodes (the other logic nodes take no time). */
     duration: number
+    /** The Delay-node part of `duration`. */
+    delay: number
     /** Link conditions and IF assumptions (raw user text); non-empty exactly when the hop rests on an assumption. */
     condition: string
     /** Only the link conditions (without IF assumptions). */
@@ -160,6 +200,12 @@ export interface SimStats {
   hypothetical: number
   /** IF outputs taken against their structured condition (what-if choices). */
   overrides: number
+  /** Seconds of Delay nodes passed; a Delay the route is still pending at joins `totalDuration` once the next scene is entered. */
+  delayTotal: number
+  /** Event nodes passed. */
+  eventCount: number
+  /** Random Branch outputs chosen. */
+  randomDecisions: number
   beyondDuration: number
   onceSkipped: number
   avgIntensity: number | null
@@ -181,6 +227,10 @@ export interface SimResult {
   state: FlagState
   /** Every Set Flag assignment of the route, in order. */
   changes: FlagChange[]
+  /** Chronological trace of events, delays, decisions and flag assignments. */
+  flow: FlowEntry[]
+  /** Route clock at the current position (after the pending Delay, if any). */
+  clock: number
   /** The leading part of the requested choices that is still valid. */
   validChoices: string[]
   /** Choices dropped because graph edits made them invalid. */
@@ -194,11 +244,20 @@ export interface SimResult {
 
 export interface PendingNode {
   nodeId: string
-  kind: 'branch' | 'setFlag'
+  kind: 'branch' | 'setFlag' | 'event' | 'delay' | 'random'
   title: string
   condition: string
   /** IF with a structured condition: its result for the current state; otherwise null. */
   evaluated: boolean | null
+  /** Event. */
+  category?: EventCategory
+  description?: string
+  /** Delay. */
+  seconds?: number
+  /** Random Branch: probability of A in percent and the outcome labels. */
+  probabilityA?: number
+  labelA?: string
+  labelB?: string
 }
 
 const emptyStats = (): SimStats => ({
@@ -208,6 +267,9 @@ const emptyStats = (): SimStats => ({
   occurrences: 0,
   hypothetical: 0,
   overrides: 0,
+  delayTotal: 0,
+  eventCount: 0,
+  randomDecisions: 0,
   beyondDuration: 0,
   onceSkipped: 0,
   avgIntensity: null,
@@ -225,6 +287,8 @@ const none = (status: SimStatus, invalidated = 0): SimResult => ({
   pending: null,
   state: {},
   changes: [],
+  flow: [],
+  clock: 0,
   validChoices: [],
   invalidated,
   events: [],
@@ -265,33 +329,64 @@ export function simulateRoute(project: Project, choices: readonly string[], opti
   enter(start.id, null, 0)
   const validChoices: string[] = []
   let invalidated = 0
-  // Position between scenes: pending at an IF node, with the links walked since the last scene.
+  // Position between scenes: pending at a logic node, with the links walked since the last scene.
   const branches = new Map(project.logicNodes.map((n) => [n.id, n]))
-  let pendingNode: (typeof project.logicNodes)[number] | null = null
+  type LogicNode = (typeof project.logicNodes)[number]
+  let pendingNode: LogicNode | null = null
   let pendingEval: boolean | null = null
   let pathLinks: Transition[] = []
   let pathBranches: BranchPass[] = []
   let pathChanges: FlagChange[] = []
+  // Time spent since the last scene ended: link durations plus Delay nodes (accumulated in traversal order).
+  let pathDur = 0
+  let pathDelay = 0
+  const flow: FlowEntry[] = []
   const assumption = (n: { title: string; condition: string; id: string }) => n.condition.trim() || n.title.trim() || n.id
+  /** IF and Random nodes only continue through their own output pins; the other logic nodes through their single port-less link. */
+  const portFits = (n: LogicNode, port: Port | undefined) => {
+    const ports = portsOf(n.type)
+    return ports.length === 0 || (port !== undefined && ports.includes(port))
+  }
+  const isBranchPort = (v: unknown): v is BranchPort => (BRANCH_PORTS as readonly unknown[]).includes(v)
+  const pushFlow = (e: Omit<FlowEntry, 'key'>) => flow.push({ ...e, key: `${flow.length}:${e.kind}:${e.nodeId}` })
 
   const logicOf = (evaluated: boolean | null, port: BranchPort): { logic: BranchLogic; evaluated: boolean | null } => ({
     evaluated,
     logic: evaluated === null ? 'manual' : evaluated === (port === 'true') ? 'valid' : 'override',
   })
-  /** Entering a logic node: a Set Flag applies its assignment, an IF with a structured condition is evaluated. */
-  const enterLogic = (node: NonNullable<typeof pendingNode>, stepIndex: number) => {
+  /** Entering a logic node: Set Flag applies its assignment, Event stamps the clock, Delay advances it, an IF with a structured condition is evaluated. */
+  const enterLogic = (node: LogicNode, stepIndex: number, hereEnd: number) => {
     pendingEval = null
-    if (node.type === 'branch') {
-      if (node.expression) pendingEval = evalExpr(node.expression, state)
-      return
+    const now = () => hereEnd + pathDur
+    switch (node.type) {
+      case 'branch':
+        if (node.expression) pendingEval = evalExpr(node.expression, state)
+        return
+      case 'random':
+        return
+      case 'event':
+        pushFlow({ kind: 'event', nodeId: node.id, title: node.title, time: now(), stepIndex, category: node.eventCategory ?? 'story', description: node.description })
+        return
+      case 'delay': {
+        const seconds = node.seconds ?? 0
+        pushFlow({ kind: 'delayStart', nodeId: node.id, title: node.title, time: now(), stepIndex, seconds, description: node.description })
+        pathDur += seconds
+        pathDelay += seconds
+        pushFlow({ kind: 'delayEnd', nodeId: node.id, title: node.title, time: now(), stepIndex, seconds, description: node.description })
+        return
+      }
+      case 'setFlag': {
+        const flag = node.flagId ? flagById.get(node.flagId) : undefined
+        if (!flag || node.value === undefined) return
+        const before = state[flag.id] === true
+        state[flag.id] = node.value
+        const change: FlagChange = { nodeId: node.id, nodeTitle: node.title, flagId: flag.id, flagName: flag.name, before, after: node.value, stepIndex }
+        changes.push(change)
+        pathChanges = [...pathChanges, change]
+        pushFlow({ kind: 'flag', nodeId: node.id, title: node.title, time: now(), stepIndex, flagName: flag.name, before, after: node.value })
+        return
+      }
     }
-    const flag = node.flagId ? flagById.get(node.flagId) : undefined
-    if (!flag || node.value === undefined) return
-    const before = state[flag.id] === true
-    state[flag.id] = node.value
-    const change: FlagChange = { nodeId: node.id, nodeTitle: node.title, flagId: flag.id, flagName: flag.name, before, after: node.value, stepIndex }
-    changes.push(change)
-    pathChanges = [...pathChanges, change]
   }
 
   for (let i = 0; i < choices.length; i++) {
@@ -306,18 +401,37 @@ export function simulateRoute(project: Project, choices: readonly string[], opti
       tr.source !== fromId ||
       (!toScene && !toBranch) ||
       (!pendingNode && here.kind === 'ending') ||
-      (toScene && blockedBy(tr.target))
+      (toScene && blockedBy(tr.target)) ||
+      // The output pin must still belong to the node the route waits at (a graph edit may have changed it).
+      (pendingNode && !portFits(pendingNode, tr.sourcePort))
     ) {
       invalidated = choices.length - i
       break
     }
-    if (pendingNode && pendingNode.type === 'branch' && tr.sourcePort)
-      pathBranches = [...pathBranches, { nodeId: pendingNode.id, title: pendingNode.title, condition: pendingNode.condition, port: tr.sourcePort, ...logicOf(pendingEval, tr.sourcePort) }]
+    if (pendingNode && pendingNode.type === 'branch' && isBranchPort(tr.sourcePort)) {
+      const pass = { nodeId: pendingNode.id, title: pendingNode.title, condition: pendingNode.condition, port: tr.sourcePort, ...logicOf(pendingEval, tr.sourcePort) }
+      pathBranches = [...pathBranches, pass]
+      pushFlow({ kind: 'if', nodeId: pass.nodeId, title: pass.title, time: here.end + pathDur, stepIndex: here.index, choiceIndex: i, port: pass.port, logic: pass.logic, evaluated: pass.evaluated, condition: pass.condition })
+    } else if (pendingNode && pendingNode.type === 'random') {
+      const port = tr.sourcePort as RandomPort
+      pushFlow({
+        kind: 'random',
+        nodeId: pendingNode.id,
+        title: pendingNode.title,
+        time: here.end + pathDur,
+        stepIndex: here.index,
+        choiceIndex: i,
+        port,
+        label: (port === 'a' ? pendingNode.labelA : pendingNode.labelB) ?? '',
+        probabilityA: pendingNode.probabilityA ?? 50,
+      })
+    }
+    pathDur += tr.duration
     const links = [...pathLinks, tr]
     if (toBranch) {
       pendingNode = branches.get(tr.target)!
       pathLinks = links
-      enterLogic(pendingNode, here.index)
+      enterLogic(pendingNode, here.index, here.end)
     } else {
       const target = scenes.get(tr.target)!
       // A structured IF whose output matches its evaluation is logic, not an assumption.
@@ -331,7 +445,8 @@ export function simulateRoute(project: Project, choices: readonly string[], opti
           transitionId: tr.id,
           label: links.length === 1 ? tr.label : (links.map((l) => l.label).find((l) => l.trim() !== '') ?? ''),
           style: links[0].style,
-          duration: links.reduce((a, l) => a + l.duration, 0),
+          duration: pathDur,
+          delay: pathDelay,
           condition: conditions.join(' · '),
           linkCondition: links.map((l) => l.condition.trim()).filter(Boolean).join(' · '),
           crossing: crossingOf(here.kind, target.kind),
@@ -339,18 +454,21 @@ export function simulateRoute(project: Project, choices: readonly string[], opti
           branches: pathBranches,
           changes: pathChanges,
         },
-        here.end + links.reduce((a, l) => a + l.duration, 0),
+        here.end + pathDur,
       )
       pendingNode = null
       pendingEval = null
       pathLinks = []
       pathBranches = []
       pathChanges = []
+      pathDur = 0
+      pathDelay = 0
     }
     validChoices.push(tr.id)
   }
 
   const current = steps[steps.length - 1]
+  const clock = current.end + pathDur
   const capReached = validChoices.length >= opt.stepCap
   const warnings: Diagnostic[] = []
   if (invalidated > 0) warnings.push(diag('diag.sim.invalidated', { n: invalidated }))
@@ -379,14 +497,31 @@ export function simulateRoute(project: Project, choices: readonly string[], opti
         targetId: t.target,
         targetTitle: target ? target.title : branch!.title,
         targetKind: target ? target.kind : current.kind,
-        targetType: target ? 'scene' : branch!.type === 'setFlag' ? 'setFlag' : 'branch',
-        ...(pendingNode && pendingNode.type === 'branch' && t.sourcePort ? { port: t.sourcePort, logic: logicOf(pendingEval, t.sourcePort).logic } : {}),
+        targetType: target ? 'scene' : branch!.type,
+        ...(pendingNode && pendingNode.type === 'branch' && isBranchPort(t.sourcePort) ? { port: t.sourcePort, logic: logicOf(pendingEval, t.sourcePort).logic } : {}),
+        ...(pendingNode && pendingNode.type === 'random' && t.sourcePort && portFits(pendingNode, t.sourcePort)
+          ? {
+              port: t.sourcePort,
+              fromRandom: {
+                nodeId: pendingNode.id,
+                title: pendingNode.title,
+                probability: t.sourcePort === 'a' ? (pendingNode.probabilityA ?? 50) : 100 - (pendingNode.probabilityA ?? 50),
+                label: (t.sourcePort === 'a' ? pendingNode.labelA : pendingNode.labelB) ?? '',
+              },
+            }
+          : {}),
         ...(pendingNode && pendingNode.type === 'branch' ? { fromBranch: { nodeId: pendingNode.id, title: pendingNode.title, condition: pendingNode.condition } } : {}),
         blocked: capReached ? 'stepLimit' : target ? blockedBy(t.target) : null,
       })
     }
   }
   if (pendingNode?.type === 'branch') simOptions.sort((a, b) => Number(b.port === 'true') - Number(a.port === 'true'))
+  if (pendingNode?.type === 'random') {
+    simOptions.sort((a, b) => Number(b.port === 'a') - Number(a.port === 'a'))
+    for (const port of ['a', 'b'] as const)
+      if (!project.transitions.some((t) => t.source === pendingNode!.id && t.sourcePort === port))
+        warnings.push(diag('diag.sim.randomOpenPort', { node: pendingNode.title, port: port.toUpperCase() }))
+  }
   if (missingTargets > 0) warnings.push(diag('diag.sim.missingTarget', { n: missingTargets }))
 
   let status: SimStatus
@@ -462,6 +597,9 @@ export function simulateRoute(project: Project, choices: readonly string[], opti
     occurrences: planned.length,
     hypothetical: planned.filter((e) => e.hypothetical).length,
     overrides: steps.reduce((a, st) => a + (st.via?.branches.filter((b) => b.logic === 'override').length ?? 0), 0),
+    delayTotal: steps.reduce((a, st) => a + (st.via?.delay ?? 0), 0) + pathDelay,
+    eventCount: flow.filter((f) => f.kind === 'event').length,
+    randomDecisions: flow.filter((f) => f.kind === 'random').length,
     beyondDuration: beyond,
     onceSkipped,
     avgIntensity: planned.length ? Math.round((sum / planned.length) * 10) / 10 : null,
@@ -476,15 +614,28 @@ export function simulateRoute(project: Project, choices: readonly string[], opti
     steps,
     current,
     options: simOptions,
-    pending: pendingNode ? { nodeId: pendingNode.id, kind: pendingNode.type, title: pendingNode.title, condition: pendingNode.condition, evaluated: pendingEval } : null,
+    pending: pendingNode
+      ? {
+          nodeId: pendingNode.id,
+          kind: pendingNode.type,
+          title: pendingNode.title,
+          condition: pendingNode.condition,
+          evaluated: pendingEval,
+          ...(pendingNode.type === 'event' ? { category: pendingNode.eventCategory ?? 'story', description: pendingNode.description } : {}),
+          ...(pendingNode.type === 'delay' ? { seconds: pendingNode.seconds ?? 0, description: pendingNode.description } : {}),
+          ...(pendingNode.type === 'random' ? { probabilityA: pendingNode.probabilityA ?? 50, labelA: pendingNode.labelA ?? '', labelB: pendingNode.labelB ?? '' } : {}),
+        }
+      : null,
     state,
     changes,
+    flow,
+    clock,
     validChoices,
     invalidated,
     events,
     stats,
     warnings,
-    timelineEnd: Math.max(current.end, ...events.map((e) => e.absoluteTime)),
+    timelineEnd: Math.max(current.end, clock, ...events.map((e) => e.absoluteTime)),
   }
 }
 

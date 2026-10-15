@@ -31,9 +31,9 @@ const v1File = (p: Project) => {
 
 describe('schema 3 export', () => {
   it('writes schemaVersion 3 and the shots of every scene', () => {
-    expect(SCHEMA_VERSION).toBe(7)
+    expect(SCHEMA_VERSION).toBe(8)
     const e = buildExport(withShots(), when)
-    expect(e.schemaVersion).toBe(7)
+    expect(e.schemaVersion).toBe(8)
     expect(e.project.scenes.every((s) => Array.isArray(s.shots))).toBe(true)
     expect(e.project.scenes[1].shots).toHaveLength(2)
   })
@@ -45,7 +45,7 @@ describe('schema 3 export', () => {
     expect(r.ok).toBe(true)
     if (!r.ok) return
     expect(r.project).toEqual(p)
-    expect(r.schemaVersion).toBe(7)
+    expect(r.schemaVersion).toBe(8)
     expect(r.warnings.some((w) => w.code === 'diag.migratedV1')).toBe(false)
     const strip = (s: string) => s.replace(/"exportedAt": "[^"]+"/, '')
     expect(strip(serializeProject(r.project))).toBe(strip(first))
@@ -83,7 +83,7 @@ describe('schema 1 and legacy files', () => {
     expect(r.schemaVersion).toBeNull()
     expect(r.warnings.map((w) => w.code)).toContain('diag.migratedV1')
     const out = JSON.parse(serializeProject(r.project)) as { schemaVersion: number; project: { scenes: Record<string, unknown>[] } }
-    expect(out.schemaVersion).toBe(7)
+    expect(out.schemaVersion).toBe(8)
     const stripShots = (scenes: Record<string, unknown>[]) => scenes.map(({ shots, ...rest }) => (void shots, rest))
     expect(stripShots(out.project.scenes)).toEqual(stripShots(bare.scenes))
     expect(out.project.scenes.every((s) => Array.isArray(s.shots) && (s.shots as unknown[]).length === 0)).toBe(true)
@@ -124,10 +124,10 @@ describe('malformed schema 2 files are rejected without repair', () => {
   it('shots must be an array', () => {
     expect(reject(edit((_s, scene) => (scene.shots = 'nope')))).toMatch(/shots/)
   })
-  it('schema versions newer than 7', () => {
+  it('schema versions newer than 8', () => {
     const e = JSON.parse(serializeProject(clone())) as Record<string, unknown>
-    e.schemaVersion = 8
-    expect(reject(e)).toMatch(/schema version 8/)
+    e.schemaVersion = 9
+    expect(reject(e)).toMatch(/schema version 9/)
   })
   it('overlapping and late shots import with warnings only', () => {
     const p = withShots()

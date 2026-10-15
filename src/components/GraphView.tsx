@@ -26,9 +26,9 @@ import {
   type NodeChange,
   type NodeProps,
 } from '@xyflow/react'
-import { BoxSelect, ClipboardPaste, Clapperboard, Copy, Crosshair, Flag, FlagTriangleRight, GitBranch, Focus, Hand, Maximize, MousePointer2, Network, Pencil, Plus, Repeat, ScanSearch, StickyNote, Trash2, Volume2, X, Zap } from 'lucide-react'
+import { BoxSelect, ClipboardPaste, Clapperboard, Copy, Crosshair, Dices, Flag, FlagTriangleRight, GitBranch, Focus, Hand, Maximize, Milestone, MousePointer2, Network, Pencil, Plus, Repeat, ScanSearch, StickyNote, Timer, Trash2, Volume2, X, Zap } from 'lucide-react'
 import { useStore, type NewNodeSpec } from '../store/useStore'
-import { BRANCH_PORTS, SCENE_KINDS, crossingOf, type BranchPort, type GraphComment, type LogicNode, type Scene, type SceneType, type TransitionStyle, type Waypoint } from '../lib/schema'
+import { BRANCH_PORTS, SCENE_KINDS, crossingOf, type Port, type GraphComment, type LogicNode, type Scene, type SceneType, type TransitionStyle, type Waypoint } from '../lib/schema'
 import { KIND_COLOR } from '../lib/theme'
 import { useT } from '../i18n/store'
 import { reachableIds } from '../lib/graph'
@@ -39,15 +39,13 @@ import { canConnect, type ConnectReason } from '../lib/graphRules'
 import { TYPE_ICON_COMPONENTS } from '../lib/sceneTypes'
 import { ContextMenu, isEditableTarget, longPressHandlers, useContextMenu, type MenuItem } from './ContextMenu'
 import { useExprText } from './useExprText'
+import { DELAY_COLOR, DelayNode, EVENT_COLOR, EventNode, PIN_PITCH, PIN_TOP, RANDOM_COLOR, RANDOM_PORT_COLOR, RandomNode, type DelayFlowNode, type EventFlowNode, type RandomFlowNode } from './FlowNodes'
 import { ShotPlannerDialog } from './ShotPlannerDialog'
 import { AudioPlannerDialog } from './AudioPlannerDialog'
 
-const PORT_COLOR: Record<BranchPort, string> = { true: '#6ee7a1', false: '#ff6b7d' }
+const PORT_COLOR: Record<Port, string> = { true: '#6ee7a1', false: '#ff6b7d', ...RANDOM_PORT_COLOR }
 const LOGIC_COLOR = '#e0af68'
 const SET_COLOR = '#5fd6c4'
-/** Vertical centre of the first pin row (head height + half a row) and the row pitch. */
-const PIN_TOP = 47
-const PIN_PITCH = 26
 
 type SceneNodeData = {
   scene: Scene
@@ -63,7 +61,7 @@ type SceneFlowNode = Node<SceneNodeData, 'scene'>
 type BranchFlowNode = Node<BranchNodeData, 'branch'>
 type SetFlagFlowNode = Node<SetFlagNodeData, 'setFlag'>
 type CommentFlowNode = Node<CommentNodeData, 'comment'>
-type FlowNode = SceneFlowNode | BranchFlowNode | SetFlagFlowNode | CommentFlowNode
+type FlowNode = SceneFlowNode | BranchFlowNode | SetFlagFlowNode | EventFlowNode | DelayFlowNode | RandomFlowNode | CommentFlowNode
 
 function SceneNode({ data, selected }: NodeProps<SceneFlowNode>) {
   const { scene, sceneType, isStart, unreachable, chips } = data
@@ -214,7 +212,7 @@ type TransitionData = {
   crossing: string
   selfLoop: boolean
   color: string
-  port?: BranchPort
+  port?: Port
   /** The opposite ordered pair also exists. */
   reciprocal: boolean
   /** Stable 0/1 tie-break (from ids) so a reciprocal pair routes on different lanes. */
@@ -356,11 +354,11 @@ function ConnectionLine({ fromX, fromY, toX, toY, connectionStatus, fromPosition
   )
 }
 
-const nodeTypes = { scene: SceneNode, branch: BranchNode, setFlag: SetFlagNode, comment: CommentNode }
+const nodeTypes = { scene: SceneNode, branch: BranchNode, setFlag: SetFlagNode, event: EventNode, delay: DelayNode, random: RandomNode, comment: CommentNode }
 const edgeTypes = { transition: TransitionEdge }
-const isPort = (v: unknown): v is BranchPort => v === 'true' || v === 'false'
+const isPort = (v: unknown): v is Port => v === 'true' || v === 'false' || v === 'a' || v === 'b'
 
-type Pending = { x: number; y: number; from?: { id: string; port?: BranchPort } }
+type Pending = { x: number; y: number; from?: { id: string; port?: Port } }
 
 function Canvas() {
   const project = useStore((s) => s.project)
@@ -428,25 +426,22 @@ function Canvas() {
         }),
       },
     }))
-    const branches: (BranchFlowNode | SetFlagFlowNode)[] = project.logicNodes.map((node) =>
-      node.type === 'setFlag'
-        ? ({
-            id: node.id,
-            type: 'setFlag' as const,
-            position: node.position,
-            measured: dims[node.id],
-            selected: selectedSet.has(node.id),
-            data: { node, unreachable: hasStart && !reachable.has(node.id), flagName: project.flags.find((f) => f.id === node.flagId)?.name ?? null },
-          } satisfies SetFlagFlowNode)
-        : ({
-            id: node.id,
-            type: 'branch' as const,
-            position: node.position,
-            measured: dims[node.id],
-            selected: selectedSet.has(node.id),
-            data: { node, unreachable: hasStart && !reachable.has(node.id) },
-          } satisfies BranchFlowNode),
-    )
+    const branches: (BranchFlowNode | SetFlagFlowNode | EventFlowNode | DelayFlowNode | RandomFlowNode)[] = project.logicNodes.map((node) => {
+      const base = { id: node.id, position: node.position, measured: dims[node.id], selected: selectedSet.has(node.id) }
+      const unreachable = hasStart && !reachable.has(node.id)
+      switch (node.type) {
+        case 'setFlag':
+          return { ...base, type: 'setFlag' as const, data: { node, unreachable, flagName: project.flags.find((f) => f.id === node.flagId)?.name ?? null } } satisfies SetFlagFlowNode
+        case 'event':
+          return { ...base, type: 'event' as const, data: { node, unreachable } } satisfies EventFlowNode
+        case 'delay':
+          return { ...base, type: 'delay' as const, data: { node, unreachable } } satisfies DelayFlowNode
+        case 'random':
+          return { ...base, type: 'random' as const, data: { node, unreachable } } satisfies RandomFlowNode
+        default:
+          return { ...base, type: 'branch' as const, data: { node, unreachable } } satisfies BranchFlowNode
+      }
+    })
     return [...comments, ...scenes, ...branches]
   }, [project, selectedSet, reachable, typeById, dims])
 
@@ -625,7 +620,7 @@ function Canvas() {
       if (!r) say(t(from.port ? 'connect.portTaken' : 'connect.outputTaken'))
       return
     }
-    if (spec.type === 'branch' || spec.type === 'setFlag') return void s.addLogicNode(pos, spec.type)
+    if (spec.type !== 'scene') return void s.addLogicNode(pos, spec.type)
     s.addScene(spec.kind, pos, spec.typeId)
   }
 
@@ -655,6 +650,9 @@ function Canvas() {
       }),
       { id: 'branch', label: t('pick.branch'), group: t('pick.logic'), keywords: 'if branch condition true false', icon: <GitBranch size={13} />, onSelect: () => create({ type: 'branch' }, x, y, from) },
       { id: 'setflag', label: t('pick.setFlag'), group: t('pick.logic'), keywords: 'set flag variable state assign bayrak ata', icon: <FlagTriangleRight size={13} />, onSelect: () => create({ type: 'setFlag' }, x, y, from) },
+      { id: 'event', label: t('pick.event'), group: t('pick.flow'), keywords: 'event milestone narrative beat olay', icon: <Milestone size={13} />, onSelect: () => create({ type: 'event' }, x, y, from) },
+      { id: 'delay', label: t('pick.delay'), group: t('pick.flow'), keywords: 'delay wait pause timer bekleme', icon: <Timer size={13} />, onSelect: () => create({ type: 'delay' }, x, y, from) },
+      { id: 'random', label: t('pick.random'), group: t('pick.flow'), keywords: 'random branch chance probability dice rastgele', icon: <Dices size={13} />, onSelect: () => create({ type: 'random' }, x, y, from) },
       ...(from ? [] : [{ id: 'comment', label: t('pick.comment'), group: t('pick.notes'), keywords: 'comment note frame', icon: <StickyNote size={13} />, onSelect: () => create({ type: 'comment' }, x, y) } as MenuItem]),
     ]
   }
@@ -678,6 +676,9 @@ function Canvas() {
       },
       { id: 'add-branch', label: t('ctx.addBranch'), icon: <GitBranch size={13} />, onSelect: () => create({ type: 'branch' }, x, y) },
       { id: 'add-setflag', label: t('ctx.addSetFlag'), icon: <FlagTriangleRight size={13} />, onSelect: () => create({ type: 'setFlag' }, x, y) },
+      { id: 'add-event', label: t('ctx.addEvent'), icon: <Milestone size={13} />, onSelect: () => create({ type: 'event' }, x, y) },
+      { id: 'add-delay', label: t('ctx.addDelay'), icon: <Timer size={13} />, onSelect: () => create({ type: 'delay' }, x, y) },
+      { id: 'add-random', label: t('ctx.addRandom'), icon: <Dices size={13} />, onSelect: () => create({ type: 'random' }, x, y) },
       { id: 'add-comment', label: t('ctx.addComment'), icon: <StickyNote size={13} />, onSelect: () => create({ type: 'comment' }, x, y) },
       { id: 'add-node', label: t('ctx.addNode'), icon: <Plus size={13} />, onSelect: () => openPicker(x, y) },
       { id: 'paste', label: t('ctx.paste'), icon: <ClipboardPaste size={13} />, separatorBefore: true, disabled: clipboardCount === 0, onSelect: () => void store().paste(flowAt(x, y)) },
@@ -705,9 +706,10 @@ function Canvas() {
   }
   const branchMenu = (id: string): MenuItem[] => {
     const s = store()
-    const isSet = s.project.logicNodes.find((n) => n.id === id)?.type === 'setFlag'
+    const type = s.project.logicNodes.find((n) => n.id === id)?.type
+    const editKey = type === 'setFlag' ? 'ctx.editSetFlag' : type === 'event' ? 'ctx.editEvent' : type === 'delay' ? 'ctx.editDelay' : type === 'random' ? 'ctx.editRandom' : 'ctx.editCondition'
     return [
-      { id: 'cond', label: t(isSet ? 'ctx.editSetFlag' : 'ctx.editCondition'), icon: <Pencil size={13} />, onSelect: () => { s.select({ type: 'node', id }); s.requestInspectorFocus(id) } },
+      { id: 'cond', label: t(editKey), icon: <Pencil size={13} />, onSelect: () => { s.select({ type: 'node', id }); s.requestInspectorFocus(id) } },
       { id: 'copy', label: t('ctx.copy'), icon: <Copy size={13} />, onSelect: () => void s.copySelection() },
       { id: 'duplicate', label: t('ctx.duplicate'), icon: <Copy size={13} />, onSelect: () => void s.duplicateNode(id) },
       { id: 'delete', label: t('btn.delete'), icon: <Trash2 size={13} />, danger: true, separatorBefore: true, onSelect: () => s.deleteScenes([id]) },
@@ -890,6 +892,15 @@ function Canvas() {
         <button className="btn small" data-testid="add-setflag" onClick={() => addAtCenter({ type: 'setFlag' })} title={t('setflag.hint')} style={{ ['--kind' as string]: SET_COLOR }}>
           <FlagTriangleRight size={14} /> {t('pick.setFlag')}
         </button>
+        <button className="btn small" data-testid="add-event" onClick={() => addAtCenter({ type: 'event' })} title={t('event.hint')} style={{ ['--kind' as string]: EVENT_COLOR }}>
+          <Milestone size={14} /> {t('pick.event')}
+        </button>
+        <button className="btn small" data-testid="add-delay" onClick={() => addAtCenter({ type: 'delay' })} title={t('delay.hint')} style={{ ['--kind' as string]: DELAY_COLOR }}>
+          <Timer size={14} /> {t('pick.delay')}
+        </button>
+        <button className="btn small" data-testid="add-random" onClick={() => addAtCenter({ type: 'random' })} title={t('random.hint')} style={{ ['--kind' as string]: RANDOM_COLOR }}>
+          <Dices size={14} /> {t('pick.random')}
+        </button>
         <button className="btn small" data-testid="add-comment" onClick={() => addAtCenter({ type: 'comment' })} title={t('comment.hint')}>
           <StickyNote size={14} /> {t('pick.comment')}
         </button>
@@ -980,7 +991,7 @@ function Canvas() {
           zoomable
           maskColor="rgba(8,6,10,0.7)"
           nodeColor={(n) =>
-            n.type === 'branch' ? LOGIC_COLOR : n.type === 'setFlag' ? SET_COLOR : n.type === 'comment' ? '#3a3445' : KIND_COLOR[(n.data as SceneNodeData).scene.kind]
+            n.type === 'branch' ? LOGIC_COLOR : n.type === 'setFlag' ? SET_COLOR : n.type === 'event' ? EVENT_COLOR : n.type === 'delay' ? DELAY_COLOR : n.type === 'random' ? RANDOM_COLOR : n.type === 'comment' ? '#3a3445' : KIND_COLOR[(n.data as SceneNodeData).scene.kind]
           }
         />
       </ReactFlow>

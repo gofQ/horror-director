@@ -208,6 +208,11 @@ describe('switching language does not touch project data', () => {
       audioCue: en['default.audioCue'],
       branch: en['default.branch'],
       setFlag: en['default.setFlag'],
+      event: en['default.event'],
+      delay: en['default.delay'],
+      random: en['default.random'],
+      outcomeA: en['default.outcomeA'],
+      outcomeB: en['default.outcomeB'],
       flag: en['default.flag'],
       comment: en['default.comment'],
       sceneType: en['default.sceneType'],
@@ -289,9 +294,9 @@ describe('localized diagnostics', () => {
   it('structured parse errors for file-level problems', () => {
     expect(parseProject('{nope')).toEqual({ ok: false, errors: [diag('diag.json')] })
     const wrapped = JSON.parse(serializeProject(sampleProject()))
-    const r = parseProject(JSON.stringify({ ...wrapped, schemaVersion: 8 }))
-    expect(r).toEqual({ ok: false, errors: [diag('diag.newerSchema', { found: '8', supported: '7' })] })
-    expect(formatDiagnostics('tr', (r as unknown as { errors: never[] }).errors)[0]).toContain('8 şema sürümünü')
+    const r = parseProject(JSON.stringify({ ...wrapped, schemaVersion: 9 }))
+    expect(r).toEqual({ ok: false, errors: [diag('diag.newerSchema', { found: '9', supported: '8' })] })
+    expect(formatDiagnostics('tr', (r as unknown as { errors: never[] }).errors)[0]).toContain('9 şema sürümünü')
   })
 })
 
@@ -314,7 +319,7 @@ describe('JSON compatibility', () => {
     const b = JSON.stringify(buildExport(turkish(), when))
     vi.unstubAllGlobals()
     expect(a).toBe(b)
-    expect(JSON.parse(a).schemaVersion).toBe(7)
+    expect(JSON.parse(a).schemaVersion).toBe(8)
     expect(a).not.toMatch(/"lang"|"language"|"locale"/)
   })
   it('Turkish project text round-trips through export/import unchanged', () => {

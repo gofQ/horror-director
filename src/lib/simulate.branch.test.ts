@@ -155,6 +155,7 @@ describe('legacy scene-to-scene routes are unchanged', () => {
       label: tr.label,
       style: tr.style,
       duration: tr.duration,
+      delay: 0,
       condition: tr.condition.trim(),
       linkCondition: tr.condition.trim(),
       crossing: r.steps[1].via!.crossing,

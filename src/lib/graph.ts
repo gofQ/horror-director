@@ -1,6 +1,6 @@
 import { diag, type Diagnostic } from './diagnostics'
 import { exprFlags } from './flags'
-import { crossingOf, isDreamLayer, type Project } from './schema'
+import { BRANCH_PORTS, RANDOM_PORTS, crossingOf, isDreamLayer, type Project } from './schema'
 
 export type Severity = 'error' | 'warning' | 'info'
 export interface Issue {
@@ -25,6 +25,9 @@ export interface Analysis {
     crossings: number
     branches: number
     setFlags: number
+    events: number
+    delays: number
+    randoms: number
     flags: number
     loops: number
     endings: number
@@ -193,14 +196,26 @@ export function analyze(p: Project): Analysis {
   for (const n of p.logicNodes) {
     const label = n.title || n.id
     if (hasStart && !reachable.has(n.id)) add('warning', diag('diag.branchUnreachable', { node: label }))
-    if (n.type === 'branch') {
-      for (const port of ['true', 'false'] as const)
-        if (!p.transitions.some((t) => t.source === n.id && t.sourcePort === port && known(t.target)))
-          add('warning', diag('diag.branchOpenOutput', { node: label, port: port.toUpperCase() }))
-      if (!n.condition.trim() && !n.expression) add('info', diag('diag.branchNoCondition', { node: label }))
-    } else {
-      if (!n.flagId) add('warning', diag('diag.setFlagNoFlag', { node: label }))
-      if (!p.transitions.some((t) => t.source === n.id && known(t.target))) add('warning', diag('diag.setFlagNoOutput', { node: label }))
+    switch (n.type) {
+      case 'branch':
+        for (const port of BRANCH_PORTS)
+          if (!p.transitions.some((t) => t.source === n.id && t.sourcePort === port && known(t.target)))
+            add('warning', diag('diag.branchOpenOutput', { node: label, port: port.toUpperCase() }))
+        if (!n.condition.trim() && !n.expression) add('info', diag('diag.branchNoCondition', { node: label }))
+        break
+      case 'random':
+        for (const port of RANDOM_PORTS)
+          if (!p.transitions.some((t) => t.source === n.id && t.sourcePort === port && known(t.target)))
+            add('warning', diag('diag.randomOpenOutput', { node: label, port: port.toUpperCase() }))
+        break
+      case 'setFlag':
+        if (!n.flagId) add('warning', diag('diag.setFlagNoFlag', { node: label }))
+        if (!p.transitions.some((t) => t.source === n.id && known(t.target))) add('warning', diag('diag.setFlagNoOutput', { node: label }))
+        break
+      case 'event':
+      case 'delay':
+        if (!p.transitions.some((t) => t.source === n.id && known(t.target))) add('warning', diag('diag.flowNoOutput', { node: label }))
+        break
     }
   }
   // Flags that structured conditions test but that no Set Flag node ever changes: the test always yields the default.
@@ -229,6 +244,9 @@ export function analyze(p: Project): Analysis {
       crossings,
       branches: p.logicNodes.filter((n) => n.type === 'branch').length,
       setFlags: p.logicNodes.filter((n) => n.type === 'setFlag').length,
+      events: p.logicNodes.filter((n) => n.type === 'event').length,
+      delays: p.logicNodes.filter((n) => n.type === 'delay').length,
+      randoms: p.logicNodes.filter((n) => n.type === 'random').length,
       flags: p.flags.length,
       loops: loops.length,
       endings: p.scenes.filter((s) => s.kind === 'ending').length,

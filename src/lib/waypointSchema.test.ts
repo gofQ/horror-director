@@ -24,10 +24,10 @@ const withPoints = (p: Project, ids: string[]): Project => ({
 
 describe('schema 7 waypoints', () => {
   it('writes schemaVersion 7 and round-trips points on scene, IF and Set Flag connections exactly', () => {
-    expect(SCHEMA_VERSION).toBe(7)
+    expect(SCHEMA_VERSION).toBe(8)
     const p = withPoints(stateProject(), ['a', 'b', 'yes', 'bad_end']) // scene→SET, SET→IF, IF.TRUE→scene, scene→scene
     const text = serializeProject(p)
-    expect(exportOf(p).schemaVersion).toBe(7)
+    expect(exportOf(p).schemaVersion).toBe(8)
     const r = parseProject(text)
     expect(r.ok).toBe(true)
     if (!r.ok) return
@@ -48,7 +48,7 @@ describe('schema 7 waypoints', () => {
     if (!r.ok) return
     expect(r.project.transitions.every((t) => t.waypoints === undefined)).toBe(true)
     expect(r.project.transitions.map((t) => [t.id, t.source, t.target, t.sourcePort])).toEqual(base.transitions.map((t) => [t.id, t.source, t.target, t.sourcePort]))
-    expect(exportOf(r.project).schemaVersion).toBe(7)
+    expect(exportOf(r.project).schemaVersion).toBe(8)
   })
   it('rejects malformed points without repair', () => {
     const mutate = (fn: (t: Record<string, unknown>) => void) => {
@@ -63,7 +63,7 @@ describe('schema 7 waypoints', () => {
     expect(errorsOf(mutate((t) => (t.waypoints = Array.from({ length: WAYPOINT_MAX + 1 }, () => ({ x: 0, y: 0 })))))).toMatch(/waypoints/)
     expect(errorsOf(mutate((t) => (t.waypoints = 'a,b')))).toMatch(/waypoints/)
     expect(errorsOf(mutate((t) => (t.waypoints = [{ x: null, y: 0 }])))).toMatch(/waypoints/)
-    expect(errorsOf({ ...exportOf(branchProject()), schemaVersion: 8 })).toMatch(/schema version 8/)
+    expect(errorsOf({ ...exportOf(branchProject()), schemaVersion: 9 })).toMatch(/schema version 9/)
   })
 })
 

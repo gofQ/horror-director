@@ -3,9 +3,10 @@ import { z } from 'zod'
 /**
  * 2 added `scene.shots`; 3 the optional `transition.direction`; 4 `scene.audioCues`; 5 adds logic (branch) nodes,
  * graph comments, custom scene types and branch-port links; 6 adds narrative flags, Set Flag nodes and optional
- * structured branch conditions; 7 adds optional reroute `waypoints` on transitions (presentation only). Older files and bare projects are still imported.
+ * structured branch conditions; 7 adds optional reroute `waypoints` on transitions (presentation only); 8 adds Event, Delay and Random Branch
+ * logic nodes (and the A/B random ports). Older files and bare projects are still imported.
  */
-export const SCHEMA_VERSION = 7
+export const SCHEMA_VERSION = 8
 export const FORMAT_ID = 'horror-director'
 
 export const SCENE_KINDS = ['reality', 'dream', 'nightmare', 'memory', 'ending'] as const
@@ -26,8 +27,14 @@ export const DIRECTION_TECHNIQUES = [...SHOT_TECHNIQUES, 'reality-reveal'] as co
 export const AUDIO_CUE_TYPES = ['ambience', 'music', 'sfx', 'voice', 'whisper', 'stinger', 'silence'] as const
 export const AUDIO_ORIGINS = ['diegetic', 'non-diegetic', 'ambiguous'] as const
 export const AUDIO_DIRECTIONS = ['nonspatial', 'front', 'behind', 'left', 'right', 'above', 'moving'] as const
-export const LOGIC_NODE_TYPES = ['branch', 'setFlag'] as const
+export const LOGIC_NODE_TYPES = ['branch', 'setFlag', 'event', 'delay', 'random'] as const
 export const BRANCH_PORTS = ['true', 'false'] as const
+export const RANDOM_PORTS = ['a', 'b'] as const
+/** Authored narrative milestone categories of an Event node (planning labels, not gameplay callbacks). */
+export const EVENT_CATEGORIES = ['story', 'reveal', 'threat', 'relief', 'decision', 'custom'] as const
+/** Upper bound of a Delay node, in seconds. */
+export const DELAY_MAX_SECONDS = 3600
+export const RANDOM_LABEL_MAX = 40
 /** Curated, safe presentation sets for custom scene types and comments (hex colors / lucide icon names). */
 export const TYPE_COLORS = ['#c4263d', '#d98cff', '#7dcfff', '#9ece6a', '#e0af68', '#ff9e64', '#bb9af7', '#9aa0b4'] as const
 export const TYPE_ICONS = ['Skull', 'Ghost', 'Eye', 'Moon', 'Flame', 'Footprints', 'Bell', 'Radio', 'Brain', 'Church', 'Siren', 'Wind'] as const
@@ -45,6 +52,10 @@ export type AudioOrigin = (typeof AUDIO_ORIGINS)[number]
 export type AudioDirection = (typeof AUDIO_DIRECTIONS)[number]
 export type LogicNodeType = (typeof LOGIC_NODE_TYPES)[number]
 export type BranchPort = (typeof BRANCH_PORTS)[number]
+export type RandomPort = (typeof RANDOM_PORTS)[number]
+/** Any output pin a link can leave from: IF true/false or Random A/B. */
+export type Port = BranchPort | RandomPort
+export type EventCategory = (typeof EVENT_CATEGORIES)[number]
 export type CharacterRole = (typeof CHARACTER_ROLES)[number]
 
 const id = z.string().min(1)
@@ -161,7 +172,7 @@ export const transitionSchema = z.object({
   /** Optional psychological direction; absent for transitions that have not been designed. */
   direction: transitionDirectionSchema.optional(),
   /** Output pin of the branch node this link leaves (only for links whose source is a branch). */
-  sourcePort: z.enum(BRANCH_PORTS).optional(),
+  sourcePort: z.enum([...BRANCH_PORTS, ...RANDOM_PORTS]).optional(),
   /** Reroute points that shape the wire (flow coordinates, source→target). Presentation only: never read by simulation or analysis. */
   waypoints: z.array(waypointSchema).max(WAYPOINT_MAX).optional(),
 })
@@ -200,6 +211,8 @@ export const exprSchema: z.ZodType<Expr> = z.lazy(() =>
  * Zero-time logic node. `branch` (IF): `condition` is a human-readable description that is never evaluated;
  * the optional `expression` is evaluated against simulated flags. `setFlag`: assigns `value` to `flagId`
  * (null = not configured yet). `flagId`/`value` are only meaningful for `setFlag`, `expression` only for `branch`.
+ * `event` (authored milestone, `eventCategory`), `delay` (`seconds`) and `random` (`probabilityA`, `labelA`, `labelB`) carry their own fields;
+ * validateProject rejects fields that belong to another type.
  */
 export const logicNodeSchema = z.object({
   id,
@@ -210,6 +223,14 @@ export const logicNodeSchema = z.object({
   expression: exprSchema.optional(),
   flagId: id.nullable().optional(),
   value: z.boolean().optional(),
+  /** `event` only. */
+  eventCategory: z.enum(EVENT_CATEGORIES).optional(),
+  /** `delay` only: extra route time between scene visits. */
+  seconds: z.number().min(0).max(DELAY_MAX_SECONDS).optional(),
+  /** `random` only: probability of output A in percent (B is 100 − A) and the outcome labels. */
+  probabilityA: z.number().min(0).max(100).optional(),
+  labelA: z.string().max(RANDOM_LABEL_MAX).optional(),
+  labelB: z.string().max(RANDOM_LABEL_MAX).optional(),
   position,
 })
 

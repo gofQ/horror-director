@@ -16,7 +16,7 @@ import type { Diagnostic } from './diagnostics'
  * Multi-project library storage (v0.4A).
  *
  *  - `LIBRARY_KEY`      → index: library metadata only (never part of a project or an export)
- *  - `RECORD_PREFIX+id` → `{ v: 7, project }` (`v: 1`–`v: 6` records from earlier builds are still read), the project exactly as exported
+ *  - `RECORD_PREFIX+id` → `{ v: 8, project }` (`v: 1`–`v: 7` records from earlier builds are still read), the project exactly as exported
  *  - `STORAGE_KEY`      → legacy single-project data (v0.1–v0.3): read for migration, never modified
  */
 export const LIBRARY_KEY = 'horror-director:library:v1'
@@ -40,8 +40,8 @@ const indexSchema = z.object({
   projects: z.array(metaSchema),
   migratedFrom: z.string().optional(),
 })
-/** Records are `v: 1`–`v: 6` (older builds; missing fields are normalized in memory on read) or `v: 7` (written now; older builds treat it as damaged and preserve it). */
-const recordSchema = z.object({ v: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(5), z.literal(6), z.literal(7)]), project: projectSchema })
+/** Records are `v: 1`–`v: 7` (older builds; missing fields are normalized in memory on read) or `v: 8` (written now; older builds treat it as damaged and preserve it). */
+const recordSchema = z.object({ v: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(5), z.literal(6), z.literal(7), z.literal(8)]), project: projectSchema })
 
 export type ProjectMeta = z.infer<typeof metaSchema>
 export type LibraryIndex = z.infer<typeof indexSchema>
@@ -92,7 +92,7 @@ export interface LoadDeps {
 
 /* ---------- low-level helpers ---------- */
 
-export const serializeRecord = (project: Project) => JSON.stringify({ v: 7, project })
+export const serializeRecord = (project: Project) => JSON.stringify({ v: 8, project })
 export const serializeIndex = (index: LibraryIndex) => JSON.stringify(index)
 
 function safeGet(b: Backend, key: string): string | null {
