@@ -13,7 +13,7 @@ Every future feature or fix milestone must add an entry here (see `CLAUDE.md`).
 
 ## v0.6D — Cinematic sequence overview
 
-Pull request: PR_LINK_PLACEHOLDER
+Pull request: [#11](https://github.com/gofQ/horror-director/pull/11)
 
 ### Added
 - **Sequence mode** inside the Timeline tab (segmented control next to the scene selector; the trigger editor stays as its own mode and there is no new top-level tab). For the selected scene it shows three coordinated tracks — Camera (shots), Audio (cues) and Horror events (triggers) — on one scene-relative time axis with aligned ticks, a scene-end boundary, layered audio, overlapping shots in lanes, a vertical time cursor (set by selecting an item or with a keyboard-operable slider), Fit / zoom with horizontal scrolling, a detail panel and a compact time-ordered event list. Items are accessible buttons (Tab, Enter/Space) and categories are distinguished by label, shape and pattern as well as colour.
