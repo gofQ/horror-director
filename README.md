@@ -45,6 +45,30 @@ The **Simulator** tab walks a route through your scene graph, read-only, by manu
 - Simulation state is separate from the project: it never changes project data, autosave, the library or undo history,
   resets when you switch projects, and the route is revalidated (shortened with a notice) if graph edits invalidate it.
 
+## Horror pacing analysis (v0.5B)
+
+Below the simulator chart, **Pacing analysis** inspects the *currently simulated route* (it reuses the simulator's planned
+events — no second traversal). It is a read-only set of **design observations** about *authored* trigger data: trigger
+intensity is design intent, not measured player fear; clustering, repetition and silence can all be deliberate, and
+there is deliberately **no tension curve and no quality score**.
+
+Only valid planned events are analyzed (events after their scene's duration and once-only repeats are excluded);
+hypothetical (conditional) events are included, and findings that rely on them — or on conditional (assumed) transitions —
+are labelled. All thresholds are inclusive:
+
+| Pattern | Rule | Severity |
+|---|---|---|
+| Trigger cluster | ≥ 4 events within 20 s | caution from 6 events |
+| Repeated high intensity | ≥ 2 events with intensity ≥ 8 within 45 s | caution from 3 |
+| Repeated trigger type | ≥ 4 events of one kind within 120 s *(adjustable)* | caution from 6 |
+| Trigger-free interval | gap ≥ 90 s *(adjustable)* from route start, between events, and after the last event of a **finished** route | informational (neutral) |
+| Escalation | ≥ 3 consecutive events with strictly rising intensity, each ≤ 60 s apart | informational |
+
+Overlapping windows are merged into one finding per run. The overview shows planned events, events per minute, events
+per trigger kind, high-intensity events, hypothetical events and the longest trigger-free interval. Selecting a finding
+highlights its events and exact time range on the chart. Fewer than 2 planned events shows an explanatory empty state;
+unfinished or step-limited routes do not evaluate trailing silence.
+
 ## Graph usability (v0.4B)
 
 - **Auto Arrange** (graph toolbar): lays scenes out left to right in layers following the story flow — branching,

@@ -269,3 +269,25 @@ kbd { background: var(--panel-2); border: 1px solid var(--border); border-radius
 .sim-stat[data-stat="status"] .sim-stat-value { font-size: 14px; font-weight: 600; }
 .timeline-lower > *, .sim-top > * { min-width: 0; }
 @media (max-width: 900px) { .timeline-lower, .sim-top { grid-template-columns: minmax(0, 1fr); } }
+
+/* v0.5B: pacing analysis */
+.pacing-panel { display: flex; flex-direction: column; gap: 10px; }
+.pacing-kinds { display: flex; flex-direction: column; gap: 5px; }
+.pacing-kind-row { display: grid; grid-template-columns: 130px 1fr 28px; gap: 8px; align-items: center; }
+.pacing-bar { background: var(--bg-2); border-radius: 4px; height: 8px; overflow: hidden; }
+.pacing-bar i { display: block; height: 100%; }
+.pacing-kind-count { text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); }
+.pacing-findings { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.pacing-finding { width: 100%; display: flex; flex-direction: column; gap: 4px; align-items: flex-start; text-align: left; font: inherit; color: var(--text); background: var(--panel-2); border: 1px solid var(--border); border-radius: 9px; padding: 10px 12px; cursor: pointer; }
+.pacing-finding:hover { border-color: #4a3f58; }
+.pacing-finding.selected { border-color: #fff; box-shadow: 0 0 0 1px #fff inset; }
+.pacing-finding-head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.pacing-range-text { color: var(--accent-2); font-variant-numeric: tabular-nums; }
+.pacing-sev.caution { color: #f0c36d; border-color: #6b5320; }
+.pacing-sev.informational { color: #a9b8e8; }
+.pacing-deps { display: flex; gap: 6px; flex-wrap: wrap; }
+.pacing-dep { color: #f0c36d; border-color: #6b5320; }
+.pacing-th { margin: 6px 0; padding-left: 18px; color: var(--muted); }
+.trigger-row.highlighted { border-color: #fff; background: var(--panel-2); }
+.sim-stat[data-stat="longest"] .sim-stat-value { font-size: 17px; }
+@media (max-width: 900px) { .pacing-kind-row { grid-template-columns: 100px 1fr 24px; } }

@@ -44,6 +44,30 @@ projeler tarayıcınızın `localStorage` alanında saklanır.
 - Simülasyon durumu projeden ayrıdır: proje verisini, otomatik kaydı, kütüphaneyi veya geri al geçmişini asla değiştirmez,
   proje değiştirince sıfırlanır; graf düzenlemeleri rotayı geçersiz kılarsa rota doğrulanır (bildirimle kısaltılır).
 
+## Korku ritmi analizi (v0.5B)
+
+Simülatör grafiğinin altındaki **Korku ritmi analizi**, *şu an simüle edilen rotayı* inceler (simülatörün planlanmış
+olaylarını kullanır; ikinci bir gezinti yoktur). Yazılmış tetikleyici verisine dair salt okunur **tasarım gözlemleridir**:
+tetikleyici yoğunluğu tasarım niyetidir, ölçülmüş oyuncu korkusu değildir; kümelenme, tekrar ve sessizlik bilinçli olabilir ve
+bilerek **gerilim eğrisi ya da kalite puanı yoktur**.
+
+Yalnızca geçerli planlanmış olaylar analiz edilir (sahne süresinden sonra gelenler ve tek seferlik tekrarlar hariç);
+varsayımsal (koşullu) olaylar dahildir ve bunlara ya da koşullu (varsayılan) geçişlere dayanan bulgular etiketlenir.
+Tüm eşikler dahildir:
+
+| Örüntü | Kural | Önem |
+|---|---|---|
+| Tetikleyici kümesi | 20 sn içinde ≥ 4 olay | 6 olaydan itibaren dikkat |
+| Tekrarlanan yüksek yoğunluk | 45 sn içinde yoğunluğu ≥ 8 olan ≥ 2 olay | 3'ten itibaren dikkat |
+| Tekrarlanan tetikleyici türü | 120 sn içinde aynı türden ≥ 4 olay *(ayarlanabilir)* | 6'dan itibaren dikkat |
+| Tetikleyicisiz aralık | ≥ 90 sn boşluk *(ayarlanabilir)*: rota başından, olaylar arasında ve **bitmiş** rotanın son olayından sonra | bilgi (tarafsız) |
+| Tırmanma | yoğunluğu kesin artan ≥ 3 ardışık olay, aralarında en fazla 60 sn | bilgi |
+
+Çakışan pencereler tek bulguda birleştirilir. Özet; planlanan olayları, dakikadaki olayı, tetikleyici türüne göre olayları,
+yüksek yoğunluklu ve varsayımsal olayları ve en uzun tetikleyicisiz aralığı gösterir. Bir bulguyu seçmek, olaylarını ve tam zaman
+aralığını grafikte vurgular. 2'den az planlanmış olay açıklayıcı bir boş durum gösterir; bitmemiş veya adım sınırında kalmış
+rotalarda sondaki sessizlik değerlendirilmez.
+
 ## Graf kullanılabilirliği (v0.4B)
 
 - **Otomatik Düzenle** (graf araç çubuğu): sahneleri hikâye akışına göre soldan sağa katmanlar halinde yerleştirir;
