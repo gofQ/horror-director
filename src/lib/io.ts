@@ -1,4 +1,6 @@
+import type { z } from 'zod'
 import { crossingOf, exportSchema, FORMAT_ID, SCHEMA_VERSION, projectSchema, type Project } from './schema'
+import { diag, type Diagnostic } from './diagnostics'
 import { findDroppedKeys, validateProject } from './validate'
 
 export interface ExportFile {
@@ -36,19 +38,71 @@ export function serializeProject(project: Project): string {
 }
 
 export function exportFileName(project: Project): string {
-  return `${project.name.replace(/[^\w-]+/g, '_').replace(/^_+|_+$/g, '') || 'project'}.horror.json`
+  // Unicode-aware so Turkish (and other) letters survive in file names.
+  return `${project.name.replace(/[^\p{L}\p{N}_-]+/gu, '_').replace(/^_+|_+$/g, '') || 'project'}.horror.json`
 }
 
 export type ParseResult =
-  | { ok: true; project: Project; warnings: string[] }
-  | { ok: false; errors: string[] }
+  | { ok: true; project: Project; warnings: Diagnostic[] }
+  | { ok: false; errors: Diagnostic[] }
 
 const MAX_LISTED = 50
 
-function cap(list: string[]): string[] {
+function cap(list: Diagnostic[]): Diagnostic[] {
   return list.length > MAX_LISTED
-    ? [...list.slice(0, MAX_LISTED), `…and ${list.length - MAX_LISTED} more.`]
+    ? [...list.slice(0, MAX_LISTED), diag('diag.moreItems', { n: list.length - MAX_LISTED })]
     : list
+}
+
+const TYPE_KEYS = ['string', 'number', 'boolean', 'array', 'object', 'null'] as const
+type TypeKey = (typeof TYPE_KEYS)[number]
+
+/** JSON type of the value at `path` in `raw`, or 'undefined' when absent. */
+function jsonTypeAt(raw: unknown, path: PropertyKey[]): TypeKey | 'undefined' | 'unknown' {
+  let cur: unknown = raw
+  for (const key of path) {
+    if (cur === null || typeof cur !== 'object') return 'undefined'
+    cur = (cur as Record<PropertyKey, unknown>)[key]
+  }
+  if (cur === undefined) return 'undefined'
+  if (cur === null) return 'null'
+  if (Array.isArray(cur)) return 'array'
+  const t = typeof cur
+  return (TYPE_KEYS as readonly string[]).includes(t) ? (t as TypeKey) : 'unknown'
+}
+
+/** Maps a Zod issue to a language-neutral diagnostic (by issue code, never by message text). */
+function schemaDiagnostic(issue: z.core.$ZodIssue, raw: unknown): Diagnostic {
+  const path = issue.path.join('.') || '$'
+  const got = jsonTypeAt(raw, issue.path)
+  // A missing value is reported as "required" whichever schema rule it tripped (type, enum, …).
+  if (got === 'undefined') return diag('diag.schema.required', { path })
+  switch (issue.code) {
+    case 'invalid_type': {
+      const expected = (TYPE_KEYS as readonly string[]).includes(issue.expected) ? issue.expected : 'unknown'
+      return diag('diag.schema.invalidType', { path, expected, received: got })
+    }
+    case 'too_small': {
+      const min = Number(issue.minimum)
+      if (issue.origin === 'string') return diag('diag.schema.tooShort', { path, min })
+      if (issue.origin === 'array') return diag('diag.schema.tooFew', { path, min })
+      return issue.inclusive === false
+        ? diag('diag.schema.tooSmallExclusive', { path, min })
+        : diag('diag.schema.tooSmall', { path, min })
+    }
+    case 'too_big': {
+      const max = Number(issue.maximum)
+      if (issue.origin === 'string') return diag('diag.schema.tooLong', { path, max })
+      if (issue.origin === 'array') return diag('diag.schema.tooMany', { path, max })
+      return issue.inclusive === false
+        ? diag('diag.schema.tooBigExclusive', { path, max })
+        : diag('diag.schema.tooBig', { path, max })
+    }
+    case 'invalid_value':
+      return diag('diag.schema.invalidValue', { path, values: issue.values.map(String).join(', ') })
+    default:
+      return diag('diag.schema.generic', { path })
+  }
 }
 
 /**
@@ -60,47 +114,41 @@ export function parseProject(text: string): ParseResult {
   try {
     raw = JSON.parse(text)
   } catch {
-    return { ok: false, errors: ['File is not valid JSON.'] }
+    return { ok: false, errors: [diag('diag.json')] }
   }
   if (!raw || typeof raw !== 'object' || Array.isArray(raw))
-    return { ok: false, errors: ['File must contain a JSON object.'] }
+    return { ok: false, errors: [diag('diag.notObject')] }
 
   const obj = raw as Record<string, unknown>
   const isExport = obj.format !== undefined || obj.schemaVersion !== undefined || obj.project !== undefined
   if (isExport) {
-    if (obj.format !== FORMAT_ID)
-      return { ok: false, errors: [`Unrecognised file format (expected "${FORMAT_ID}").`] }
+    if (obj.format !== FORMAT_ID) return { ok: false, errors: [diag('diag.format', { expected: FORMAT_ID })] }
     if (typeof obj.schemaVersion === 'number' && obj.schemaVersion > SCHEMA_VERSION)
       return {
         ok: false,
-        errors: [
-          `File uses schema version ${obj.schemaVersion}, newer than this app supports (${SCHEMA_VERSION}). Update Horror Director to open it.`,
-        ],
+        errors: [diag('diag.newerSchema', { found: String(obj.schemaVersion), supported: String(SCHEMA_VERSION) })],
       }
   }
 
   const rawProject = isExport ? obj.project : raw
   const result = isExport ? exportSchema.safeParse(raw) : projectSchema.safeParse(raw)
   if (!result.success) {
-    return {
-      ok: false,
-      errors: cap(
-        result.error.issues.map((i) => `${i.path.join('.') || 'root'}: ${i.message}`),
-      ),
-    }
+    return { ok: false, errors: cap(result.error.issues.map((i) => schemaDiagnostic(i, raw))) }
   }
   const project = isExport ? (result.data as { project: Project }).project : (result.data as Project)
 
-  const errors: string[] = []
-  const warnings: string[] = []
+  const errors: Diagnostic[] = []
   const dropped = findDroppedKeys(rawProject, project)
-  if (dropped.length)
+  if (dropped.length) {
+    const fields = dropped.slice(0, 10).join(', ')
     errors.push(
-      `Unrecognised field(s) that would be lost on import: ${dropped.slice(0, 10).join(', ')}${dropped.length > 10 ? ` (+${dropped.length - 10} more)` : ''}.`,
+      dropped.length > 10
+        ? diag('diag.droppedFieldsMore', { fields, n: dropped.length - 10 })
+        : diag('diag.droppedFields', { fields }),
     )
+  }
   const v = validateProject(project)
   errors.push(...v.errors)
-  warnings.push(...v.warnings)
   if (errors.length) return { ok: false, errors: cap(errors) }
-  return { ok: true, project, warnings: cap(warnings) }
+  return { ok: true, project, warnings: cap(v.warnings) }
 }

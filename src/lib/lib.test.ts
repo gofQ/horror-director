@@ -4,6 +4,10 @@ import { buildExport, parseProject, serializeProject } from './io'
 import { emptyProject, newScene, newTransition } from './factory'
 import { sampleProject } from './sample'
 import { crossingOf, projectSchema } from './schema'
+import { formatDiagnostics } from './diagnostics'
+
+const msgs = (issues: { diagnostic: Parameters<typeof formatDiagnostics>[1][number] }[]) =>
+  formatDiagnostics('en', issues.map((i) => i.diagnostic))
 
 describe('crossingOf', () => {
   it('classifies dream/reality transitions', () => {
@@ -34,9 +38,9 @@ describe('analyze', () => {
     const orphan = newScene('dream')
     p.scenes.push(orphan)
     const a = analyze(p)
-    const msgs = a.issues.map((i) => i.message).join('\n')
-    expect(msgs).toMatch(/unreachable/)
-    expect(msgs).toMatch(/dead end/)
+    const text = msgs(a.issues).join('\n')
+    expect(text).toMatch(/unreachable/)
+    expect(text).toMatch(/dead end/)
     p.startSceneId = null
     expect(analyze(p).issues.some((i) => i.severity === 'error')).toBe(true)
   })
@@ -46,8 +50,8 @@ describe('analyze', () => {
     p.scenes.push(a)
     p.transitions.push(newTransition(p.startSceneId!, a.id), newTransition(a.id, a.id))
     const res = analyze(p)
-    expect(res.issues.some((i) => /Closed loop/.test(i.message))).toBe(true)
-    expect(res.issues.some((i) => /never leads back to reality/.test(i.message))).toBe(true)
+    expect(msgs(res.issues).some((m) => /Closed loop/.test(m))).toBe(true)
+    expect(msgs(res.issues).some((m) => /never leads back to reality/.test(m))).toBe(true)
   })
   it('findLoops handles self loops and ignores DAGs', () => {
     const dag = new Map([['a', ['b']], ['b', []]])
@@ -77,6 +81,6 @@ describe('import/export', () => {
     expect(parseProject('nope')).toMatchObject({ ok: false })
     const bad = parseProject(JSON.stringify({ name: 'x', scenes: [{ id: 'a', title: 'A', kind: 'bogus', position: { x: 0, y: 0 } }] }))
     expect(bad.ok).toBe(false)
-    if (!bad.ok) expect(bad.errors.join()).toMatch(/scenes\.0\.kind/)
+    if (!bad.ok) expect(formatDiagnostics('en', bad.errors).join()).toMatch(/scenes\.0\.kind/)
   })
 })

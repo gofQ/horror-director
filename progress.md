@@ -55,3 +55,36 @@ Unreal importer plugin / DataTable CSV export, audio cue library, scene thumbnai
 - Save status reflects the browser write succeeding, not durability against the user clearing site data — keep using Backup.
 - Dialog focus is moved in but not fully trapped; New/Sample still use `window.confirm`.
 - Remaining v0.1 limitations (auto-layout, single stored project, bundle size) are unchanged.
+
+## V0.3 — Turkish / English localization
+
+### Delivered
+- **Lightweight, type-safe i18n** (`src/i18n/`, no new dependencies): `en.ts` is the source of truth; `tr.ts` is typed `Record<MessageKey, string>` so missing/extra keys fail `tsc`; `t(key, params)` checks `{placeholder}` names at compile time; numbers are formatted per locale (`1.200`, `5,8` in Turkish).
+- **Language switcher** (compact TR | EN group in the top bar, `aria-pressed`). Switching re-renders immediately; it does not touch project state, history, autosave or undo stack (tested).
+- **Detection & persistence**: first visit uses the browser language (`tr*` → Turkish, otherwise English); an explicit choice is stored under `horror-director:lang`, separate from project data and never part of exports. `<html lang>` follows the language (so CSS uppercase uses Turkish casing: `ANALİZ`; brand name pinned to `lang="en"`); times use the locale.
+- **Everything app-controlled is localized**: navigation, buttons, tooltips, aria-labels, Scene Graph, Inspector, Timeline (incl. `sn` units), Characters (roles, states), Analysis stats, save status/banners/toasts, confirmations, import dialog, scene/transition/trigger/role display labels, and default names for newly created items (existing items are never renamed).
+- **Structured diagnostics instead of English sentences**: `analyze`, `validateProject` and `parseProject` now return `Diagnostic { code, params }` (`src/lib/diagnostics.ts`); the UI renders them through the dictionary. Zod issues are mapped by issue code (`required`, `invalidType`, `tooSmall/Big`, exclusive/string/array variants, `invalidValue`, generic fallback) — raw Zod text is never shown. Paths and ids stay untranslated. Storage failure reasons and recovery notices are codes/flags too.
+- **Unicode-safe backup file names**: `exportFileName` now keeps Turkish letters (`Kâbus_Üçgeni.horror.json`).
+- Docs: `README.md` (language section, translation guide), new `README.tr.md`.
+- Mobile fix found during smoke test: top-bar actions now wrap on narrow screens (page previously overflowed horizontally since v0.2).
+
+### API / behavior changes
+- `Issue.message` → `Issue.diagnostic`; `ValidationResult` and `ParseResult` carry `Diagnostic[]` (render with `formatDiagnostic`/`formatDiagnostics`). `SaveStatus.error.message` → `reason: 'full' | 'unavailable'`; `loadNotice.message` → `backedUp: boolean`. `theme.ts` exports colors only (`KIND_COLOR`, `TRIGGER_COLOR`); labels moved to the dictionary. `factory` functions take an optional `DefaultNames` (English default, so existing callers/tests are unchanged).
+- Schema v1, JSON export format, persisted project shape and all v0.2 behavior (undo/redo, strict import, autosave, backup, recovery) are unchanged; v0.2 tests kept with the same assertions (they now format diagnostics in English before matching).
+
+### Changed files
+- New: `src/i18n/{en,tr,index,store}.ts`, `src/lib/diagnostics.ts`, `src/i18n/i18n.test.ts`, `src/i18n/render.test.tsx`, `README.tr.md`.
+- Modified: `src/App.tsx`, `src/components/{GraphView,Inspector,TimelineView,CharactersView,AnalysisView,ImportDialog}.tsx`, `src/lib/{graph,validate,io,factory,theme,persist}.ts`, `src/store/useStore.ts`, `src/styles.css`, `vite.config.ts` (test glob includes `.tsx`), `src/lib/{lib,import,persist}.test.ts`, `README.md`.
+
+### Test results
+- `npm run typecheck`, `npm test` (7 files, 93 tests: dictionary parity/placeholders, detection, persistence, interpolation incl. Turkish Unicode, diagnostics in both languages, language switch vs project/history, JSON round-trip & language-independent export, server-rendered AnalysisView/ImportDialog in both languages) and `npm run build` all pass.
+- Chromium smoke test (Playwright), both languages: first-visit detection (tr-TR → TR, en-US/de-DE → EN), all four views, new-item default names, import rejected/confirm dialogs, backup download + toast, storage-failure banner (simulated quota error), corrupt-storage recovery banner, live switch TR→EN mid-edit (edits kept, no reload), preference persisted across reload, mobile width without horizontal overflow, no console errors.
+
+### Known limitations
+- Only `tr` and `en`; no runtime language loading or plural engine (the two languages need none: messages use neutral forms like "trigger(s)").
+- User content is intentionally untranslated, including the sample project's narrative and default names already stored in the project (they keep the language they were created in).
+- Browser-supplied text (native `confirm()` button labels, file-picker, date-picker chrome) follows the browser/OS language, not the in-app setting.
+- Unknown Zod issue kinds fall back to a generic localized "invalid value" message with the field path.
+- Turkish strings are professionally phrased but have not been reviewed by a native game-industry editor; "Jumpscare" and "Glitch" are kept as genre terms.
+- Desktop top bar wraps to two rows below ~1500px in both languages.
+- v0.2 limitations (session-only history, multi-tab last-write-wins, etc.) are unchanged.

@@ -20,6 +20,22 @@ everything as JSON for later Unreal Engine import. No backend, no paid APIs — 
 - Undo/redo (50 steps, Ctrl/Cmd+Z), strict import validation, save-status indicator and one-click JSON backup (Ctrl/Cmd+S).
 - Auto-save to `localStorage`, responsive dark UI (inspector becomes a bottom sheet on small screens).
 
+## Language / Dil
+
+The interface is fully available in **English** and **Türkçe**. The language is chosen on first visit from the browser
+language (`tr*` → Turkish, anything else → English); use the **TR | EN** switch in the top bar to change it at any time —
+the UI updates immediately without reloading or losing edits, and the choice is remembered separately from project data
+(`localStorage` key `horror-director:lang`). Your own content (scene names, descriptions, imported text and the sample
+project's narrative) is never translated, and exported JSON is identical in both languages (JSON keys, enum values and
+Unreal asset paths stay as-is). New items (scene, trigger, character…) are given default names in the language active when
+they are created. Turkish documentation: [README.tr.md](README.tr.md).
+
+### Adding or changing translations
+`src/i18n/en.ts` is the source of truth; `src/i18n/tr.ts` is typed `Record<MessageKey, string>`, so a missing key fails
+`npm run typecheck`. Messages use `{placeholder}` interpolation, checked at compile time by `t(key, params)`. Analysis,
+validation and import problems are *structured diagnostics* (`code` + `params`, see `src/lib/diagnostics.ts`) rendered
+through the dictionary — never English strings translated after the fact.
+
 ## Setup
 
 Requires Node.js 20+.

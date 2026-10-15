@@ -1,10 +1,11 @@
+import { diag, type Diagnostic } from './diagnostics'
 import type { Project } from './schema'
 
 export interface ValidationResult {
   /** Blocking problems: the project is internally inconsistent. */
-  errors: string[]
+  errors: Diagnostic[]
   /** Non-blocking oddities worth showing to the user. */
-  warnings: string[]
+  warnings: Diagnostic[]
 }
 
 function duplicates(ids: string[]): string[] {
@@ -16,47 +17,47 @@ function duplicates(ids: string[]): string[] {
 
 /** Structural integrity checks for a parsed project (IDs, references, consistency). */
 export function validateProject(p: Project): ValidationResult {
-  const errors: string[] = []
-  const warnings: string[] = []
+  const errors: Diagnostic[] = []
+  const warnings: Diagnostic[] = []
   const q = (s: string) => `"${s}"`
 
-  for (const id of duplicates(p.scenes.map((s) => s.id))) errors.push(`Duplicate scene id ${q(id)}.`)
-  for (const id of duplicates(p.transitions.map((t) => t.id))) errors.push(`Duplicate transition id ${q(id)}.`)
-  for (const id of duplicates(p.characters.map((c) => c.id))) errors.push(`Duplicate character id ${q(id)}.`)
+  for (const id of duplicates(p.scenes.map((s) => s.id))) errors.push(diag('diag.dupScene', { id }))
+  for (const id of duplicates(p.transitions.map((t) => t.id))) errors.push(diag('diag.dupTransition', { id }))
+  for (const id of duplicates(p.characters.map((c) => c.id))) errors.push(diag('diag.dupCharacter', { id }))
   for (const c of p.characters)
     for (const id of duplicates(c.states.map((s) => s.id)))
-      errors.push(`Duplicate state id ${q(id)} in character ${q(c.name)}.`)
+      errors.push(diag('diag.dupState', { id, character: c.name }))
   for (const s of p.scenes)
     for (const id of duplicates(s.triggers.map((t) => t.id)))
-      errors.push(`Duplicate trigger id ${q(id)} in scene ${q(s.title)}.`)
+      errors.push(diag('diag.dupTrigger', { id, scene: s.title }))
 
   const sceneIds = new Set(p.scenes.map((s) => s.id))
   if (p.startSceneId !== null && !sceneIds.has(p.startSceneId))
-    errors.push(`startSceneId ${q(p.startSceneId)} does not match any scene.`)
+    errors.push(diag('diag.badStart', { id: p.startSceneId }))
   if (p.startSceneId === null && p.scenes.length > 0)
-    warnings.push('No start scene is set.')
+    warnings.push(diag('diag.noStart'))
 
   for (const t of p.transitions) {
     const name = t.label ? `${q(t.label)} (${t.id})` : q(t.id)
-    if (!sceneIds.has(t.source)) errors.push(`Transition ${name} has missing source scene ${q(t.source)}.`)
-    if (!sceneIds.has(t.target)) errors.push(`Transition ${name} has missing target scene ${q(t.target)}.`)
+    if (!sceneIds.has(t.source)) errors.push(diag('diag.transitionMissingSource', { name, id: t.source }))
+    if (!sceneIds.has(t.target)) errors.push(diag('diag.transitionMissingTarget', { name, id: t.target }))
   }
   const pairs = p.transitions.map((t) => `${t.source}\u0000${t.target}`)
   const dupPairs = duplicates(pairs).length
-  if (dupPairs > 0) warnings.push(`${dupPairs} scene pair(s) are connected by more than one transition.`)
+  if (dupPairs > 0) warnings.push(diag('diag.multiTransitions', { n: dupPairs }))
 
   const chars = new Map(p.characters.map((c) => [c.id, c]))
   for (const s of p.scenes) {
     for (const [cid, stid] of Object.entries(s.characterStates)) {
       const c = chars.get(cid)
-      if (!c) errors.push(`Scene ${q(s.title)} references missing character ${q(cid)}.`)
+      if (!c) errors.push(diag('diag.sceneMissingChar', { scene: s.title, id: cid }))
       else if (!c.states.some((st) => st.id === stid))
-        errors.push(`Scene ${q(s.title)} references missing state ${q(stid)} of character ${q(c.name)}.`)
+        errors.push(diag('diag.sceneMissingState', { scene: s.title, id: stid, character: c.name }))
     }
     if (s.loop.enabled && s.loop.maxIterations === 0 && !s.loop.exitCondition.trim())
-      warnings.push(`Loop scene ${q(s.title)} has no iteration cap or exit condition.`)
+      warnings.push(diag('diag.loopNoExit', { scene: s.title }))
     const late = s.triggers.filter((t) => t.time > s.duration).length
-    if (late) warnings.push(`Scene ${q(s.title)} has ${late} trigger(s) after its ${s.duration}s duration.`)
+    if (late) warnings.push(diag('diag.lateTriggers', { scene: s.title, n: late, duration: s.duration }))
   }
 
   return { errors, warnings }

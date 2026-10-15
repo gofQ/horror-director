@@ -180,7 +180,7 @@ kbd { background: var(--panel-2); border: 1px solid var(--border); border-radius
   .topbar { gap: 8px; padding: 6px 10px; }
   .project-name { display: none; }
   .actions .btn span { display: none; }
-  .actions { margin-left: auto; }
+  .actions { margin-left: auto; flex-wrap: wrap; justify-content: flex-end; min-width: 0; max-width: 100%; }
   .tabs { order: 3; width: 100%; overflow-x: auto; }
   .tab span { display: inline; }
   .inspector-slot {
@@ -208,3 +208,10 @@ kbd { background: var(--panel-2); border: 1px solid var(--border); border-radius
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
 .inline-icon { vertical-align: -2px; } .inline-icon.err { color: #ff8a9b; }
 @media (max-width: 900px) { .save-badge { font-size: 11px; } }
+
+/* v0.3: language switch */
+.lang-switch { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.lang-switch button { background: var(--panel); color: var(--muted); border: 0; padding: 5px 9px; font: inherit; font-size: 12px; font-weight: 600; letter-spacing: .04em; cursor: pointer; }
+.lang-switch button + button { border-left: 1px solid var(--border); }
+.lang-switch button:hover { color: var(--text); }
+.lang-switch button.active { background: var(--accent); color: #fff; }

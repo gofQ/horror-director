@@ -23,8 +23,9 @@ import {
 } from '@xyflow/react'
 import { Flag, Repeat, Zap } from 'lucide-react'
 import { useStore } from '../store/useStore'
-import { SCENE_KINDS, crossingOf, type Scene, type SceneKind } from '../lib/schema'
-import { KIND_META, STYLE_LABEL } from '../lib/theme'
+import { SCENE_KINDS, crossingOf, type Scene, type SceneKind, type TransitionStyle } from '../lib/schema'
+import { KIND_COLOR } from '../lib/theme'
+import { useT } from '../i18n/store'
 import { analyze } from '../lib/graph'
 
 type SceneNodeData = {
@@ -37,35 +38,35 @@ type SceneFlowNode = Node<SceneNodeData, 'scene'>
 
 function SceneNode({ data, selected }: NodeProps<SceneFlowNode>) {
   const { scene, isStart, unreachable, chips } = data
-  const meta = KIND_META[scene.kind]
+  const { t } = useT()
   return (
     <div
       className={`scene-node${selected ? ' selected' : ''}${unreachable ? ' unreachable' : ''}`}
-      style={{ ['--kind' as string]: meta.color }}
+      style={{ ['--kind' as string]: KIND_COLOR[scene.kind] }}
     >
       <Handle type="target" position={Position.Left} />
       <div className="scene-node-head">
         <span className="kind-dot" />
-        <span className="scene-node-kind">{meta.label}</span>
+        <span className="scene-node-kind">{t(`kind.${scene.kind}`)}</span>
         <span className="scene-node-badges">
           {isStart && (
-            <span title="Start scene" className="badge start">
+            <span title={t('node.start')} className="badge start">
               <Flag size={11} />
             </span>
           )}
           {scene.loop.enabled && (
-            <span title="Loops" className="badge loop">
+            <span title={t('node.loops')} className="badge loop">
               <Repeat size={11} />
             </span>
           )}
           {scene.triggers.length > 0 && (
-            <span title={`${scene.triggers.length} triggers`} className="badge trig">
+            <span title={t('node.triggers', { n: scene.triggers.length })} className="badge trig">
               <Zap size={11} /> {scene.triggers.length}
             </span>
           )}
         </span>
       </div>
-      <div className="scene-node-title">{scene.title || 'Untitled'}</div>
+      <div className="scene-node-title">{scene.title || t('scene.untitled')}</div>
       {scene.unrealLevel && <div className="scene-node-sub">{scene.unrealLevel}</div>}
       {chips.length > 0 && (
         <div className="scene-node-chips">
@@ -87,6 +88,7 @@ type TransitionFlowEdge = Edge<TransitionData, 'transition'>
 function TransitionEdge(props: EdgeProps<TransitionFlowEdge>) {
   const { id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, data, selected } = props
   const d = data!
+  const { t } = useT()
   let path: string
   let lx: number
   let ly: number
@@ -122,9 +124,9 @@ function TransitionEdge(props: EdgeProps<TransitionFlowEdge>) {
           className={`edge-label${selected ? ' selected' : ''}`}
           style={{ transform: `translate(-50%, -50%) translate(${lx}px, ${ly}px)`, borderColor: d.color }}
         >
-          {d.crossing === 'reality->dream' && <span title="Reality → Dream">↓ </span>}
-          {d.crossing === 'dream->reality' && <span title="Dream → Reality">↑ </span>}
-          {d.label || STYLE_LABEL[d.style as keyof typeof STYLE_LABEL]}
+          {d.crossing === 'reality->dream' && <span title={t('crossing.down')}>↓ </span>}
+          {d.crossing === 'dream->reality' && <span title={t('crossing.up')}>↑ </span>}
+          {d.label || t(`style.${d.style as TransitionStyle}`)}
         </div>
       </EdgeLabelRenderer>
     </>
@@ -144,6 +146,7 @@ function Canvas() {
   const addTransition = useStore((s) => s.addTransition)
   const addScene = useStore((s) => s.addScene)
   const rf = useReactFlow()
+  const { t } = useT()
 
   const analysis = useMemo(() => analyze(project), [project])
 
@@ -175,7 +178,7 @@ function Canvas() {
       const b = kind.get(t.target) ?? 'reality'
       const crossing = crossingOf(a, b)
       const color =
-        crossing === 'same-layer' ? KIND_META[b].color : crossing === 'reality->dream' ? '#d98cff' : '#f0c36d'
+        crossing === 'same-layer' ? KIND_COLOR[b] : crossing === 'reality->dream' ? '#d98cff' : '#f0c36d'
       return {
         id: t.id,
         source: t.source,
@@ -228,17 +231,17 @@ function Canvas() {
 
   return (
     <div className="graph-wrap">
-      <div className="palette" role="toolbar" aria-label="Add scene">
-        <span className="palette-title">Add scene</span>
+      <div className="palette" role="toolbar" aria-label={t('palette.title')}>
+        <span className="palette-title">{t('palette.title')}</span>
         {SCENE_KINDS.map((k) => (
           <button
             key={k}
             className="btn small"
-            style={{ ['--kind' as string]: KIND_META[k].color }}
+            style={{ ['--kind' as string]: KIND_COLOR[k] }}
             onClick={() => addAtCenter(k)}
-            title={KIND_META[k].hint}
+            title={t(`kind.${k}.hint`)}
           >
-            <span className="kind-dot" /> {KIND_META[k].label}
+            <span className="kind-dot" /> {t(`kind.${k}`)}
           </button>
         ))}
       </div>
@@ -266,7 +269,7 @@ function Canvas() {
           pannable
           zoomable
           maskColor="rgba(8,6,10,0.7)"
-          nodeColor={(n) => KIND_META[(n.data as SceneNodeData).scene.kind].color}
+          nodeColor={(n) => KIND_COLOR[(n.data as SceneNodeData).scene.kind]}
         />
       </ReactFlow>
     </div>

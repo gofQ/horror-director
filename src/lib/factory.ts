@@ -1,10 +1,36 @@
 import { uid } from './id'
 import type { Character, Project, Scene, SceneKind, Transition, Trigger } from './schema'
 
-export function newScene(kind: SceneKind = 'reality', position = { x: 0, y: 0 }): Scene {
+/** Display names given to newly created items. The UI passes the current language's set. */
+export interface DefaultNames {
+  project: string
+  opening: string
+  scene: string
+  ending: string
+  trigger: string
+  character: string
+  state: string
+  stateIdle: string
+}
+export const ENGLISH_NAMES: DefaultNames = {
+  project: 'Untitled Nightmare',
+  opening: 'Opening',
+  scene: 'New Scene',
+  ending: 'New Ending',
+  trigger: 'New trigger',
+  character: 'New Character',
+  state: 'New state',
+  stateIdle: 'Idle',
+}
+
+export function newScene(
+  kind: SceneKind = 'reality',
+  position = { x: 0, y: 0 },
+  names: DefaultNames = ENGLISH_NAMES,
+): Scene {
   return {
     id: uid('scene'),
-    title: kind === 'ending' ? 'New Ending' : 'New Scene',
+    title: kind === 'ending' ? names.ending : names.scene,
     kind,
     position,
     description: '',
@@ -17,10 +43,10 @@ export function newScene(kind: SceneKind = 'reality', position = { x: 0, y: 0 })
   }
 }
 
-export function newTrigger(time = 0): Trigger {
+export function newTrigger(time = 0, names: DefaultNames = ENGLISH_NAMES): Trigger {
   return {
     id: uid('trg'),
-    name: 'New trigger',
+    name: names.trigger,
     kind: 'audio',
     time,
     intensity: 5,
@@ -42,21 +68,21 @@ export function newTransition(source: string, target: string): Transition {
   }
 }
 
-export function newCharacter(): Character {
+export function newCharacter(names: DefaultNames = ENGLISH_NAMES): Character {
   const stateId = uid('st')
   return {
     id: uid('chr'),
-    name: 'New Character',
+    name: names.character,
     role: 'entity',
     color: '#c4263d',
     description: '',
-    states: [{ id: stateId, name: 'Idle', behavior: '', aggression: 0 }],
+    states: [{ id: stateId, name: names.stateIdle, behavior: '', aggression: 0 }],
   }
 }
 
-export function emptyProject(name = 'Untitled Nightmare'): Project {
-  const start = newScene('reality', { x: 80, y: 120 })
-  start.title = 'Opening'
+export function emptyProject(names: DefaultNames = ENGLISH_NAMES, name = names.project): Project {
+  const start = newScene('reality', { x: 80, y: 120 }, names)
+  start.title = names.opening
   return {
     name,
     description: '',

@@ -1,10 +1,12 @@
 import { useEffect, useRef } from 'react'
 import { AlertTriangle, XCircle } from 'lucide-react'
+import { useT } from '../i18n/store'
+import { formatDiagnostic, type Diagnostic } from '../lib/diagnostics'
 import type { Project } from '../lib/schema'
 
 export type ImportState =
-  | { kind: 'rejected'; fileName: string; errors: string[] }
-  | { kind: 'confirm'; fileName: string; project: Project; warnings: string[] }
+  | { kind: 'rejected'; fileName: string; errors: Diagnostic[] }
+  | { kind: 'confirm'; fileName: string; project: Project; warnings: Diagnostic[] }
 
 interface Props {
   state: ImportState
@@ -14,10 +16,8 @@ interface Props {
   onBackupCurrent: () => void
 }
 
-const describe = (p: Project) =>
-  `“${p.name}” — ${p.scenes.length} scenes, ${p.transitions.length} transitions, ${p.characters.length} characters`
-
 export function ImportDialog({ state, current, onCancel, onConfirm, onBackupCurrent }: Props) {
+  const { t } = useT()
   const ref = useRef<HTMLDivElement>(null)
   useEffect(() => {
     ref.current?.querySelector<HTMLElement>('button')?.focus()
@@ -26,48 +26,55 @@ export function ImportDialog({ state, current, onCancel, onConfirm, onBackupCurr
     return () => window.removeEventListener('keydown', onKey)
   }, [onCancel])
 
+  const describe = (p: Project) =>
+    t('dlg.describe', {
+      name: p.name,
+      scenes: p.scenes.length,
+      transitions: p.transitions.length,
+      characters: p.characters.length,
+    })
+
   const rejected = state.kind === 'rejected'
   return (
     <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onCancel()}>
       <div ref={ref} className="modal" role="dialog" aria-modal="true" aria-labelledby="import-title">
-        <h3 id="import-title">{rejected ? 'Import blocked' : 'Replace current project?'}</h3>
-        <p className="muted">File: {state.fileName}</p>
+        <h3 id="import-title">{rejected ? t('dlg.blocked') : t('dlg.replaceTitle')}</h3>
+        <p className="muted">{t('dlg.file', { name: state.fileName })}</p>
         {rejected ? (
           <>
             <p>
-              <XCircle size={14} className="inline-icon err" /> This file was not imported and your current
-              project is unchanged. Fix these problems and try again:
+              <XCircle size={14} className="inline-icon err" /> {t('dlg.rejectedLead')}
             </p>
             <ul className="issues" role="alert">
               {state.errors.map((e, i) => (
                 <li key={i} className="issue error">
-                  <span>{e}</span>
+                  <span>{formatDiagnostic(t, e)}</span>
                 </li>
               ))}
             </ul>
             <div className="modal-actions">
               <button className="btn primary" onClick={onCancel}>
-                Close
+                {t('btn.close')}
               </button>
             </div>
           </>
         ) : (
           <>
             <p>
-              <strong>Current:</strong> {describe(current)}
+              <strong>{t('dlg.current')}</strong> {describe(current)}
               <br />
-              <strong>Import:</strong> {describe(state.project)}
+              <strong>{t('dlg.import')}</strong> {describe(state.project)}
             </p>
-            <p className="muted">You can undo the replacement afterwards (Ctrl/Cmd+Z) during this session.</p>
+            <p className="muted">{t('dlg.undoNote')}</p>
             {state.warnings.length > 0 && (
               <>
                 <div className="section-title">
-                  <AlertTriangle size={12} className="inline-icon" /> Warnings (import is still allowed)
+                  <AlertTriangle size={12} className="inline-icon" /> {t('dlg.warnings')}
                 </div>
                 <ul className="issues">
                   {state.warnings.map((w, i) => (
                     <li key={i} className="issue warning">
-                      <span>{w}</span>
+                      <span>{formatDiagnostic(t, w)}</span>
                     </li>
                   ))}
                 </ul>
@@ -75,13 +82,13 @@ export function ImportDialog({ state, current, onCancel, onConfirm, onBackupCurr
             )}
             <div className="modal-actions">
               <button className="btn" onClick={onBackupCurrent}>
-                Download current backup
+                {t('dlg.backupCurrent')}
               </button>
               <button className="btn" onClick={onCancel}>
-                Cancel
+                {t('btn.cancel')}
               </button>
               <button className="btn primary" onClick={() => onConfirm(state.project)}>
-                Replace project
+                {t('dlg.replace')}
               </button>
             </div>
           </>

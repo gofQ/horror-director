@@ -1,10 +1,12 @@
+import { diag, type Diagnostic } from './diagnostics'
 import { crossingOf, isDreamLayer, type Project } from './schema'
 
 export type Severity = 'error' | 'warning' | 'info'
 export interface Issue {
   id: string
   severity: Severity
-  message: string
+  /** Language-neutral message; render with `formatDiagnostic`. */
+  diagnostic: Diagnostic
   sceneId?: string
 }
 
@@ -93,36 +95,36 @@ export function analyze(p: Project): Analysis {
   const byId = new Map(p.scenes.map((s) => [s.id, s]))
   const reachable = reachableFrom(adj, p.startSceneId)
   const loops = findLoops(adj)
-  const add = (severity: Severity, message: string, sceneId?: string) =>
-    issues.push({ id: `${issues.length}`, severity, message, sceneId })
+  const add = (severity: Severity, diagnostic: Diagnostic, sceneId?: string) =>
+    issues.push({ id: `${issues.length}`, severity, diagnostic, sceneId })
 
-  if (p.scenes.length === 0) add('error', 'Project has no scenes.')
+  if (p.scenes.length === 0) add('error', diag('diag.noScenes'))
   else if (!p.startSceneId || !byId.has(p.startSceneId))
-    add('error', 'No start scene is set. Mark one scene as the start.')
+    add('error', diag('diag.noStartSet'))
 
   for (const t of p.transitions) {
     if (!byId.has(t.source) || !byId.has(t.target))
-      add('error', `Transition "${t.label || t.id}" references a missing scene.`)
+      add('error', diag('diag.transitionMissingScene', { name: t.label || t.id }))
   }
 
   const hasStart = !!p.startSceneId && byId.has(p.startSceneId)
   for (const s of p.scenes) {
     const out = p.transitions.filter((t) => t.source === s.id && byId.has(t.target))
     if (hasStart && !reachable.has(s.id))
-      add('warning', `"${s.title}" is unreachable from the start scene.`, s.id)
+      add('warning', diag('diag.unreachable', { scene: s.title }), s.id)
     if (s.kind !== 'ending' && out.length === 0)
-      add('warning', `"${s.title}" is a dead end (no outgoing transitions, not an ending).`, s.id)
+      add('warning', diag('diag.deadEnd', { scene: s.title }), s.id)
     if (s.kind === 'ending' && out.length > 0)
-      add('info', `Ending "${s.title}" has outgoing transitions.`, s.id)
+      add('info', diag('diag.endingHasOutgoing', { scene: s.title }), s.id)
     if (s.loop.enabled && !s.loop.exitCondition.trim() && s.loop.maxIterations === 0)
-      add('warning', `Loop scene "${s.title}" has no exit condition or iteration cap.`, s.id)
+      add('warning', diag('diag.loopNoExit', { scene: s.title }), s.id)
     const late = s.triggers.filter((t) => t.time > s.duration)
     if (late.length)
-      add('warning', `"${s.title}" has ${late.length} trigger(s) after its ${s.duration}s duration.`, s.id)
+      add('warning', diag('diag.lateTriggers', { scene: s.title, n: late.length, duration: s.duration }), s.id)
     for (const [cid, stid] of Object.entries(s.characterStates)) {
       const c = p.characters.find((c) => c.id === cid)
       if (!c || !c.states.some((st) => st.id === stid))
-        add('warning', `"${s.title}" references a deleted character state.`, s.id)
+        add('warning', diag('diag.staleState', { scene: s.title }), s.id)
     }
     if (isDreamLayer(s.kind) && hasStart && reachable.has(s.id)) {
       const back = reachableFrom(adj, s.id)
@@ -131,7 +133,7 @@ export function analyze(p: Project): Analysis {
         return k && !isDreamLayer(k)
       })
       if (!escapes)
-        add('info', `Dream scene "${s.title}" never leads back to reality (inescapable).`, s.id)
+        add('info', diag('diag.inescapableDream', { scene: s.title }), s.id)
     }
   }
 
@@ -141,7 +143,7 @@ export function analyze(p: Project): Analysis {
     const exits = comp.some((id) => (adj.get(id) ?? []).some((n) => !set.has(n)))
     if (!exits) {
       const titles = comp.map((id) => byId.get(id)?.title ?? id).join(' → ')
-      add('warning', `Closed loop with no exit: ${titles}.`, comp[0])
+      add('warning', diag('diag.closedLoop', { path: titles }), comp[0])
     }
   }
 
