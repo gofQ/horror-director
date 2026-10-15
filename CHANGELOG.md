@@ -13,7 +13,7 @@ Every future feature or fix milestone must add an entry here (see `CLAUDE.md`).
 
 ## v0.6B — Psychological transition designer
 
-Pull request: _link added when the pull request is opened_.
+Pull request: [#9](https://github.com/gofQ/horror-director/pull/9)
 
 ### Added
 - **Transition direction**: an optional, structured design per transition — psychological technique (the shot techniques plus *reality reveal*), what the player believes is happening, what is actually happening, the reveal/contradiction, visual (match-cut) continuity, audio continuity, Unreal implementation notes and optional links to a shot of the source scene and a shot of the destination scene. It is director-authored planning data: never evaluated or executed, and independent of the transition's style, condition and duration.
