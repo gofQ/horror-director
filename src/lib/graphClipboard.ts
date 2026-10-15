@@ -1,4 +1,5 @@
 import { exprFlags, exprWithoutFlag } from './flags'
+import { logicIdPrefix } from './factory'
 import { uid } from './id'
 import type { Expr, GraphComment, LogicNode, Project, Scene, Transition } from './schema'
 import { translate } from './waypoints'
@@ -76,7 +77,7 @@ export function pasteGraph(p: Pick<Project, 'sceneTypes' | 'flags'>, data: Clipb
     return copy
   })
   const logicNodes = data.logicNodes.map((src): LogicNode => {
-    const id = uid(src.type === 'setFlag' ? 'set' : 'if')
+    const id = uid(logicIdPrefix(src.type))
     idMap.set(src.id, id)
     const copy: LogicNode = { ...structuredClone(src), id, position: shift(src.position) }
     if (copy.type === 'setFlag' && copy.flagId && !flags.has(copy.flagId)) copy.flagId = null

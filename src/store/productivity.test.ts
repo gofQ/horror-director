@@ -108,7 +108,7 @@ describe('reroute points', () => {
     st().addWaypoint('yes', 0, { x: 3, y: 4 })
     flushNow()
     const rec = rawRecord()
-    expect(rec.v).toBe(7)
+    expect(rec.v).toBe(8)
     expect(rec.project.transitions.find((t) => t.id === 'yes')!.waypoints).toEqual([{ x: 3, y: 4 }])
   })
 })

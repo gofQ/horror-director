@@ -24,10 +24,10 @@ const full = (): Project => {
 
 describe('schema 5 export and round trip', () => {
   it('writes schemaVersion 5 and round-trips branches, comments, scene types and ports exactly', () => {
-    expect(SCHEMA_VERSION).toBe(7)
+    expect(SCHEMA_VERSION).toBe(8)
     const p = full()
     const text = serializeProject(p)
-    expect(exportOf(p).schemaVersion).toBe(7)
+    expect(exportOf(p).schemaVersion).toBe(8)
     const r = parseProject(text)
     expect(r.ok).toBe(true)
     if (!r.ok) return
@@ -68,7 +68,7 @@ describe('older files import into v5 without changes', () => {
     if (v >= 3) expect(r.project.transitions.map((t) => t.direction)).toEqual(base.transitions.map((t) => t.direction))
     if (v >= 2) expect(r.project.scenes.map((s) => s.shots)).toEqual(base.scenes.map((s) => s.shots))
     if (v >= 4) expect(r.project.scenes.map((s) => s.audioCues)).toEqual(base.scenes.map((s) => s.audioCues))
-    expect(exportOf(r.project).schemaVersion).toBe(7)
+    expect(exportOf(r.project).schemaVersion).toBe(8)
     expect(r.warnings.some((w) => w.code === 'diag.migratedV1')).toBe(v === 1)
   })
   it('a bare legacy project imports with empty collections', () => {
@@ -91,7 +91,7 @@ describe('malformed v5 data is rejected without repair', () => {
     return e
   }
   const tr = (e: Raw, id: string) => e.project.transitions.find((t) => t.id === id)!
-  it('schema versions newer than 7', () => expect(errorsOf(mutate((e) => (e.schemaVersion = 8)))).toMatch(/schema version 8/))
+  it('schema versions newer than 8', () => expect(errorsOf(mutate((e) => (e.schemaVersion = 9)))).toMatch(/schema version 9/))
   it('unknown fields on nodes, comments, types and links', () => {
     expect(errorsOf(mutate((e) => (e.project.logicNodes![0].script = 'x = 1')))).toMatch(/script/)
     expect(errorsOf(mutate((e) => (e.project.comments![0].shape = 'box')))).toMatch(/shape/)
@@ -116,8 +116,8 @@ describe('malformed v5 data is rejected without repair', () => {
   it('dangling endpoints, comment endpoints and ports', () => {
     expect(errorsOf(mutate((e) => (tr(e, 'into').target = 'ghost')))).toMatch(/ghost/)
     expect(errorsOf(mutate((e) => (tr(e, 'into').target = 'note1')))).toMatch(/comment/)
-    expect(errorsOf(mutate((e) => delete tr(e, 'yes').sourcePort))).toMatch(/without a TRUE\/FALSE output/)
-    expect(errorsOf(mutate((e) => (tr(e, 'c_end').sourcePort = 'true')))).toMatch(/does not start at an IF node/)
+    expect(errorsOf(mutate((e) => delete tr(e, 'yes').sourcePort))).toMatch(/without an output pin/)
+    expect(errorsOf(mutate((e) => (tr(e, 'c_end').sourcePort = 'true')))).toMatch(/does not start at an IF or Random Branch node/)
   })
   it('two connections on one output pin, duplicate links and self-links', () => {
     expect(errorsOf(mutate((e) => (tr(e, 'no').sourcePort = 'true')))).toMatch(/already connected/)

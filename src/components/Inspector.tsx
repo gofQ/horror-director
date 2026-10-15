@@ -10,6 +10,7 @@ import { AudioPlannerDialog } from './AudioPlannerDialog'
 import { ShotPlannerDialog } from './ShotPlannerDialog'
 import { TransitionDesignerDialog } from './TransitionDesignerDialog'
 import { ConditionBuilder, FlagManager, SetFlagInspector } from './FlagInspectors'
+import { DelayInspector, EventInspector, RandomInspector } from './FlowInspectors'
 import { shift as shiftPoint } from '../lib/waypoints'
 import { NODE_W } from '../lib/layout'
 
@@ -350,7 +351,18 @@ function MultiInspector({ ids }: { ids: string[] }) {
 
 function NodeInspector({ id }: { id: string }) {
   const type = useStore((s) => s.project.logicNodes.find((n) => n.id === id)?.type)
-  return type === 'setFlag' ? <SetFlagInspector id={id} /> : <BranchInspector id={id} />
+  switch (type) {
+    case 'setFlag':
+      return <SetFlagInspector id={id} />
+    case 'event':
+      return <EventInspector id={id} />
+    case 'delay':
+      return <DelayInspector id={id} />
+    case 'random':
+      return <RandomInspector id={id} />
+    default:
+      return <BranchInspector id={id} />
+  }
 }
 
 function CommentInspector({ id }: { id: string }) {

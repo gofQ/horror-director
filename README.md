@@ -25,6 +25,16 @@ documentation: [README.tr.md](README.tr.md).
   node can additionally carry a **structured condition** (check a flag is TRUE/FALSE, combined with AND, OR and NOT, nested)
   built with an accessible form, no scripting. The Simulator tracks flag state along the route, evaluates only structured
   conditions, and shows a State inspector. Set Flag and IF nodes are zero-time planning logic, not scenes.
+- **Flow control:** three more zero-scene nodes share the same connection rules. An **Event** node (title, description,
+  category: story beat, reveal, threat, relief, decision, custom; one input, one output) is an authored narrative milestone: when
+  the simulated route passes it, it is stamped on the route clock. A **Delay** node (one input, one output, a duration from
+  0 to 3600 seconds, planning notes) adds waiting time *between* scene visits. A **Random Branch** has one input and two
+  outputs **A** and **B** with editable outcome labels and a probability of A from 0 to 100 % (B is 100 − A). Events are
+  not gameplay callbacks: they are separate from scene triggers and audio cues and never change trigger counts, pacing
+  intensity or scene data. Event and Delay outputs accept one connection, Random outputs one connection each, and loops that
+  would only pass through logic nodes without a scene are refused. All three work with the context menu and picker,
+  drag-to-create from a pin, the Inspector, copy/paste/duplicate, multi-selection, undo/redo, Auto Arrange, reroute points,
+  reachability and the minimap.
 - **Custom scene types:** per-project, reusable scene types (name, curated colour and icon, base kind, default description
   and duration). A custom scene is a normal scene whose base kind (reality, dream, nightmare, memory, ending) still drives
   crossings, simulation and analysis.
@@ -95,7 +105,7 @@ npm run preview    # serve the production build
    scenes, and use it in the Simulator, where you choose TRUE or FALSE yourself — the choice is shown as an assumption, the
    IF node takes no scene time and adds no extra visit or trigger. To model story state, create **flags** in the project
    inspector (nothing selected), add a **Set Flag** node (**Add Set Flag**, the picker, or drag from a pin), choose its flag and
-   TRUE/FALSE, and give an IF node a **structured condition** in its inspector. Define reusable **Scene types** in the project inspector
+   TRUE/FALSE, and give an IF node a **structured condition** in its inspector. **Add Event**, **Add Delay** and **Add Random Branch** (menu, picker, palette or drag from a pin) create the flow-control nodes; edit their category, duration, labels and probability in the inspector. Define reusable **Scene types** in the project inspector
    (nothing selected). Select an item and press `Del` to delete it (connections go with it in one undo step).
    Set the start scene in the scene inspector. **Sample** loads "The Hollow Apartment", a demo with dream layers, a loop
    and two endings.
@@ -113,6 +123,15 @@ npm run preview    # serve the production build
      marked *matches condition*, the other stays selectable as an explicit *override (what-if)* that is counted and flagged
      (also in route comparison). Your route is never changed silently. Flag state is recomputed from the start on every
      replay, Back, Restart and graph edit, and is never saved.
+   - A **Delay** adds its seconds to the route clock exactly once, in traversal order: the next scene simply starts later
+     (scene and connection durations are unchanged) and its scene-local triggers shift with it. An **Event** is stamped
+     with the absolute route time. Neither is a scene visit or a trigger occurrence. The **Flow trace** lists events,
+     delay start/end, IF choices, Set Flag assignments and Random decisions in chronological order.
+   - At a **Random Branch** you either pick A or B yourself (marked as a *what-if*) or press **Roll outcome**: a seeded draw
+     (the seed is a session-only field) that only previews the result until you commit it. The same seed and decision
+     always give the same draw, and nothing is rerolled by Back, replay, project edits or reload. The chosen connection is
+     stored in the route like any other choice; the roll's seed is session-only provenance (never saved or exported), and
+     route comparison counts rolled versus hand-picked outcomes. One simulated route does not verify the authored probability.
    - Loop `Max iterations` counts *additional repeat visits after the first* (4 ⇒ up to 5 visits). `0` (unlimited) is
      bounded by a configurable safety limit (default 5); other cycles by a hard step cap (default 40, 1–200).
    - A scene visit lasts the scene's `duration`, followed by the transition's `duration`; a trigger's time is *scene
@@ -170,13 +189,13 @@ library or undo history, it is not exported, and it resets when you switch proje
 - **Storage** (browser `localStorage`): `horror-director:library:v1` (index), `horror-director:proj:<id>` (one record per
   project), `horror-director:lang` (language). Ids are internal and independent of names. Library data (ids,
   timestamps, active project) is never written into project JSON.
-- **Backup** downloads the *active* project in the schema-7 export format. Importing validates strictly (duplicate ids,
+- **Backup** downloads the *active* project in the schema-8 export format. Importing validates strictly (duplicate ids,
   dangling references, invalid values, unrecognised fields, newer schema versions are errors shown before anything is replaced). A file
   can be imported as a new project or, with confirmation, replace the active project.
-- **Older files and data:** schema-1 to schema-6 exports and bare project files are still imported; missing shots, audio
+- **Older files and data:** schema-1 to schema-7 exports and bare project files are still imported; missing shots, audio
   cues, IF nodes, comments, scene types and flags start as empty lists and missing transition directions stay absent (an informational notice appears for
-  schema-1/bare files), and the next backup is schema 7 with all other fields unchanged. Stored projects from earlier versions are read the
-  same way and are only rewritten when you edit them. Project records are stored as `{ v: 7, project }` (earlier `v: 1`–`v: 6`
+  schema-1/bare files), and the next backup is schema 8 with all other fields unchanged. Stored projects from earlier versions are read the
+  same way and are only rewritten when you edit them. Project records are stored as `{ v: 8, project }` (earlier `v: 1`–`v: 7`
   records are still read); an older build that cannot read the new fields shows such a record as damaged and preserves it
   rather than dropping data. Downgrading is not supported.
 - **Migration:** the single-project storage of early versions is validated, copied into the library under the id
@@ -189,7 +208,7 @@ library or undo history, it is not exported, and it resets when you switch proje
 ```jsonc
 {
   "format": "horror-director",
-  "schemaVersion": 7,
+  "schemaVersion": 8,
   "exportedAt": "ISO-8601",
   "project": {
     "name": "", "description": "", "startSceneId": "scene id | null",
@@ -210,12 +229,15 @@ library or undo history, it is not exported, and it resets when you switch proje
     "flags": [{ "id","name","description","defaultValue": true }],
     "logicNodes": [{ "id", "type": "branch", "title", "description", "condition": "free text, never evaluated", "position": {"x","y"},
                      "expression": "optional structured condition: {op:'flag',flagId,is} | {op:'not',arg} | {op:'and'|'or',args:[…]}" },
-                   { "id", "type": "setFlag", "title", "description", "flagId": "flag id | null", "value": true, "position": {"x","y"} }],
+                   { "id", "type": "setFlag", "title", "description", "flagId": "flag id | null", "value": true, "position": {"x","y"} },
+                   { "id", "type": "event", "title", "description", "eventCategory": "story|reveal|threat|relief|decision|custom", "position": {"x","y"} },
+                   { "id", "type": "delay", "title", "description": "planning notes", "seconds": "0–3600", "position": {"x","y"} },
+                   { "id", "type": "random", "title", "description", "probabilityA": "0–100 (B = 100 − A)", "labelA", "labelB", "position": {"x","y"} }],
     "comments": [{ "id","title","text","color","position": {"x","y"},"width","height" }],
     "sceneTypes": [{ "id","name","color","icon","baseKind": "reality|dream|nightmare|memory|ending","description","duration?" }],
     "transitions": [{ "id","source": "scene or IF node id","target": "scene or IF node id","label","style","condition","duration",
                       "waypoints": "[{x,y}] reroute points, ≤ 16, flow coordinates, optional (presentation only)",
-                      "sourcePort": "true|false (only for connections leaving an IF node)",
+                      "sourcePort": "true|false (leaving an IF node) or a|b (leaving a Random Branch); absent for every other source",
                       "direction": { "technique": "none|match-cut|impossible-space|identity-discontinuity|false-awakening|reality-reveal",
                                      "playerBelief","reality","visualContinuity","audioContinuity","reveal","unrealNotes",
                                      "sourceShotId": "shot id of the source scene | null",
@@ -255,7 +277,7 @@ Chromium and uses test ids and DOM geometry rather than screenshot comparisons.
 
 ## Known limitations
 
-- Simulation is manual: no automatic route enumeration, probabilities or "best path"; free-text conditions are display-only; only structured flag conditions are evaluated, and only inside the simulator.
+- Simulation is manual: no automatic route enumeration or "best path"; Random Branch probabilities are authored intent that a single route cannot verify; free-text conditions are display-only; only structured flag conditions are evaluated, and only inside the simulator.
 - Timing assumes the full scene duration is spent in every scene; real gameplay timing will differ.
 - Pacing thresholds are fixed heuristics (only the repeated-type window and trigger-free minimum are adjustable), not tuned
   to an audience or validated against player behaviour. Intensity is authored design intent, not measured fear.
@@ -268,8 +290,9 @@ Chromium and uses test ids and DOM geometry rather than screenshot comparisons.
   selection, zoom and cursor only for the session, and shows triggers with a condition as conditional rather than evaluating them.
 - Free-text conditions are planning notes and are never parsed or evaluated. Only structured IF conditions on Boolean flags are
   evaluated, and only inside the simulator (nothing is executed in a game); there are no numeric variables, scripting, separate
-  AND/OR/NOT nodes, events, delays, random branches, reroute nodes or clipboard paste yet. A Set Flag node has one input and one
-  output, and connections touching an IF or Set Flag node cannot carry a transition design.
+  AND/OR/NOT nodes, Sequence or parallel nodes, or runtime execution. Set Flag, Event and Delay nodes have one input and one
+  output, and connections touching any logic node cannot carry a transition design. A Delay is extra time between scene visits,
+  not an in-scene timeline editor; scenes still consume their full authored duration.
 - Audio cues are planning notes: no playback, waveform, 3D spatialization, AI generation or engine/Unreal runtime
   instructions, and no asset library. Cues are independent of triggers and do not affect pacing statistics.
 - Transition directions are planning notes: no generated images, animation or 3D preview, and no Unreal execution. Stored

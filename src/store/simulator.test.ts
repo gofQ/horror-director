@@ -152,7 +152,7 @@ describe('route comparison state', () => {
     sim().choose('e1')
     sim().choose('e2')
     sim().pinRouteA()
-    expect(sim().pinned).toEqual({ projectId: st().library.activeId, choices: ['e1', 'e2'] })
+    expect(sim().pinned).toEqual({ projectId: st().library.activeId, choices: ['e1', 'e2'], marks: {} })
     sim().restart()
     sim().choose('e1')
     sim().choose('e3')

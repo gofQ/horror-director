@@ -1,8 +1,8 @@
 import { diag, type Diagnostic } from './diagnostics'
-import type { Project } from './schema'
+import { BRANCH_PORTS, RANDOM_PORTS, type Project } from './schema'
 import { analyzeAudioCues } from './audio'
 import { analyzeShots } from './shots'
-import { logicCycles } from './graphRules'
+import { logicCycles, portsOf } from './graphRules'
 import { exprFlags, exprWithinLimits, normalizeFlagName } from './flags'
 
 export interface ValidationResult {
@@ -49,7 +49,8 @@ export function validateProject(p: Project): ValidationResult {
   // Scenes, branch nodes and comments share one id space (transitions reference scenes and branches).
   const sceneIds = new Set(p.scenes.map((s) => s.id))
   const logicIds = new Set(p.logicNodes.map((n) => n.id))
-  const branchIds = new Set(p.logicNodes.filter((n) => n.type === 'branch').map((n) => n.id))
+  // Nodes with output pins: IF (TRUE/FALSE) and Random (A/B); the pin names allowed per node.
+  const pinsOf = new Map(p.logicNodes.filter((n) => portsOf(n.type).length > 0).map((n) => [n.id, portsOf(n.type)]))
   const commentIds = new Set(p.comments.map((c) => c.id))
   for (const id of logicIds) if (sceneIds.has(id) || commentIds.has(id)) errors.push(diag('diag.dupNode', { id }))
   for (const id of commentIds) if (sceneIds.has(id)) errors.push(diag('diag.dupNode', { id }))
@@ -73,8 +74,10 @@ export function validateProject(p: Project): ValidationResult {
       if (!known(t.source)) errors.push(diag('diag.transitionMissingSource', { name, id: t.source }))
       if (!known(t.target)) errors.push(diag('diag.transitionMissingTarget', { name, id: t.target }))
     }
-    if (branchIds.has(t.source) && t.sourcePort === undefined) errors.push(diag('diag.portMissing', { name }))
-    if (!branchIds.has(t.source) && t.sourcePort !== undefined) errors.push(diag('diag.portUnexpected', { name }))
+    const pins = pinsOf.get(t.source)
+    if (pins && t.sourcePort === undefined) errors.push(diag('diag.portMissing', { name }))
+    if (pins && t.sourcePort !== undefined && !pins.includes(t.sourcePort)) errors.push(diag('diag.portWrong', { name }))
+    if (!pins && t.sourcePort !== undefined) errors.push(diag('diag.portUnexpected', { name }))
     if (logicIds.has(t.source) && t.source === t.target) errors.push(diag('diag.logicSelf', { name }))
     if (t.direction && (logicIds.has(t.source) || logicIds.has(t.target))) errors.push(diag('diag.dirOnLogicLink', { name }))
   }
@@ -82,7 +85,7 @@ export function validateProject(p: Project): ValidationResult {
   const seenLink = new Set<string>()
   for (const t of p.transitions) {
     const name = t.label ? `${q(t.label)} (${t.id})` : q(t.id)
-    if (branchIds.has(t.source) && t.sourcePort) {
+    if (pinsOf.has(t.source) && t.sourcePort) {
       const pin = `${t.source}\u0000${t.sourcePort}`
       if (seenOut.has(pin)) errors.push(diag('diag.portTaken', { name, node: t.source, port: t.sourcePort.toUpperCase() }))
       seenOut.add(pin)
@@ -117,21 +120,43 @@ export function validateProject(p: Project): ValidationResult {
     const label = n.title || n.id
     const outs = p.transitions.filter((t) => t.source === n.id)
     const hasInput = p.transitions.some((t) => t.target === n.id)
-    if (n.type === 'branch') {
-      if (n.flagId !== undefined || n.value !== undefined) errors.push(diag('diag.nodeFields', { node: label }))
-      if (n.expression) {
-        if (!exprWithinLimits(n.expression)) errors.push(diag('diag.exprLimits', { node: label }))
-        else for (const f of exprFlags(n.expression)) if (!flagIds.has(f)) errors.push(diag('diag.flagMissing', { node: label, id: f }))
-      }
-      if (!n.condition.trim() && !n.expression) warnings.push(diag('diag.branchNoCondition', { node: label }))
-      for (const port of ['true', 'false'] as const)
-        if (!outs.some((t) => t.sourcePort === port)) warnings.push(diag('diag.branchOpenOutput', { node: label, port: port.toUpperCase() }))
-    } else {
-      if (n.expression) errors.push(diag('diag.nodeFields', { node: label }))
-      if (n.flagId && !flagIds.has(n.flagId)) errors.push(diag('diag.flagMissing', { node: label, id: n.flagId }))
-      if (!n.flagId) warnings.push(diag('diag.setFlagNoFlag', { node: label }))
-      if (outs.length > 1) errors.push(diag('diag.setFlagOutputs', { node: label }))
-      if (outs.length === 0) warnings.push(diag('diag.setFlagNoOutput', { node: label }))
+    // Type-specific fields: each type may carry only its own (a foreign field is an error), required ones must be present.
+    const own: Record<string, readonly (keyof typeof n)[]> = {
+      branch: ['expression'],
+      setFlag: ['flagId', 'value'],
+      event: ['eventCategory'],
+      delay: ['seconds'],
+      random: ['probabilityA', 'labelA', 'labelB'],
+    }
+    const allTypeFields = Object.values(own).flat()
+    if (allTypeFields.some((f) => !own[n.type].includes(f) && n[f] !== undefined)) errors.push(diag('diag.nodeFields', { node: label }))
+    if (n.type === 'delay' && n.seconds === undefined) errors.push(diag('diag.nodeFieldsMissing', { node: label }))
+    if (n.type === 'random' && n.probabilityA === undefined) errors.push(diag('diag.nodeFieldsMissing', { node: label }))
+    switch (n.type) {
+      case 'branch':
+        if (n.expression) {
+          if (!exprWithinLimits(n.expression)) errors.push(diag('diag.exprLimits', { node: label }))
+          else for (const f of exprFlags(n.expression)) if (!flagIds.has(f)) errors.push(diag('diag.flagMissing', { node: label, id: f }))
+        }
+        if (!n.condition.trim() && !n.expression) warnings.push(diag('diag.branchNoCondition', { node: label }))
+        for (const port of BRANCH_PORTS)
+          if (!outs.some((t) => t.sourcePort === port)) warnings.push(diag('diag.branchOpenOutput', { node: label, port: port.toUpperCase() }))
+        break
+      case 'random':
+        for (const port of RANDOM_PORTS)
+          if (!outs.some((t) => t.sourcePort === port)) warnings.push(diag('diag.randomOpenOutput', { node: label, port: port.toUpperCase() }))
+        break
+      case 'setFlag':
+        if (n.flagId && !flagIds.has(n.flagId)) errors.push(diag('diag.flagMissing', { node: label, id: n.flagId }))
+        if (!n.flagId) warnings.push(diag('diag.setFlagNoFlag', { node: label }))
+        if (outs.length > 1) errors.push(diag('diag.setFlagOutputs', { node: label }))
+        if (outs.length === 0) warnings.push(diag('diag.setFlagNoOutput', { node: label }))
+        break
+      case 'event':
+      case 'delay':
+        if (outs.length > 1) errors.push(diag('diag.singleOutput', { node: label }))
+        if (outs.length === 0) warnings.push(diag('diag.flowNoOutput', { node: label }))
+        break
     }
     if (!hasInput) warnings.push(diag('diag.branchNoInput', { node: label }))
   }

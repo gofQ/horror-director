@@ -10,6 +10,8 @@ import { NumberInput } from './fields'
 import { useExprText } from './useExprText'
 import { PacingPanel } from './PacingPanel'
 import { ComparePanel } from './ComparePanel'
+import { FlowTrace, RandomPanel } from './FlowPanels'
+import { RANDOM_PORT_COLOR } from './FlowNodes'
 import { analyzePacing } from '../lib/pacing'
 
 const W = 1000
@@ -106,9 +108,17 @@ export function SimulatorView() {
               {result.pending && (
                 <p className="issue warning" role="status" data-testid="sim-pending" data-kind={result.pending.kind}>
                   <span>
-                    {result.pending.kind === 'setFlag'
-                      ? t('sim.pendingSet', { title: result.pending.title || t('default.setFlag') })
-                      : t('sim.pending', { title: result.pending.title || t('default.branch'), condition: result.pending.condition.trim() || (pendingExpr ? exprText(pendingExpr) : t('branch.noCondition')) })}
+                    {result.pending.kind === 'setFlag' ? (
+                      t('sim.pendingSet', { title: result.pending.title || t('default.setFlag') })
+                    ) : result.pending.kind === 'event' ? (
+                      t('sim.pendingEvent', { title: result.pending.title || t('default.event') })
+                    ) : result.pending.kind === 'delay' ? (
+                      t('sim.pendingDelay', { title: result.pending.title || t('default.delay'), n: result.pending.seconds ?? 0 })
+                    ) : result.pending.kind === 'random' ? (
+                      t('sim.pendingRandom', { title: result.pending.title || t('default.random') })
+                    ) : (
+                      t('sim.pending', { title: result.pending.title || t('default.branch'), condition: result.pending.condition.trim() || (pendingExpr ? exprText(pendingExpr) : t('branch.noCondition')) })
+                    )}
                     {result.pending.evaluated !== null && (
                       <strong data-testid="sim-evaluated" data-value={String(result.pending.evaluated)}>
                         {' '}
@@ -131,15 +141,15 @@ export function SimulatorView() {
                     data-logic={o.logic ?? ''}
                     data-target-type={o.targetType}
                     disabled={o.blocked !== null}
-                    onClick={() => choose(o.transitionId)}
+                    onClick={() => choose(o.transitionId, o.fromRandom ? { mode: 'manual' } : undefined)}
                   >
                     <span className="sim-option-title">
-                      {o.port && <strong style={{ color: o.port === 'true' ? '#6ee7a1' : '#ff6b7d' }}>{t(`pin.${o.port}`)} </strong>}
-                      {o.port ? (o.label ? `${o.label} ` : '') : `${label(o)} `}→{' '}
-                      {o.targetType === 'branch' || o.targetType === 'setFlag' ? (
+                      {o.port && <strong style={{ color: o.port === 'true' ? '#6ee7a1' : o.port === 'false' ? '#ff6b7d' : RANDOM_PORT_COLOR[o.port] }}>{t(`pin.${o.port}`)} </strong>}
+                      {o.port ? (o.fromRandom ? (o.fromRandom.label ? `${o.fromRandom.label} · ${o.fromRandom.probability}% ` : `${o.fromRandom.probability}% `) : o.label ? `${o.label} ` : '') : `${label(o)} `}→{' '}
+                      {o.targetType !== 'scene' ? (
                         <>
-                          <span className="badge">{t(o.targetType === 'setFlag' ? 'setflag.badge' : 'branch.badge')}</span>{' '}
-                          <strong>{o.targetTitle || t(o.targetType === 'setFlag' ? 'default.setFlag' : 'default.branch')}</strong>
+                          <span className="badge">{t(`${o.targetType === 'setFlag' ? 'setflag' : o.targetType}.badge`)}</span>{' '}
+                          <strong>{o.targetTitle || t(`default.${o.targetType}`)}</strong>
                         </>
                       ) : (
                         <>
@@ -173,6 +183,11 @@ export function SimulatorView() {
                         {t('sim.branchAssumption', { condition: o.fromBranch.condition.trim() || o.fromBranch.title || t('default.branch'), port: t(`pin.${o.port}`) })}
                       </span>
                     )}
+                    {o.fromRandom && (
+                      <span className="sim-assumption" title={t('sim.randomWhatIfHint')} data-testid="sim-random-whatif">
+                        {t('sim.randomWhatIf', { p: o.fromRandom.probability })}
+                      </span>
+                    )}
                     {o.logic && o.logic !== 'manual' && (
                       <span className={`sim-logic ${o.logic}`} data-testid="sim-logic" data-logic={o.logic} title={t(`sim.logic.${o.logic}.hint`)}>
                         {t(`sim.logic.${o.logic}`)}
@@ -182,6 +197,8 @@ export function SimulatorView() {
                   </button>
                 ))}
               </div>
+
+              <RandomPanel result={result} />
 
               <div className="sim-controls">
                 <button className="btn" data-testid="sim-back" onClick={back} disabled={choices.length === 0}>
@@ -264,6 +281,7 @@ export function SimulatorView() {
                   <p className="muted">{t('sim.state.note')}</p>
                 </div>
               )}
+              <FlowTrace result={result} />
               <div className="card">
                 <div className="section-title">{t('sim.route')}</div>
                 <ol className="sim-route" data-testid="sim-route">
@@ -280,6 +298,7 @@ export function SimulatorView() {
                         {s.via && (
                           <span className="muted sim-via">
                             {t('sim.via', { label: label(s.via) })} · {t(`style.${s.via.style}`)} · {t('unit.seconds', { n: s.via.duration })}
+                            {s.via.delay > 0 && <span className="badge" data-testid="sim-via-delay"> {t('sim.viaDelay', { n: s.via.delay })}</span>}
                             {s.via.linkCondition.trim() && <span className="sim-assumption"> {t('sim.assumption', { text: s.via.linkCondition.trim() })}</span>}
                             {s.via.branches.map((b) => (
                               <span key={b.nodeId + b.port} className="sim-assumption" data-testid="sim-branch-pass">

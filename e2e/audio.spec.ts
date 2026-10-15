@@ -140,7 +140,7 @@ test.describe('persistence, backups and file compatibility', () => {
     await waitSaved(page)
 
     const exported = await backup(page)
-    expect(exported.schemaVersion).toBe(7)
+    expect(exported.schemaVersion).toBe(8)
     expect(exported.project.scenes.find((s) => s.id === 's_living')!.audioCues[0]).toMatchObject({ title: 'Persisted cue', loop: true, type: 'sfx' })
 
     await newProject(page)
@@ -165,7 +165,7 @@ test.describe('persistence, backups and file compatibility', () => {
     await page.getByRole('button', { name: 'Add project' }).click()
     await expect(nodes(page)).toHaveCount(8)
     const migrated = await backup(page)
-    expect(migrated.schemaVersion).toBe(7)
+    expect(migrated.schemaVersion).toBe(8)
     expect(migrated.project.scenes.every((s) => s.audioCues.length === 0)).toBe(true)
     const strip = (scenes: RawExport['project']['scenes']) => scenes.map(({ audioCues, ...rest }) => (void audioCues, rest))
     expect(strip(migrated.project.scenes)).toEqual(strip(original.project.scenes))

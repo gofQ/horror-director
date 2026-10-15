@@ -12,6 +12,11 @@ export interface DefaultNames {
   audioCue: string
   branch: string
   setFlag: string
+  event: string
+  delay: string
+  random: string
+  outcomeA: string
+  outcomeB: string
   flag: string
   comment: string
   sceneType: string
@@ -29,6 +34,11 @@ export const ENGLISH_NAMES: DefaultNames = {
   audioCue: 'New audio cue',
   branch: 'IF',
   setFlag: 'Set flag',
+  event: 'Event',
+  delay: 'Delay',
+  random: 'Random branch',
+  outcomeA: 'Outcome A',
+  outcomeB: 'Outcome B',
   flag: 'New flag',
   comment: 'Comment',
   sceneType: 'New scene type',
@@ -115,6 +125,38 @@ export function newLogicNode(position = { x: 0, y: 0 }, names: DefaultNames = EN
 
 export function newSetFlagNode(position = { x: 0, y: 0 }, names: DefaultNames = ENGLISH_NAMES, flagId: string | null = null): LogicNode {
   return { id: uid('set'), type: 'setFlag', title: names.setFlag, description: '', condition: '', flagId, value: true, position }
+}
+
+export function newEventNode(position = { x: 0, y: 0 }, names: DefaultNames = ENGLISH_NAMES): LogicNode {
+  return { id: uid('evt'), type: 'event', title: names.event, description: '', condition: '', eventCategory: 'story', position }
+}
+
+export function newDelayNode(position = { x: 0, y: 0 }, names: DefaultNames = ENGLISH_NAMES): LogicNode {
+  return { id: uid('dly'), type: 'delay', title: names.delay, description: '', condition: '', seconds: 5, position }
+}
+
+export function newRandomNode(position = { x: 0, y: 0 }, names: DefaultNames = ENGLISH_NAMES): LogicNode {
+  return { id: uid('rnd'), type: 'random', title: names.random, description: '', condition: '', probabilityA: 50, labelA: names.outcomeA, labelB: names.outcomeB, position }
+}
+
+/** Id prefix of a logic node type (IF keeps `if`, Set Flag `set`). */
+export const logicIdPrefix = (type: LogicNode['type']): string =>
+  ({ branch: 'if', setFlag: 'set', event: 'evt', delay: 'dly', random: 'rnd' })[type]
+
+/** A fresh logic node of any type with that type's defaults. */
+export function newLogicNodeOfType(type: LogicNode['type'], position = { x: 0, y: 0 }, names: DefaultNames = ENGLISH_NAMES): LogicNode {
+  switch (type) {
+    case 'setFlag':
+      return newSetFlagNode(position, names)
+    case 'event':
+      return newEventNode(position, names)
+    case 'delay':
+      return newDelayNode(position, names)
+    case 'random':
+      return newRandomNode(position, names)
+    default:
+      return newLogicNode(position, names)
+  }
 }
 
 export function newFlag(name: string): Flag {

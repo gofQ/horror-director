@@ -1,13 +1,15 @@
 import { create } from 'zustand'
-import { emptyProject, newAudioCue, newCharacter, newComment, newFlag, newLogicNode, newSetFlagNode, newSceneType, newScene, newShot, newTransition, newTrigger, type DefaultNames } from '../lib/factory'
+import { emptyProject, newAudioCue, newCharacter, newComment, newFlag, newLogicNode, logicIdPrefix, newLogicNodeOfType, newSceneType, newScene, newShot, newTransition, newTrigger, type DefaultNames } from '../lib/factory'
 import { getLang } from '../i18n/store'
 import { translate } from '../i18n'
 import { uid } from '../lib/id'
+import { DELAY_MAX_SECONDS, RANDOM_LABEL_MAX } from '../lib/schema'
 import { loadLibrary, type DamagedEntry, type LibraryIndex, type LoadNotice, type LoadedLibrary } from '../lib/library'
 import { browserBackend, useSaveStatus } from '../lib/persist'
 import type {
   AudioCue,
-  BranchPort,
+  LogicNodeType,
+  Port,
   Character,
   Flag,
   GraphComment,
@@ -36,7 +38,7 @@ export type View = 'graph' | 'timeline' | 'characters' | 'analysis' | 'simulator
 export type Selection = { type: 'scene' | 'edge' | 'node' | 'comment'; id: string } | null
 
 /** What `addNodeFromPin` creates at the drop position. */
-export type NewNodeSpec = { type: 'scene'; kind: SceneKind; typeId?: string } | { type: 'branch' } | { type: 'setFlag' }
+export type NewNodeSpec = { type: 'scene'; kind: SceneKind; typeId?: string } | { type: LogicNodeType }
 
 export const HISTORY_LIMIT = 50
 
@@ -53,6 +55,11 @@ export function defaultNames(): DefaultNames {
     audioCue: translate(l, 'default.audioCue'),
     branch: translate(l, 'default.branch'),
     setFlag: translate(l, 'default.setFlag'),
+    event: translate(l, 'default.event'),
+    delay: translate(l, 'default.delay'),
+    random: translate(l, 'default.random'),
+    outcomeA: translate(l, 'default.outcomeA'),
+    outcomeB: translate(l, 'default.outcomeB'),
     flag: translate(l, 'default.flag'),
     comment: translate(l, 'default.comment'),
     sceneType: translate(l, 'default.sceneType'),
@@ -128,7 +135,7 @@ interface State {
   /** Copies a scene's content with fresh ids (no connections), offset to the right-bottom; returns the new id. */
   duplicateScene: (id: string, copySuffix: string) => string | null
   duplicateNode: (id: string) => string | null
-  addLogicNode: (position: { x: number; y: number }, type?: 'branch' | 'setFlag') => string
+  addLogicNode: (position: { x: number; y: number }, type?: LogicNodeType) => string
   updateLogicNode: (id: string, patch: Partial<Omit<LogicNode, 'id' | 'type'>>) => void
   /** Adds a flag with a unique default name (or `name` when free); returns its id. */
   addFlag: (name?: string) => string
@@ -139,7 +146,7 @@ interface State {
   addComment: (position: { x: number; y: number }) => string
   updateComment: (id: string, patch: Partial<Omit<GraphComment, 'id'>>) => void
   /** Creates a node at `position` and connects `fromId` (output pin `fromPort`) to it in ONE undo step; null (nothing changes) when the connection is invalid. */
-  addNodeFromPin: (spec: { fromId: string; fromPort?: BranchPort; position: { x: number; y: number }; node: NewNodeSpec }) => { nodeId: string; transitionId: string } | null
+  addNodeFromPin: (spec: { fromId: string; fromPort?: Port; position: { x: number; y: number }; node: NewNodeSpec }) => { nodeId: string; transitionId: string } | null
   /** Puts a new IF node between a connection's endpoints (the original connection id is kept and ends at the IF). Refused (null) when the connection carries a transition design. */
   insertBranchOnTransition: (transitionId: string) => string | null
   addSceneType: (baseKind?: SceneKind) => string
@@ -154,7 +161,7 @@ interface State {
   arrangeScenes: () => boolean
 
   /** Connects two nodes (scene or IF node; `sourcePort` is required when `source` is an IF node). Returns null when `canConnect` refuses. */
-  addTransition: (source: string, target: string, sourcePort?: BranchPort) => string | null
+  addTransition: (source: string, target: string, sourcePort?: Port) => string | null
   /** Endpoints and output pin are fixed after creation (shot links in a direction depend on them). */
   updateTransition: (id: string, patch: Partial<Omit<Transition, 'source' | 'target' | 'sourcePort' | 'waypoints'>>) => void
   /** Creates the direction when absent and merges the patch. Refuses (false) shot links outside the transition's source/target scene. */
@@ -559,7 +566,7 @@ export const useStore = create<State>()(
           const n = p.logicNodes.find((x) => x.id === id)
           const c = p.comments.find((x) => x.id === id)
           if (n) {
-            const copy: LogicNode = { ...structuredClone(n), id: uid(n.type === 'setFlag' ? 'set' : 'if'), position: { x: n.position.x + 40, y: n.position.y + 60 } }
+            const copy: LogicNode = { ...structuredClone(n), id: uid(logicIdPrefix(n.type)), position: { x: n.position.x + 40, y: n.position.y + 60 } }
             set((s) => ({ project: { ...s.project, logicNodes: [...s.project.logicNodes, copy] }, selection: { type: 'node', id: copy.id } }))
             return copy.id
           }
@@ -607,15 +614,23 @@ export const useStore = create<State>()(
           return 'deleted'
         },
         addLogicNode: (position, type = 'branch') => {
-          const n = type === 'setFlag' ? newSetFlagNode(position, defaultNames()) : newLogicNode(position, defaultNames())
+          const n = newLogicNodeOfType(type, position, defaultNames())
           set((s) => ({ project: { ...s.project, logicNodes: [...s.project.logicNodes, n] }, selection: { type: 'node', id: n.id } }))
           return n.id
         },
-        updateLogicNode: (id, patch) =>
+        updateLogicNode: (id, patch) => {
+          // Keep the type-specific numbers and labels inside the schema limits (the inputs are free-form).
+          const fit = (v: number, max: number) => Math.round(Math.min(max, Math.max(0, Number.isFinite(v) ? v : 0)) * 100) / 100
+          const clean: typeof patch = { ...patch }
+          if (patch.seconds !== undefined) clean.seconds = fit(patch.seconds, DELAY_MAX_SECONDS)
+          if (patch.probabilityA !== undefined) clean.probabilityA = fit(patch.probabilityA, 100)
+          if (patch.labelA !== undefined) clean.labelA = patch.labelA.slice(0, RANDOM_LABEL_MAX)
+          if (patch.labelB !== undefined) clean.labelB = patch.labelB.slice(0, RANDOM_LABEL_MAX)
           set(
-            (s) => ({ project: { ...s.project, logicNodes: s.project.logicNodes.map((n) => (n.id === id ? { ...n, ...patch } : n)) } }),
+            (s) => ({ project: { ...s.project, logicNodes: s.project.logicNodes.map((n) => (n.id === id ? { ...n, ...clean } : n)) } }),
             { key: `node:${id}:${keysOf(patch)}` },
-          ),
+          )
+        },
         addComment: (position) => {
           const c = newComment(position, defaultNames())
           set((s) => ({ project: { ...s.project, comments: [...s.project.comments, c] }, selection: { type: 'comment', id: c.id } }))
@@ -631,8 +646,8 @@ export const useStore = create<State>()(
           let newScenes = base.scenes
           let newBranches = base.logicNodes
           let nodeId: string
-          if (node.type === 'branch' || node.type === 'setFlag') {
-            const n = node.type === 'setFlag' ? newSetFlagNode(position, defaultNames()) : newLogicNode(position, defaultNames())
+          if (node.type !== 'scene') {
+            const n = newLogicNodeOfType(node.type, position, defaultNames())
             newBranches = [...base.logicNodes, n]
             nodeId = n.id
           } else {

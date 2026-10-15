@@ -1,4 +1,4 @@
-import { BRANCH_PORTS, type BranchPort, type Project } from './schema'
+import { BRANCH_PORTS, RANDOM_PORTS, type Port, type Project } from './schema'
 
 /**
  * Connection semantics of the narrative graph (shared by the store, the canvas and import validation).
@@ -7,14 +7,21 @@ import { BRANCH_PORTS, type BranchPort, type Project } from './schema'
  */
 type GraphData = Pick<Project, 'scenes' | 'logicNodes' | 'comments' | 'transitions'>
 
-export type NodeKind = 'scene' | 'branch' | 'setFlag' | 'comment'
-/** Zero-time logic nodes (IF and Set Flag). */
-export const isLogicKind = (k: NodeKind | null): k is 'branch' | 'setFlag' => k === 'branch' || k === 'setFlag'
+export type NodeKind = 'scene' | 'branch' | 'random' | 'setFlag' | 'event' | 'delay' | 'comment'
+export type LogicKind = 'branch' | 'random' | 'setFlag' | 'event' | 'delay'
+/** Logic nodes (IF, Random, Set Flag, Event, Delay): they are never scenes and create no scene visit. */
+export const isLogicKind = (k: NodeKind | null): k is LogicKind =>
+  k === 'branch' || k === 'random' || k === 'setFlag' || k === 'event' || k === 'delay'
+/** Output pins of a node kind: IF has TRUE/FALSE, Random has A/B, everything else has one unnamed output. */
+export const portsOf = (k: NodeKind | null): readonly Port[] => (k === 'branch' ? BRANCH_PORTS : k === 'random' ? RANDOM_PORTS : [])
+/** Logic nodes with exactly one, port-less output. */
+export const isSingleOutput = (k: NodeKind | null): boolean => k === 'setFlag' || k === 'event' || k === 'delay'
 export type ConnectReason =
   | 'missing'
   | 'comment'
   | 'portMissing'
   | 'portUnexpected'
+  | 'portWrong'
   | 'portTaken'
   | 'outputTaken'
   | 'duplicate'
@@ -24,7 +31,7 @@ export type ConnectReason =
 
 export interface Connect {
   source: string
-  sourcePort?: BranchPort
+  sourcePort?: Port
   target: string
 }
 export type ConnectResult = { ok: true } | { ok: false; reason: ConnectReason }
@@ -32,12 +39,13 @@ export type ConnectResult = { ok: true } | { ok: false; reason: ConnectReason }
 export function nodeKind(p: GraphData, id: string): NodeKind | null {
   if (p.scenes.some((s) => s.id === id)) return 'scene'
   const n = p.logicNodes.find((x) => x.id === id)
-  if (n) return n.type === 'setFlag' ? 'setFlag' : 'branch'
+  if (n) return n.type
   if (p.comments.some((c) => c.id === id)) return 'comment'
   return null
 }
 
-const isPort = (v: unknown): v is BranchPort => (BRANCH_PORTS as readonly unknown[]).includes(v)
+/** Any known output pin name (IF or Random). */
+export const isPort = (v: unknown): v is Port => (BRANCH_PORTS as readonly unknown[]).includes(v) || (RANDOM_PORTS as readonly unknown[]).includes(v)
 
 /** Logic node ids (IF and Set Flag) reachable from `from` through links that only touch logic nodes. */
 function logicReach(p: GraphData, from: string): Set<string> {
@@ -65,14 +73,16 @@ export function canConnect(p: GraphData, c: Connect): ConnectResult {
   const b = nodeKind(p, c.target)
   if (!a || !b) return { ok: false, reason: 'missing' }
   if (a === 'comment' || b === 'comment') return { ok: false, reason: 'comment' }
-  if (a === 'branch') {
-    if (!isPort(c.sourcePort)) return { ok: false, reason: 'portMissing' }
+  const ports = portsOf(a)
+  if (ports.length > 0) {
+    if (c.sourcePort === undefined) return { ok: false, reason: 'portMissing' }
+    if (!ports.includes(c.sourcePort)) return { ok: false, reason: 'portWrong' }
     if (c.source === c.target) return { ok: false, reason: 'self' }
     if (p.transitions.some((t) => t.source === c.source && t.sourcePort === c.sourcePort))
       return { ok: false, reason: 'portTaken' }
   } else if (c.sourcePort !== undefined) {
     return { ok: false, reason: 'portUnexpected' }
-  } else if (a === 'setFlag') {
+  } else if (isSingleOutput(a)) {
     if (c.source === c.target) return { ok: false, reason: 'self' }
     if (p.transitions.some((t) => t.source === c.source)) return { ok: false, reason: 'outputTaken' }
   }

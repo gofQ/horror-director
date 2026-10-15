@@ -26,11 +26,11 @@ export function ComparePanel() {
   const { t } = useT()
   const project = useStore((s) => s.project)
   const activeId = useStore((s) => s.library.activeId)
-  const { pinned, choices, options, pacing, invalidatedNotice } = useSim()
+  const { pinned, choices, options, pacing, invalidatedNotice, marks } = useSim()
   const [selected, setSelected] = useState<string | null>(null)
   const pin = pinned && pinned.projectId === activeId ? pinned : null
 
-  const cmp = useMemo(() => (pin ? compareRoutes(project, pin.choices, choices, options, pacing) : null), [project, pin, choices, options, pacing])
+  const cmp = useMemo(() => (pin ? compareRoutes(project, pin.choices, choices, options, pacing, { a: pin.marks, b: marks }) : null), [project, pin, choices, options, pacing, marks])
 
   if (!pin || !cmp) {
     return (
@@ -63,6 +63,9 @@ function CompareBody({ cmp, selected, setSelected, bNotice }: { cmp: RouteCompar
       row('hypothetical', t('compare.row.hypothetical'), a.hypothetical, b.hypothetical, d.hypothetical),
       row('assumed', t('compare.row.assumed'), a.assumedTransitions, b.assumedTransitions, d.assumedTransitions),
       { key: 'overrides', label: t('compare.row.overrides'), a: num(a.overrides), b: num(b.overrides), delta: sign(b.overrides - a.overrides) },
+      row('delay', t('compare.row.delay'), a.delayTotal, b.delayTotal, b.delayTotal - a.delayTotal),
+      row('eventNodes', t('compare.row.eventNodes'), a.eventNodes, b.eventNodes, b.eventNodes - a.eventNodes),
+      row('random', t('compare.row.random'), a.randomDecisions, b.randomDecisions, b.randomDecisions - a.randomDecisions),
       row('perMinute', t('compare.row.perMinute'), a.eventsPerMinute, b.eventsPerMinute, d.eventsPerMinute),
       row('avg', t('compare.row.avg'), a.avgIntensity, b.avgIntensity, d.avgIntensity),
       row('peak', t('compare.row.peak'), a.peakIntensity, b.peakIntensity, d.peakIntensity),
@@ -228,6 +231,11 @@ function CompareBody({ cmp, selected, setSelected, bNotice }: { cmp: RouteCompar
             {a.overrides + b.overrides > 0 && (
               <p className="muted" role="note" data-testid="compare-overrides-note">
                 {t('compare.overridesNote')}
+              </p>
+            )}
+            {a.randomDecisions + b.randomDecisions > 0 && (
+              <p className="muted" role="note" data-testid="compare-random-note">
+                {t('compare.randomNote', { aM: a.randomManual, aR: a.randomRolled, aU: a.randomDecisions - a.randomManual - a.randomRolled, bM: b.randomManual, bR: b.randomRolled, bU: b.randomDecisions - b.randomManual - b.randomRolled })}
               </p>
             )}
             {table(t('compare.sec.summary'), summary, 'summary')}
