@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from 'react'
-import { ArrowDownRight, ArrowUpRight, RotateCcw, Undo2 } from 'lucide-react'
+import { ArrowDownRight, ArrowUpRight, Pin, PinOff, RotateCcw, Undo2 } from 'lucide-react'
 import { useStore } from '../store/useStore'
 import { useSim } from '../store/simulator'
 import { useT } from '../i18n/store'
@@ -8,6 +8,7 @@ import { formatClock, simulateRoute, type SimEvent, type SimOption, type SimStat
 import { KIND_COLOR, TRIGGER_COLOR } from '../lib/theme'
 import { NumberInput } from './fields'
 import { PacingPanel } from './PacingPanel'
+import { ComparePanel } from './ComparePanel'
 import { analyzePacing } from '../lib/pacing'
 
 const W = 1000
@@ -18,7 +19,9 @@ const TICKS = [5, 10, 15, 30, 60, 120, 300, 600, 1200, 1800, 3600]
 export function SimulatorView() {
   const { t, formatNumber } = useT()
   const project = useStore((s) => s.project)
-  const { choices, options, selectedEventKey, selectedFindingId, pacing, invalidatedNotice, choose, back, restart, setOptions, prune, selectEvent } = useSim()
+  const { choices, options, selectedEventKey, selectedFindingId, pacing, pinned, invalidatedNotice, choose, back, restart, setOptions, prune, selectEvent, pinRouteA, clearPin } = useSim()
+  const activeId = useStore((s) => s.library.activeId)
+  const hasPin = !!pinned && pinned.projectId === activeId
 
   const result = useMemo(() => simulateRoute(project, choices, options), [project, choices, options])
 
@@ -63,11 +66,21 @@ export function SimulatorView() {
       </div>
 
       {result.status === 'empty' || result.status === 'noStart' ? (
-        <div className="card">
-          <p className="issue error" data-testid="sim-status" data-status={result.status}>
-            {t(`sim.status.${result.status}`)}
-          </p>
-        </div>
+        <>
+          <div className="card">
+            <p className="issue error" data-testid="sim-status" data-status={result.status}>
+              {t(`sim.status.${result.status}`)}
+            </p>
+          </div>
+          {hasPin && (
+            <>
+              <ComparePanel />
+              <button className="btn" data-testid="compare-clear" onClick={clearPin}>
+                <PinOff size={14} /> {t('compare.clear')}
+              </button>
+            </>
+          )}
+        </>
       ) : (
         <>
           <div className="sim-top">
@@ -135,6 +148,14 @@ export function SimulatorView() {
                 <button className="btn" data-testid="sim-restart" onClick={restart} disabled={choices.length === 0}>
                   <RotateCcw size={14} /> {t('sim.restart')}
                 </button>
+                <button className="btn" data-testid="sim-pin" onClick={pinRouteA}>
+                  <Pin size={14} /> {hasPin ? t('compare.replace') : t('compare.pin')}
+                </button>
+                {hasPin && (
+                  <button className="btn" data-testid="compare-clear" onClick={clearPin}>
+                    <PinOff size={14} /> {t('compare.clear')}
+                  </button>
+                )}
               </div>
 
               <details className="sim-limits">
@@ -334,6 +355,8 @@ export function SimulatorView() {
           </div>
 
           <PacingPanel analysis={analysis} sceneTitle={sceneTitle} selectedId={selectedFinding?.id ?? null} />
+
+          <ComparePanel />
 
           <div className="timeline-lower">
             <div className="card trigger-list">

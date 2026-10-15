@@ -291,3 +291,26 @@ kbd { background: var(--panel-2); border: 1px solid var(--border); border-radius
 .trigger-row.highlighted { border-color: #fff; background: var(--panel-2); }
 .sim-stat[data-stat="longest"] .sim-stat-value { font-size: 17px; }
 @media (max-width: 900px) { .pacing-kind-row { grid-template-columns: 100px 1fr 24px; } }
+
+/* route comparison */
+.compare-panel { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.compare-table-wrap { overflow-x: auto; max-width: 100%; }
+.compare-table { border-collapse: collapse; width: 100%; font-size: 13px; }
+.compare-table caption { text-align: left; font-weight: 600; padding: 4px 0; color: var(--accent-2); }
+.compare-table th, .compare-table td { border-bottom: 1px solid var(--border); padding: 4px 8px; text-align: right; font-variant-numeric: tabular-nums; }
+.compare-table th[scope="col"]:first-child, .compare-table th[scope="row"] { text-align: left; font-weight: 500; }
+.compare-table th[scope="col"] { color: var(--muted); font-weight: 600; }
+.compare-delta { color: #a9b8e8; }
+.compare-lists { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.compare-lists > * { min-width: 0; }
+.compare-group { margin-bottom: 8px; }
+.compare-group-title { margin-bottom: 4px; }
+.compare-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.compare-chip { background: var(--bg-2); border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; font-size: 13px; overflow-wrap: anywhere; }
+.compare-ev { width: 100%; display: flex; gap: 8px; align-items: center; text-align: left; font: inherit; font-size: 13px; color: var(--text); background: var(--bg-2); border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; cursor: pointer; }
+.compare-ev.selected { border-color: #fff; }
+.compare-ev i { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.compare-ev-name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.compare-ev-time { color: var(--accent-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.compare-legend { display: flex; flex-wrap: wrap; gap: 4px 16px; list-style: none; margin: 0; padding: 0; font-size: 12.5px; }
+@media (max-width: 900px) { .compare-lists { grid-template-columns: minmax(0, 1fr); } .compare-ev { flex-wrap: wrap; } .compare-ev-time { white-space: normal; } }

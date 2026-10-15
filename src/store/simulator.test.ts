@@ -5,6 +5,7 @@ import { useSim } from './simulator'
 import { addAndOpen, bootLibrary, deleteProject, flushNow, openProject } from './library'
 import { simulateRoute } from '../lib/simulate'
 import { analyzePacing } from '../lib/pacing'
+import { compareRoutes } from '../lib/compare'
 import { emptyProject } from '../lib/factory'
 import { sampleProject } from '../lib/sample'
 
@@ -142,6 +143,80 @@ describe('pacing state', () => {
     expect(st().past).toBe(past)
     expect(flushNow()).toBe(true)
     expect(writes).not.toHaveBeenCalled()
+    writes.mockRestore()
+  })
+})
+
+describe('route comparison state', () => {
+  it('pins a copy of the current route for the active project and keeps it when Route B changes', () => {
+    sim().choose('e1')
+    sim().choose('e2')
+    sim().pinRouteA()
+    expect(sim().pinned).toEqual({ projectId: st().library.activeId, choices: ['e1', 'e2'] })
+    sim().restart()
+    sim().choose('e1')
+    sim().choose('e3')
+    sim().back()
+    expect(sim().pinned?.choices).toEqual(['e1', 'e2'])
+    expect(sim().choices).toEqual(['e1'])
+  })
+
+  it('replaces and clears the pin without touching the live route', () => {
+    sim().choose('e1')
+    sim().pinRouteA()
+    sim().choose('e2')
+    sim().pinRouteA()
+    expect(sim().pinned?.choices).toEqual(['e1', 'e2'])
+    sim().clearPin()
+    expect(sim().pinned).toBeNull()
+    expect(sim().choices).toEqual(['e1', 'e2'])
+  })
+
+  it('is not pruned when graph edits invalidate it (the comparison reports it instead)', () => {
+    sim().choose('e1')
+    sim().choose('e2')
+    sim().pinRouteA()
+    st().deleteTransition('e2')
+    expect(sim().pinned?.choices).toEqual(['e1', 'e2'])
+    const c = compareRoutes(st().project, sim().pinned!.choices, ['e1'], sim().options, sim().pacing)
+    expect(c.a.dropped).toBe(1)
+    expect(c.incomplete).toBe(true)
+  })
+
+  it('resets on project switch, create and delete', () => {
+    const first = st().library.activeId!
+    sim().choose('e1')
+    sim().pinRouteA()
+    addAndOpen(emptyProject())
+    expect(sim().pinned).toBeNull()
+    sim().pinRouteA()
+    expect(sim().pinned?.projectId).toBe(st().library.activeId)
+    openProject(first)
+    expect(sim().pinned).toBeNull()
+    sim().pinRouteA()
+    deleteProject(first, () => emptyProject())
+    expect(sim().pinned).toBeNull()
+  })
+
+  it('comparing never touches project data, history or storage', () => {
+    flushNow()
+    const project = st().project
+    const past = st().past
+    const library = st().library
+    const writes = vi.spyOn(b, 'setItem')
+    const snapshot = JSON.stringify([...b.data])
+    for (const id of ['e1', 'e2', 'e5']) sim().choose(id)
+    sim().pinRouteA()
+    sim().restart()
+    sim().choose('e1')
+    compareRoutes(st().project, sim().pinned!.choices, sim().choices, sim().options, sim().pacing)
+    sim().clearPin()
+    expect(st().project).toBe(project)
+    expect(st().past).toBe(past)
+    expect(st().library).toBe(library)
+    expect(flushNow()).toBe(true)
+    expect(writes).not.toHaveBeenCalled()
+    expect(JSON.stringify([...b.data])).toBe(snapshot)
     writes.mockRestore()
   })
 })
