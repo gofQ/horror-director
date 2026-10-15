@@ -1,7 +1,7 @@
 import { z } from 'zod'
 
-/** 2 added `scene.shots`; 3 adds the optional `transition.direction`. Older files and bare projects are still imported. */
-export const SCHEMA_VERSION = 3
+/** 2 added `scene.shots`; 3 the optional `transition.direction`; 4 adds `scene.audioCues`. Older files and bare projects are still imported. */
+export const SCHEMA_VERSION = 4
 export const FORMAT_ID = 'horror-director'
 
 export const SCENE_KINDS = ['reality', 'dream', 'nightmare', 'memory', 'ending'] as const
@@ -19,6 +19,9 @@ export const SHOT_MOVEMENTS = ['static', 'pan', 'tilt', 'tracking', 'handheld'] 
 export const SHOT_TECHNIQUES = ['none', 'match-cut', 'impossible-space', 'identity-discontinuity', 'false-awakening'] as const
 /** Psychological techniques for transition direction: the shot techniques plus the reality reveal. */
 export const DIRECTION_TECHNIQUES = [...SHOT_TECHNIQUES, 'reality-reveal'] as const
+export const AUDIO_CUE_TYPES = ['ambience', 'music', 'sfx', 'voice', 'whisper', 'stinger', 'silence'] as const
+export const AUDIO_ORIGINS = ['diegetic', 'non-diegetic', 'ambiguous'] as const
+export const AUDIO_DIRECTIONS = ['nonspatial', 'front', 'behind', 'left', 'right', 'above', 'moving'] as const
 export const CHARACTER_ROLES = ['player', 'entity', 'npc'] as const
 
 export type SceneKind = (typeof SCENE_KINDS)[number]
@@ -28,6 +31,9 @@ export type ShotFraming = (typeof SHOT_FRAMINGS)[number]
 export type ShotMovement = (typeof SHOT_MOVEMENTS)[number]
 export type ShotTechnique = (typeof SHOT_TECHNIQUES)[number]
 export type DirectionTechnique = (typeof DIRECTION_TECHNIQUES)[number]
+export type AudioCueType = (typeof AUDIO_CUE_TYPES)[number]
+export type AudioOrigin = (typeof AUDIO_ORIGINS)[number]
+export type AudioDirection = (typeof AUDIO_DIRECTIONS)[number]
 export type CharacterRole = (typeof CHARACTER_ROLES)[number]
 
 const id = z.string().min(1)
@@ -56,6 +62,29 @@ export const shotSchema = z.object({
   visualNotes: z.string().default(''),
 })
 
+/**
+ * Planning notes for one audio cue (not playable audio or engine commands). Times are seconds relative
+ * to the scene; `level` is a descriptive 0–10 planning value, not measured loudness.
+ */
+export const audioCueSchema = z.object({
+  id,
+  title: z.string(),
+  start: z.number().min(0),
+  duration: z.number().positive(),
+  type: z.enum(AUDIO_CUE_TYPES),
+  origin: z.enum(AUDIO_ORIGINS).default('non-diegetic'),
+  direction: z.enum(AUDIO_DIRECTIONS).default('nonspatial'),
+  level: z.number().min(0).max(10).default(5),
+  fadeIn: z.number().min(0).default(0),
+  fadeOut: z.number().min(0).default(0),
+  loop: z.boolean().default(false),
+  /** Asset path or identifier (free text, never resolved). */
+  asset: z.string().default(''),
+  notes: z.string().default(''),
+  /** Optional text-to-audio generation brief (never sent anywhere). */
+  prompt: z.string().default(''),
+})
+
 export const sceneSchema = z.object({
   id,
   title: z.string(),
@@ -75,6 +104,8 @@ export const sceneSchema = z.object({
   triggers: z.array(triggerSchema).default([]),
   /** Ordered cinematic shots (authored order). */
   shots: z.array(shotSchema).default([]),
+  /** Ordered audio cues (authored order; independent of triggers, ambience and shot sound notes). */
+  audioCues: z.array(audioCueSchema).default([]),
   /** characterId -> characterStateId */
   characterStates: z.record(z.string(), z.string()).default({}),
 })
@@ -145,6 +176,7 @@ export const exportSchema = z.object({
 })
 
 export type TransitionDirection = z.infer<typeof transitionDirectionSchema>
+export type AudioCue = z.infer<typeof audioCueSchema>
 export type Shot = z.infer<typeof shotSchema>
 export type Trigger = z.infer<typeof triggerSchema>
 export type Scene = z.infer<typeof sceneSchema>

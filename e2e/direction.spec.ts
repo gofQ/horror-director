@@ -229,7 +229,7 @@ test.describe('persistence, backups and file compatibility', () => {
     await waitSaved(page)
 
     const exported = await backup(page)
-    expect(exported.schemaVersion).toBe(3)
+    expect(exported.schemaVersion).toBe(4)
     expect(exported.project.transitions.find((t) => t.id === 'e2')!.direction).toMatchObject({ reveal: 'Persisted reveal', technique: 'none', sourceShotId: null })
     expect('direction' in exported.project.transitions.find((t) => t.id === 'e3')!).toBe(false)
 
@@ -250,12 +250,13 @@ test.describe('persistence, backups and file compatibility', () => {
     await expect(label(page, 'Reveal moment / contradiction')).toHaveValue('Persisted reveal')
   })
 
-  test('imports a schema-2 file and backs it up as schema 3 without losing fields', async ({ page }) => {
+  test('imports a schema-2 file and backs it up as schema 4 without losing fields', async ({ page }) => {
     await openApp(page)
     const original = await backup(page)
     const v2 = structuredClone(original)
     v2.schemaVersion = 2
     for (const t of v2.project.transitions) delete t.direction
+    for (const sc of v2.project.scenes) delete sc.audioCues
 
     await importAsNew(page, v2)
     await expect(page.getByRole('button', { name: 'Add project' })).toBeVisible()
@@ -264,8 +265,10 @@ test.describe('persistence, backups and file compatibility', () => {
     await expect(nodes(page)).toHaveCount(8)
 
     const migrated = await backup(page)
-    expect(migrated.schemaVersion).toBe(3)
-    expect(migrated.project.scenes).toEqual(original.project.scenes) // shots intact
+    expect(migrated.schemaVersion).toBe(4)
+    const noAudio = (scenes: Record<string, unknown>[]) => scenes.map(({ audioCues, ...rest }) => (void audioCues, rest))
+    expect(noAudio(migrated.project.scenes)).toEqual(noAudio(original.project.scenes)) // shots intact
+    expect(migrated.project.scenes.every((sc) => Array.isArray(sc.audioCues) && (sc.audioCues as unknown[]).length === 0)).toBe(true)
     expect(migrated.project.transitions.every((t) => !('direction' in t))).toBe(true)
     expect(migrated.project.transitions.map((t) => t.id)).toEqual(original.project.transitions.map((t) => t.id))
   })

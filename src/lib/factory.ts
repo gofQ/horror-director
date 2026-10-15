@@ -1,5 +1,5 @@
 import { uid } from './id'
-import type { Character, Project, Scene, SceneKind, Shot, Transition, Trigger } from './schema'
+import type { AudioCue, Character, Project, Scene, SceneKind, Shot, Transition, Trigger } from './schema'
 
 /** Display names given to newly created items. The UI passes the current language's set. */
 export interface DefaultNames {
@@ -9,6 +9,7 @@ export interface DefaultNames {
   ending: string
   trigger: string
   shot: string
+  audioCue: string
   character: string
   state: string
   stateIdle: string
@@ -20,6 +21,7 @@ export const ENGLISH_NAMES: DefaultNames = {
   ending: 'New Ending',
   trigger: 'New trigger',
   shot: 'New shot',
+  audioCue: 'New audio cue',
   character: 'New Character',
   state: 'New state',
   stateIdle: 'Idle',
@@ -42,6 +44,7 @@ export function newScene(
     loop: { enabled: false, maxIterations: 0, exitCondition: '' },
     triggers: [],
     shots: [],
+    audioCues: [],
     characterStates: {},
   }
 }
@@ -72,6 +75,27 @@ export function newShot(start = 0, names: DefaultNames = ENGLISH_NAMES): Shot {
     technique: 'none',
     soundNotes: '',
     visualNotes: '',
+  }
+}
+
+export const DEFAULT_CUE_DURATION = 5
+
+export function newAudioCue(start = 0, names: DefaultNames = ENGLISH_NAMES): AudioCue {
+  return {
+    id: uid('cue'),
+    title: names.audioCue,
+    start,
+    duration: DEFAULT_CUE_DURATION,
+    type: 'sfx',
+    origin: 'non-diegetic',
+    direction: 'nonspatial',
+    level: 5,
+    fadeIn: 0,
+    fadeOut: 0,
+    loop: false,
+    asset: '',
+    notes: '',
+    prompt: '',
   }
 }
 

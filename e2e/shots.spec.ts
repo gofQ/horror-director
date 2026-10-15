@@ -190,13 +190,16 @@ test.describe('persistence, isolation and file compatibility', () => {
     expect(await titles(page)).toEqual(['Persisted shot'])
   })
 
-  test('imports a schema-1 file and backs it up as schema 3 without losing fields', async ({ page }) => {
+  test('imports a schema-1 file and backs it up as schema 4 without losing fields', async ({ page }) => {
     await openApp(page)
     const original = await backup(page)
-    expect(original.schemaVersion).toBe(3)
+    expect(original.schemaVersion).toBe(4)
     const v1 = structuredClone(original)
     v1.schemaVersion = 1
-    for (const s of v1.project.scenes) delete s.shots
+    for (const s of v1.project.scenes) {
+      delete s.shots
+      delete s.audioCues
+    }
     for (const t of (v1.project as unknown as { transitions: Record<string, unknown>[] }).transitions) delete t.direction
 
     await importAsNew(page, v1)
@@ -206,9 +209,9 @@ test.describe('persistence, isolation and file compatibility', () => {
     await expect(nodes(page)).toHaveCount(8)
 
     const migrated = await backup(page)
-    expect(migrated.schemaVersion).toBe(3)
+    expect(migrated.schemaVersion).toBe(4)
     expect(migrated.project.scenes.every((s) => Array.isArray(s.shots) && (s.shots as unknown[]).length === 0)).toBe(true)
-    const strip = (scenes: Record<string, unknown>[]) => scenes.map(({ shots, ...rest }) => (void shots, rest))
+    const strip = (scenes: Record<string, unknown>[]) => scenes.map(({ shots, audioCues, ...rest }) => (void shots, void audioCues, rest))
     expect(strip(migrated.project.scenes)).toEqual(strip(original.project.scenes))
     const noDirection = (ts: unknown) => (ts as Record<string, unknown>[]).map(({ direction, ...rest }) => (void direction, rest))
     expect({ ...migrated.project, scenes: [], transitions: noDirection((migrated.project as unknown as { transitions: unknown }).transitions) }).toEqual({

@@ -1,11 +1,12 @@
 import { create } from 'zustand'
-import { emptyProject, newCharacter, newScene, newShot, newTransition, newTrigger, type DefaultNames } from '../lib/factory'
+import { emptyProject, newAudioCue, newCharacter, newScene, newShot, newTransition, newTrigger, type DefaultNames } from '../lib/factory'
 import { getLang } from '../i18n/store'
 import { translate } from '../i18n'
 import { uid } from '../lib/id'
 import { loadLibrary, type LibraryIndex, type LoadNotice, type LoadedLibrary } from '../lib/library'
 import { browserBackend, useSaveStatus } from '../lib/persist'
 import type {
+  AudioCue,
   Character,
   CharacterState,
   Project,
@@ -18,6 +19,7 @@ import type {
 } from '../lib/schema'
 import { sampleProject } from '../lib/sample'
 import { computeLayout } from '../lib/layout'
+import { nextCueStart } from '../lib/audio'
 import { nextStart, shotReferences, sortedByTime } from '../lib/shots'
 import { transitionDirectionSchema } from '../lib/schema'
 
@@ -36,6 +38,7 @@ export function defaultNames(): DefaultNames {
     ending: translate(l, 'default.ending'),
     trigger: translate(l, 'default.trigger'),
     shot: translate(l, 'default.shot'),
+    audioCue: translate(l, 'default.audioCue'),
     character: translate(l, 'default.character'),
     state: translate(l, 'default.state'),
     stateIdle: translate(l, 'default.stateIdle'),
@@ -107,6 +110,16 @@ interface State {
   moveShot: (sceneId: string, id: string, dir: -1 | 1) => void
   /** Reorders by start time (stable); one undo step, no history entry when already sorted. */
   sortShotsByTime: (sceneId: string) => void
+
+  /** Audio cues (planning notes; independent of triggers, ambience and shot sound notes). Authored timing is never changed implicitly. */
+  addAudioCue: (sceneId: string) => string
+  /** Refuses (false, nothing changes) values that would make the cue invalid (negative start/fades, non-positive duration, level outside 0–10). */
+  updateAudioCue: (sceneId: string, id: string, patch: Partial<Omit<AudioCue, 'id'>>) => boolean
+  deleteAudioCue: (sceneId: string, id: string) => void
+  /** Inserts a copy right after the original, starting where the original ends. */
+  duplicateAudioCue: (sceneId: string, id: string, copyTitle: string) => string | null
+  /** Moves a cue one place in the authored order (timing untouched). */
+  moveAudioCue: (sceneId: string, id: string, dir: -1 | 1) => void
 
   addCharacter: () => string
   updateCharacter: (id: string, patch: Partial<Character>) => void
@@ -476,6 +489,60 @@ export const useStore = create<State>()(
           const sorted = sortedByTime(shots)
           if (sorted.every((x, i) => x === shots[i])) return
           set((s) => ({ project: mapScene(s.project, sceneId, (sc) => ({ ...sc, shots: sortedByTime(sc.shots) })) }))
+        },
+
+        addAudioCue: (sceneId) => {
+          const scene = get().project.scenes.find((x) => x.id === sceneId)
+          const cue = newAudioCue(nextCueStart(scene?.audioCues ?? []), defaultNames())
+          set((s) => ({ project: mapScene(s.project, sceneId, (sc) => ({ ...sc, audioCues: [...sc.audioCues, cue] })) }))
+          return cue.id
+        },
+        updateAudioCue: (sceneId, id, patch) => {
+          if (!get().project.scenes.find((x) => x.id === sceneId)?.audioCues.some((x) => x.id === id)) return false
+          const bad =
+            (patch.start !== undefined && !(patch.start >= 0)) ||
+            (patch.duration !== undefined && !(patch.duration > 0)) ||
+            (patch.fadeIn !== undefined && !(patch.fadeIn >= 0)) ||
+            (patch.fadeOut !== undefined && !(patch.fadeOut >= 0)) ||
+            (patch.level !== undefined && !(patch.level >= 0 && patch.level <= 10))
+          if (bad) return false
+          set(
+            (s) => ({
+              project: mapScene(s.project, sceneId, (sc) => ({
+                ...sc,
+                audioCues: sc.audioCues.map((x) => (x.id === id ? { ...x, ...patch } : x)),
+              })),
+            }),
+            { key: `audio:${id}:${keysOf(patch)}` },
+          )
+          return true
+        },
+        deleteAudioCue: (sceneId, id) =>
+          set((s) => ({ project: mapScene(s.project, sceneId, (sc) => ({ ...sc, audioCues: sc.audioCues.filter((x) => x.id !== id) })) })),
+        duplicateAudioCue: (sceneId, id, copyTitle) => {
+          const src = get().project.scenes.find((x) => x.id === sceneId)?.audioCues.find((x) => x.id === id)
+          if (!src) return null
+          const copy: AudioCue = { ...src, id: uid('cue'), title: copyTitle, start: Math.round((src.start + src.duration) * 100) / 100 }
+          set((s) => ({
+            project: mapScene(s.project, sceneId, (sc) => {
+              const i = sc.audioCues.findIndex((x) => x.id === id)
+              return { ...sc, audioCues: [...sc.audioCues.slice(0, i + 1), copy, ...sc.audioCues.slice(i + 1)] }
+            }),
+          }))
+          return copy.id
+        },
+        moveAudioCue: (sceneId, id, dir) => {
+          const cues = get().project.scenes.find((x) => x.id === sceneId)?.audioCues ?? []
+          const i = cues.findIndex((x) => x.id === id)
+          const j = i + dir
+          if (i < 0 || j < 0 || j >= cues.length) return
+          set((s) => ({
+            project: mapScene(s.project, sceneId, (sc) => {
+              const next = [...sc.audioCues]
+              ;[next[i], next[j]] = [next[j], next[i]]
+              return { ...sc, audioCues: next }
+            }),
+          }))
         },
 
         addCharacter: () => {

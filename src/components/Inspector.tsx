@@ -1,9 +1,10 @@
 import { useState } from 'react'
-import { Clapperboard, Drama, Flag, Trash2, X } from 'lucide-react'
+import { Clapperboard, Drama, Flag, Trash2, Volume2, X } from 'lucide-react'
 import { useStore } from '../store/useStore'
 import { useT } from '../i18n/store'
 import { SCENE_KINDS, TRANSITION_STYLES, crossingOf } from '../lib/schema'
 import { Field, NumberInput, Select, TextArea, TextInput } from './fields'
+import { AudioPlannerDialog } from './AudioPlannerDialog'
 import { ShotPlannerDialog } from './ShotPlannerDialog'
 import { TransitionDesignerDialog } from './TransitionDesignerDialog'
 
@@ -18,6 +19,7 @@ function SceneInspector({ id }: { id: string }) {
   const setTimelineScene = useStore((s) => s.setTimelineScene)
   const setCharState = useStore((s) => s.setSceneCharacterState)
   const [shotsOpen, setShotsOpen] = useState(false)
+  const [audioOpen, setAudioOpen] = useState(false)
   if (!scene) return null
   const isStart = project.startSceneId === id
 
@@ -119,6 +121,12 @@ function SceneInspector({ id }: { id: string }) {
         <Clapperboard size={14} /> {t('shot.open', { n: scene.shots.length })}
       </button>
       {shotsOpen && <ShotPlannerDialog sceneId={id} onClose={() => setShotsOpen(false)} />}
+
+      <div className="section-title">{t('audio.open', { n: scene.audioCues.length })}</div>
+      <button className="btn" data-testid="open-audio" onClick={() => setAudioOpen(true)} title={t('audio.openTip')}>
+        <Volume2 size={14} /> {t('audio.open', { n: scene.audioCues.length })}
+      </button>
+      {audioOpen && <AudioPlannerDialog sceneId={id} onClose={() => setAudioOpen(false)} />}
     </>
   )
 }
