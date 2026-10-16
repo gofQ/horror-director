@@ -69,6 +69,7 @@ korku ritmini planlamak isteyen bağımsız geliştiriciler ve küçük ekipler.
   ve geçiş yönü notlarından oyuncunun inancı ile gerçeklik farkı. Ulaşılamayan sahneler ve eksik yazım listelenir, eksik ayrıntılar
   **TBD** olarak işaretlenir. Sınıf, varlık ve dosya adları *önerilerdir*; kod üretilmez ve **hiçbir Unreal ya da Unity çalışma zamanı
   entegrasyonu yapılmaz**. Planlayıcı salt okunurdur: projeyi, kütüphaneyi, otomatik kaydı ya da geri alma geçmişini asla değiştirmez.
+- **Görev devri:** Üretim sekmesi tüm görevleri bağımlılık sırasıyla (ihtiyaç duyan ses ve karakter görevlerinden önce varlıklar, tüketicilerden önce ortak sistemler, en sonda doğrulama) aşama, kaynak türü ve hazırlık filtreli aranabilir bir görev gezgininde de listeler. Hazırlık **Hazır**, **Bilgi gerekli** (temel bir yazılmış girdi eksik; örneğin koşulsuz EĞER, eksik Sıra aşaması, bağlanmamış çıkış, varlık referansı olmayan ipucu ya da ulaşılamayan sahne) veya **Bağımlılıklar engelliyor** olur; yalnızca yazılmış veriden türetilir ve hiçbir şeyin uygulandığı anlamına gelmez: uygulama bir oyun motoruna bağlı olmadığı için uygulama durumu her zaman bilinmiyordur. Görevin ayrıntıları eksik gereksinimlerini ve onaylanacak öğeleri, kaynak kimliklerini (sahneyi, düğümü ya da geçişi grafikte açmak için tıklayın) ve bağımlılıklarını ile ona bağlı görevleri gösterir. Seçili görev için tam yazılmış veriyi — çekimler ve yön notları, ipucu zamanlaması, uzamsal yön, geçişler, sessizlik ve varlık referansları, graf pinleri, bayraklar, yapılandırılmış EĞER metni, Rastgele olasılıkları, Olay ve Bekleme verisi, Sıra aşama düzeni, karakter durumları, tetikleyici zamanı ve şiddeti — ayrıca önerilen sınıf ve varlıkları, sıralı adımları, uç durumları, kabul testlerini, eksik bilgileri ve dışlamaları içeren bir **uygulama özeti indirebilir** (Markdown) ve Unreal ya da Unity projenizde çalışan Claude Code veya Codex için bir **kodlama ajanı istemi kopyalayabilirsiniz** (önce incele, var olanı doğrula, yalnızca bu görevi uygula, yazılmış davranışı koru, motor kontrollerini çalıştır, raporla). Görev kimlikleri yalnızca görevin sorumluluğuna ve kaynağına bağlıdır, zamanlamaya değil. Sahne başına yazdığınız Unreal `/Game/...` metni yalnızca Unreal planlarında, doğrulanmamış bir referans olarak gösterilir; Unity planları önerilen bir sahne yolu gösterir. Gezgin seçimi ve filtreler yalnızca oturumludur ve projeyi asla değiştirmez.
 - **Kapsamlı örnek:** **Projeler → Örnek ekle** yeni bir proje oluşturur, "The Hollow Village (Showcase)" (mevcut çalışmanın üzerine
   asla yazmaz): beş sahne türünün hepsi, özel bir sahne türü, birkaç durumlu üç karakter, tetikleyiciler, çekimler, uzamsal ses, geçiş
   yönü notları, sınırlı bir döngü, yapılandırılmış AND/OR/NOT koşullu bir EĞER, Bayrak Ata düğümleri, Olay, Bekleme, Rastgele Dal,
@@ -225,7 +226,8 @@ npm run preview    # üretim derlemesini sun
    değiştirilmez. Uzamsal fikirler (oyuncunun arkasında fısıltı, soldan sağa giden ses, aniden kaybolan ambiyans, kaynağı
    belirsiz uzak ses, sessizliğin ardından stinger) yapılandırılmış alanlar ve notlarla anlatılır. Geri al/yinele her değişikliği kapsar.
 10. **Motor işini planlayın** (**Üretim**): Unreal Engine 5.x ya da Unity 6'yı seçin, önizlemeyi okuyun, listelenen boşlukları
-    ve TBD işaretlerini kontrol edin, Markdown planını ve görev CSV'sini indirin. Projenizde hiçbir şey değişmez.
+    ve TBD işaretlerini kontrol edin, Markdown planını ve görev CSV'sini indirin. Görev gezgininde görevleri arayıp filtreleyin,
+    kaynaklarını grafikte açın, uygulama özetini indirin ya da kodlama ajanı istemini kopyalayın. Projenizde hiçbir şey değişmez.
 11. **Yedekle** düğmesini düzenli kullanın — tarayıcı depolaması temizlenebilir.
 
 Simülasyon, ritim ve karşılaştırma durumu projeden ayrıdır: proje verisini, otomatik kaydı, kütüphaneyi ya da geri al
@@ -298,6 +300,7 @@ derlemesine karşı Chromium'da çalışır; ekran görüntüsü karşılaştır
   sahneler yine yazılmış sürelerinin tamamını harcar.
 - Sekans görünümü türetilmiş bir özettir: çalma, dalga biçimi ya da simülasyon yoktur, öğeleri kendisi düzenleyemez, seçim, yakınlık
   ve imleci yalnızca oturum boyunca tutar ve koşullu tetikleyicileri değerlendirmek yerine koşullu olarak işaretler.
+- Görev hazırlığı yalnızca yazılmış bilgiyi yansıtır (Hazır, Uygulanmış demek değildir); özetler ve istemler rehberdir, üretilmiş motor kodu değildir ve içlerindeki her yol, sınıf ve varlık adı bir öneridir. Görev kimlikleri ilk üretim planlayıcıdan bu sürüme geçerken bir kez değişti; gezgin durumu yalnızca oturumludur.
 - Üretim planları projeden türetilmiş planlama rehberidir: çalıştırılabilir motor kodu içermez, hiçbir motor varlığının ya da sisteminin
   var olduğunu iddia etmez; Unreal ya da Unity çalışma zamanı entegrasyonu veya içe aktarıcı yoktur. Sınıf/varlık adları önerilerdir;
   plan metni yerelleştirilir ama içindeki proje içeriği çevrilmez. Eski "The Hollow Apartment" örneği hâlâ boş kütüphaneyi besler;
