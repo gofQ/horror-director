@@ -13,7 +13,7 @@ Every future feature or fix milestone must add an entry here (see `CLAUDE.md`).
 
 ## v0.8B — Production Execution Handoff
 
-Pull request: PR_LINK_PLACEHOLDER
+Pull request: [#19](https://github.com/gofQ/horror-director/pull/19)
 
 ### Added
 - **Task explorer** in the Production workspace: a searchable list of all production tasks in dependency order with filters for phase, source type and readiness, and a details panel with readiness, missing requirements, items to confirm, source links that open the scene, node or transition in the graph, and dependencies and dependents you can click through. Selection and filters are session-only.
