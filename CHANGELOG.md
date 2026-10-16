@@ -13,7 +13,7 @@ Every future feature or fix milestone must add an entry here (see `CLAUDE.md`).
 
 ## Fix — Full-width responsive navbar
 
-Pull request: PR_LINK_PLACEHOLDER
+Pull request: [#21](https://github.com/gofQ/horror-director/pull/21)
 
 ### Fixed
 - **The top navbar now uses the whole viewport width.** On wide screens (about 1500px and up) the header used to end well before the right edge (about 330px unused at 1792px) while the six tabs stayed compressed: the action group grew but its controls were packed at the start, and the project name was capped at 220px. Now the brand stays on the left, the tabs share the central space evenly with comfortable click areas, and the project name, Undo/Redo, save indicator, language switch, Projects and Backup are grouped at the far right edge. Long project names are truncated with an ellipsis and never push controls away.
