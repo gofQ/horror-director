@@ -13,7 +13,7 @@ Every future feature or fix milestone must add an entry here (see `CLAUDE.md`).
 
 ## v0.8C — Production Tracking & Feedback Loop
 
-Pull request: PR_LINK_PLACEHOLDER
+Pull request: [#20](https://github.com/gofQ/horror-director/pull/20)
 
 ### Added
 - **Implementation progress** per production task (Not started, In progress, Submitted for review, Verified / approved, Blocked), with notes, a concise history, a status filter and a progress dashboard (totals per status, stale tasks, tasks ready to begin). It is kept strictly apart from **authoring readiness** (derived from authored data) and **source freshness** (current or stale): a Ready task is never treated as done, and only an explicit, confirmed user action can mark a task Verified.
