@@ -586,12 +586,27 @@ kbd { background: var(--panel-2); border: 1px solid var(--border); border-radius
 .sample-guide ol, .sample-guide ul { margin: 0; padding-left: 18px; font-size: 12.5px; display: flex; flex-direction: column; gap: 4px; }
 @media (max-width: 700px) { .sample-guide { max-height: 40%; } .production-actions .btn { flex: 1 1 100%; justify-content: center; } }
 
-/* v0.8A: six tabs — keep the header on one line on wide screens by letting the project name shrink */
-@media (min-width: 1200px) {
-  .tab { padding: 6px 9px; }
+/* Desktop header: brand left, tabs share the central space evenly (they never shrink below their labels), project name +
+   actions grouped at the far right. Below 1500px the project name is hidden and the row wraps (actions on a second,
+   right-aligned row) only if the controls genuinely do not fit; from 1500px everything stays on one row and the project
+   name is the only item that shrinks (ellipsis), so nothing is pushed offscreen, clipped or overlapped. */
+@media (min-width: 901px) {
+  .brand { flex: none; }
+  .brand-name { white-space: nowrap; }
+  .tabs { flex: 1 0 auto; gap: 4px; }
+  .tab { flex: 1 0 auto; justify-content: center; padding: 6px clamp(8px, .7vw, 14px); }
+  .actions { flex: 0 1 auto; margin-left: auto; justify-content: flex-end; min-width: 0; }
+  .actions > :not(.project-name) { flex: none; } /* only the project name may shrink: the language switch clips its buttons otherwise */
+  .project-name { display: none; flex: 0 1 auto; min-width: 0; max-width: clamp(120px, 14vw, 280px); text-align: right; }
+}
+@media (min-width: 1200px) and (max-width: 1499px) { /* compact spacing so the single row still fits */
+  .topbar { gap: 8px; padding-inline: 10px; }
   .tabs { gap: 2px; }
-  .actions { flex: 1 1 0; min-width: 0; }
-  .project-name { flex: 1 1 40px; min-width: 0; text-align: right; }
+  .tab { gap: 5px; padding-inline: 7px; }
+}
+@media (min-width: 1500px) {
+  .topbar { flex-wrap: nowrap; }
+  .project-name { display: block; }
 }
 
 /* v0.8B — task explorer */
