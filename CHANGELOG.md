@@ -3,13 +3,30 @@
 Version history of Horror Director, newest first. This file is the canonical user-facing history; the READMEs describe
 the current product only and `progress.md` tracks engineering status.
 
-The labels below (MVP/v0.1 through v0.7E) are **development milestones**, not published releases: the project has no
+The labels below (MVP/v0.1 through v0.8A) are **development milestones**, not published releases: the project has no
 tagged releases and `package.json` stays at `0.1.0`. Each milestone after the MVP was developed on its own branch and
 merged through a pull request into the integration branch (`claude/optimistic-tesla-r2v8g6`). The JSON schema was
 `schemaVersion: 1` until v0.6A introduced `schemaVersion: 2` (scene shots) and v0.6B `schemaVersion: 3`
 (transition direction) v0.6C `schemaVersion: 4` (scene audio cues) v0.7A `schemaVersion: 5` (IF nodes, comments, custom scene types, branch-port links) v0.7B `schemaVersion: 6` (narrative flags, Set Flag nodes, structured IF conditions) v0.7C `schemaVersion: 7` (reroute points) v0.7D `schemaVersion: 8` (Event, Delay and Random Branch nodes) and v0.7E `schemaVersion: 9` (ordered Sequence and Sequence Return nodes); files of every earlier version, and bare project files, are still imported.
 
 Every future feature or fix milestone must add an entry here (see `CLAUDE.md`).
+
+## v0.8A — Engine Production Planner, Complete Sample & Global Context Menu
+
+Pull request: PR_LINK_PLACEHOLDER
+
+### Added
+- **Production workspace** (new top-level tab) with an engine selector: **Unreal Engine 5.x** (Blueprint-first) or **Unity 6** (C# and components). One pure, deterministic planning core (`src/lib/production/plan.ts`) derives a plan from the *whole* authored project — every branch and ending, unreachable scenes and incomplete authoring listed instead of omitted — and engine adapters (`engines.ts`) add the engine mapping. The preview and the downloads `production-plan-unreal.md` / `production-plan-unity.md` and `production-tasks-<engine>.csv` have the 14 requested sections. Every task has a stable ID (`T-<phase>-<kind>-<source id>`), phase, title, source scene/node/transition/trigger IDs, engine concept, implementation instructions, dependencies (validated: existing and acyclic), Definition of Done and missing information; unknown details are marked **TBD**; class/asset/file names are proposals and no engine code is generated. Semantics are preserved: Scene → logic → Scene hops, Sequence order Then 0 → Return 0 → Then 1 → Return 1 → Completed, Delay as extra time between scenes, Event as a planning milestone, Random probabilities as design intent, structured conditions distinguished from free-text assumptions, player belief versus reality from transition direction notes. Read-only: no project, library, autosave or undo-history writes. Markdown tables escape pipes and line breaks; the CSV is RFC 4180 with CRLF and a guard against spreadsheet formula prefixes. Plan texts are localized (EN/TR); project content is not translated.
+- **Showcase sample** "The Hollow Village (Showcase)" (`src/lib/showcase.ts`), now the primary **Projects → Add sample**: a false-awakening story with Reality / Dream / Nightmare / Memory / Ending scenes, a custom scene type, three characters with several states, triggers, shots, spatial audio cues (including silence), transition direction notes, a bounded loop, an IF with a structured AND/OR/NOT condition and one free-text IF, four flags and Set Flag nodes, Event, Delay, Random Branch, one complete ordered Sequence with two Returns, reroute points and graph comments. It validates without errors or warnings, has routes to all three endings, and always creates a new library project. A dismissible **Explore the sample** guide on the graph explains where each feature lives and the editor interactions (undo/redo, copy/paste, multi-select, context menus), which are not stored as project data.
+- **Global app-owned context menu** (`GlobalContextMenu.tsx`): one centralized fallback for right-click, the Menu key / Shift+F10 and touch long-press on every target inside the app that no specialised menu handled (header, tabs, empty panels, dialogs, the Production workspace). Specialised menus keep priority (the fallback only acts when `contextmenu` is not already prevented, so no duplicates). Text inputs and text areas get an app-themed **Cut / Copy / Paste / Select all** menu that preserves selection, caret and the native undo stack; the clipboard is permission-gated and every failure is reported (Paste is disabled and names Ctrl/Cmd+V where the browser offers no read access; denied access shows a message). Menus support Escape, arrow keys, viewport clamping and TR/EN. Targets outside the app are never touched.
+
+### Changed
+- Right-click on inputs, the palette, zoom controls and the minimap no longer shows the native browser menu; it shows the app menu instead (the former native-menu exception in the graph was removed).
+- `src/lib/sample.ts` helpers are exported for reuse; the legacy `sampleProject()` ("The Hollow Apartment") is unchanged and still seeds a fresh library.
+- No schema change: JSON schema stays **9**; library records, import/export and recovery are untouched. `package.json` version metadata is unchanged.
+
+### Not included
+- No Unreal or Unity runtime integration, importer or generated engine code; no automatic route enumeration.
 
 ## v0.7E — Ordered Sequence
 

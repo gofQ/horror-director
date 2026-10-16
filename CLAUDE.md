@@ -23,3 +23,5 @@ PW_CHROMIUM_PATH=/opt/pw-browsers/chromium npm run test:e2e   # Cloud sessions; 
 - Localization: add every UI string to `src/i18n/en.ts` and `src/i18n/tr.ts` (typed parity); user content is never translated.
 - Simulator, pacing and comparison are read-only and session-only: they must never write to project data, autosave, undo history or exports.
 - Keep changes scoped to the milestone; no unrelated refactors.
+- Right-click inside the app is app-owned: a new region needs no code (the global fallback in `GlobalContextMenu.tsx` covers it); a specialised menu must call `preventDefault()` so the fallback skips it.
+- The production planner (`src/lib/production/`) is pure and read-only; engine wording lives in `plan.*` i18n keys and names are always labelled as proposals.

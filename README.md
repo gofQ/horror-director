@@ -47,9 +47,34 @@ documentation: [README.tr.md](README.tr.md).
 - **Custom scene types:** per-project, reusable scene types (name, curated colour and icon, base kind, default description
   and duration). A custom scene is a normal scene whose base kind (reality, dream, nightmare, memory, ending) still drives
   crossings, simulation and analysis.
-- **Context menus:** accessible right-click menus on the graph canvas, scenes, IF nodes, comments and connections, and on
-  Timeline/Sequence items and project rows (also Shift+F10 / the menu key, and long-press on touch). Native right-click is
-  kept in inputs and text fields.
+- **Context menus:** the app owns right-click everywhere inside it, so the browser's native menu never appears. Specialised
+  menus cover the graph canvas, scenes, IF nodes, comments, connections, reroute points, Timeline/Sequence items and project
+  rows; every other region (header, tabs, empty panels, dialogs, the Production workspace) gets a general application menu
+  (copy selected text, undo/redo, go to a tab, back up, projects, language). Text inputs and text areas get an app-themed
+  **Cut / Copy / Paste / Select all** menu that keeps the selection and caret and the browser's own undo. The clipboard is
+  permission-gated: when the browser blocks or lacks it the item says so (Paste is disabled and names Ctrl/Cmd+V) and a
+  message explains what happened, never a silent no-op. Also available with Shift+F10 / the Menu key, Escape to close, arrow
+  keys to move, and long-press on touch. Only targets inside the app are handled; browser chrome is untouched.
+- **Production planner:** the **Production** tab turns the active project into an implementation plan for **Unreal Engine 5.x**
+  (Blueprint-first) or **Unity 6** (C# and components). A pure, deterministic planning core reads the whole authored graph
+  (every branch and ending, not one simulated route) and an engine adapter adds the engine mapping. The preview and the
+  downloads (`production-plan-unreal.md` / `production-plan-unity.md` and an engine-specific task CSV
+  `production-tasks-<engine>.csv`) have 14 sections: overview and assumptions, scene/level inventory, graph and transitions,
+  flags, IF and Random Branch, Event/Delay/Sequence, shots, audio, characters, horror triggers, assets and missing dependencies,
+  milestones, tasks and a verification checklist. Every task has a stable ID derived from its source IDs, a phase, source
+  scene/node/transition/trigger IDs, an engine concept, implementation instructions, dependencies, a Definition of Done and its
+  missing information. Semantics are kept: Scene → logic → Scene hops, Sequence order Then 0 → Return 0 → Then 1 → Return 1 →
+  Completed, Delay as extra time *between* scenes, Event as a planning milestone (not an existing callback), Random
+  probabilities as design intent, structured conditions separated from free-text assumptions, and player belief versus reality
+  from transition direction notes. Unreachable scenes and incomplete authoring are listed, missing details are marked **TBD**.
+  Class, asset and file names are *proposals*; no code is generated and **no Unreal or Unity runtime integration is
+  performed**. The planner is read-only: it never changes the project, library, autosave or undo history.
+- **Showcase sample:** **Projects → Add sample** creates a new project, "The Hollow Village (Showcase)" (never overwriting
+  existing work): a false-awakening story with all five scene kinds, a custom scene type, three characters with several states, triggers, shots, spatial
+  audio, transition direction notes, a bounded loop, an IF with a structured AND/OR/NOT condition, Set Flag nodes, Event, Delay,
+  Random Branch, one complete ordered Sequence with two Returns, reroute points and graph comments. A dismissible **Explore the
+  sample** guide on the graph points to where each feature lives and explains editor interactions (undo/redo, copy/paste,
+  multi-select, context menus), which are not project data.
 - **Reroute points:** right-click a connection → **Add Reroute Point** (or use the buttons in the connection inspector), drag
   the points to reshape the wire, right-click a point → **Remove Point**. Several points per connection are supported (up to
   16); scene, IF and Set Flag connections all work. Points only change how the wire is drawn: endpoints, ports, ids,
@@ -116,8 +141,8 @@ npm run preview    # serve the production build
    inspector (nothing selected), add a **Set Flag** node (**Add Set Flag**, the picker, or drag from a pin), choose its flag and
    TRUE/FALSE, and give an IF node a **structured condition** in its inspector. **Add Event**, **Add Delay** and **Add Random Branch** (menu, picker, palette or drag from a pin) create the flow-control nodes; edit their category, duration, labels and probability in the inspector. Define reusable **Scene types** in the project inspector
    (nothing selected). Select an item and press `Del` to delete it (connections go with it in one undo step).
-   Set the start scene in the scene inspector. **Sample** loads "The Hollow Apartment", a demo with dream layers, a loop
-   and two endings.
+   Set the start scene in the scene inspector. **Projects → Add sample** creates "The Hollow Village (Showcase)", a complete
+   demo of every feature (a new project; your own work is untouched).
 2. **Plan scares.** In **Timeline**, double-click the track to add a trigger at that time and intensity; drag markers to retime.
    Switch the Timeline to **Sequence** to see the scene's shots, audio cues and triggers together: pick a scene, select an
    item (click, or Tab and Enter) to see its details and place the time cursor, use Fit / zoom for long scenes, and use the
@@ -193,7 +218,9 @@ npm run preview    # serve the production build
    flag cues that end after the scene and fades longer than their cue; nothing is changed automatically. Spatial ideas
    (a whisper behind the player, a sound moving left to right, ambience that suddenly disappears, a distant voice with
    ambiguous origin, a stinger after silence) are expressed through the structured fields and notes. Undo/Redo covers every change.
-10. Use **Backup** regularly — browser storage can be cleared.
+10. **Plan the engine work** in **Production:** pick Unreal Engine 5.x or Unity 6, read the preview, check the listed gaps
+    and TBD markers, and download the Markdown plan and the task CSV. Nothing is changed in your project.
+11. Use **Backup** regularly — browser storage can be cleared.
 
 Simulation, pacing and comparison state is separate from the project: it never changes project data, autosave, the
 library or undo history, it is not exported, and it resets when you switch projects.
@@ -309,6 +336,12 @@ Chromium and uses test ids and DOM geometry rather than screenshot comparisons.
   AND/OR/NOT nodes, parallel execution, nested Sequences, Sequences with more than two stages, or runtime execution. Set Flag, Event and Delay nodes have one input and one
   output, a Sequence Return has no output, and connections touching any logic node cannot carry a transition design. A Delay is extra time between scene visits,
   not an in-scene timeline editor; scenes still consume their full authored duration.
+- Production plans are planning guidance derived from the project: they contain no executable engine code, do not claim that any
+  engine asset or system exists, and no Unreal or Unity runtime integration or importer exists. Class/asset names are proposals;
+  the plan text is localized but the project content inside it is not translated. The legacy "The Hollow Apartment" sample still
+  seeds a fresh library; the full showcase is added from Projects.
+- The app-owned context menu cannot reach browser chrome, and the clipboard depends on browser permission (Paste is unavailable
+  where the browser offers no read access; use Ctrl/Cmd+V). Long-press on touch is not exercised on a real device.
 - Audio cues are planning notes: no playback, waveform, 3D spatialization, AI generation or engine/Unreal runtime
   instructions, and no asset library. Cues are independent of triggers and do not affect pacing statistics.
 - Transition directions are planning notes: no generated images, animation or 3D preview, and no Unreal execution. Stored
