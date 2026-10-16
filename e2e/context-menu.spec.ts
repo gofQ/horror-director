@@ -15,7 +15,7 @@ async function probe(page: Page) {
   })
 }
 const prevented = (page: Page) => page.evaluate(() => (window as unknown as { __ctx: boolean[] }).__ctx)
-const titleInput = (page: Page) => page.getByLabel('Title').first()
+const titleInput = (page: Page) => page.getByRole('textbox', { name: 'Title' }).first()
 
 async function selectHallway(page: Page) {
   await page.getByText('Apartment Hallway').first().click()
@@ -234,7 +234,7 @@ test.describe('global app-owned context menu', () => {
     await expect(item(page, /Geri al/)).toBeVisible()
     await page.keyboard.press('Escape')
     await page.getByText('Apartment Hallway').first().click()
-    const input = page.getByLabel('Başlık').first()
+    const input = page.getByRole('textbox', { name: 'Başlık' }).first()
     await input.click({ button: 'right' })
     await expect(menu(page).getByTestId('ctx-item')).toHaveText([/Kes/, /Kopyala/, /Yapıştır/, /Tümünü seç/])
     const b2 = (await menu(page).boundingBox())!

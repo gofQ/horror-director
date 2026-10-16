@@ -585,3 +585,11 @@ kbd { background: var(--panel-2); border: 1px solid var(--border); border-radius
 .sample-guide-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .sample-guide ol, .sample-guide ul { margin: 0; padding-left: 18px; font-size: 12.5px; display: flex; flex-direction: column; gap: 4px; }
 @media (max-width: 700px) { .sample-guide { max-height: 40%; } .production-actions .btn { flex: 1 1 100%; justify-content: center; } }
+
+/* v0.8A: six tabs — keep the header on one line on wide screens by letting the project name shrink */
+@media (min-width: 1200px) {
+  .tab { padding: 6px 9px; }
+  .tabs { gap: 2px; }
+  .actions { flex: 1 1 0; min-width: 0; }
+  .project-name { flex: 1 1 40px; min-width: 0; text-align: right; }
+}
