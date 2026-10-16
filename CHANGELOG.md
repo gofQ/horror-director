@@ -11,6 +11,15 @@ merged through a pull request into the integration branch (`claude/optimistic-te
 
 Every future feature or fix milestone must add an entry here (see `CLAUDE.md`).
 
+## Fix — Full-width responsive navbar
+
+Pull request: PR_LINK_PLACEHOLDER
+
+### Fixed
+- **The top navbar now uses the whole viewport width.** On wide screens (about 1500px and up) the header used to end well before the right edge (about 330px unused at 1792px) while the six tabs stayed compressed: the action group grew but its controls were packed at the start, and the project name was capped at 220px. Now the brand stays on the left, the tabs share the central space evenly with comfortable click areas, and the project name, Undo/Redo, save indicator, language switch, Projects and Backup are grouped at the far right edge. Long project names are truncated with an ellipsis and never push controls away.
+- Below 1500px the project name is hidden and spacing is compact (a single row from about 1280px for English, from about 1300px for Turkish); narrower desktop widths wrap the actions onto a second right-aligned row instead of clipping or overlapping, and tablet/mobile keep the scrollable tab row. The language switch no longer shrinks and clips its buttons.
+- CSS only (`src/styles.css`); no React, data, schema or behavior changes. New layout assertions in `e2e/navbar.spec.ts` cover 1920/1792/1440/1280/1024/900/768/390px, English and Turkish, truncation, overlap and horizontal overflow.
+
 ## v0.8C — Production Tracking & Feedback Loop
 
 Pull request: [#20](https://github.com/gofQ/horror-director/pull/20)
