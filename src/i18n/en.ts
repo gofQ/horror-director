@@ -1,5 +1,8 @@
 /** English dictionary — the source of truth for message keys and `{placeholder}` names. */
+import { planEn } from './plan.en'
+
 export const en = {
+  ...planEn,
   // navigation & chrome
   'nav.aria': 'Views',
   'tab.graph': 'Scene Graph',
@@ -281,6 +284,7 @@ export const en = {
 
   // story path simulator
   'tab.simulator': 'Simulator',
+  'tab.production': 'Production',
   'sim.title': 'Story path simulator',
   'sim.intro': 'Walk a route through the scene graph by choosing transitions yourself. This is a read-only planning aid: nothing is saved, transition conditions are never evaluated, and your project is not changed.',
   'sim.current': 'Current scene',
