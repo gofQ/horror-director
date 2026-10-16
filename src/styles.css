@@ -65,7 +65,7 @@ kbd { background: var(--panel-2); border: 1px solid var(--border); border-radius
 .toast.error { background: #2d1219; border-color: #7a2536; }
 
 .main { flex: 1; min-height: 0; position: relative; }
-.graph-layout { display: flex; height: 100%; }
+.graph-layout { display: flex; height: 100%; position: relative; }
 .graph-wrap { flex: 1; min-width: 0; position: relative; }
 .inspector-slot { width: 340px; flex: none; border-left: 1px solid var(--border); background: var(--bg-2); overflow-y: auto; }
 .inspector { padding: 14px; display: flex; flex-direction: column; gap: 10px; position: relative; }
@@ -563,3 +563,33 @@ kbd { background: var(--panel-2); border: 1px solid var(--border); border-radius
 .bp-incomplete { margin: 6px 12px 0; display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; font-weight: 600; color: #f0c36d; }
 .issue-list { list-style: none; margin: 4px 0 8px; padding: 0; display: flex; flex-direction: column; gap: 4px; }
 .flow-kind.sequenceStart, .flow-kind.stageEnter, .flow-kind.stageReturn, .flow-kind.sequenceComplete { color: #ff9e64; }
+
+/* v0.8A — production workspace, markdown preview, sample guide */
+.production-head { display: flex; flex-direction: column; gap: 10px; }
+.production-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.production-actions .btn { display: inline-flex; align-items: center; gap: 6px; }
+.production-head .seg { flex-wrap: wrap; }
+.small { font-size: 12px; }
+.md-preview { max-height: 70vh; overflow: auto; font-size: 13px; line-height: 1.5; padding: 4px 6px; }
+.md-preview .md-h { margin: 18px 0 6px; }
+.md-preview h2.md-h { font-size: 18px; border-bottom: 1px solid var(--border); padding-bottom: 4px; }
+.md-preview h3.md-h { font-size: 15px; }
+.md-preview h4.md-h { font-size: 13.5px; }
+.md-preview blockquote { margin: 8px 0; padding: 6px 12px; border-left: 3px solid var(--accent); background: var(--panel-2); color: var(--muted); }
+.md-preview code { background: var(--panel-2); padding: 0 4px; border-radius: 4px; }
+.md-table-wrap { overflow-x: auto; margin: 8px 0; }
+.md-table { border-collapse: collapse; font-size: 12.5px; min-width: 100%; }
+.md-table th, .md-table td { border: 1px solid var(--border); padding: 4px 8px; text-align: left; vertical-align: top; }
+.md-table th { background: var(--panel-2); white-space: nowrap; }
+.sample-guide { position: absolute; z-index: 5; left: 12px; bottom: 12px; width: min(380px, calc(100% - 24px)); max-height: 55%; overflow: auto; display: flex; flex-direction: column; gap: 6px; }
+.sample-guide-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.sample-guide ol, .sample-guide ul { margin: 0; padding-left: 18px; font-size: 12.5px; display: flex; flex-direction: column; gap: 4px; }
+@media (max-width: 700px) { .sample-guide { max-height: 40%; } .production-actions .btn { flex: 1 1 100%; justify-content: center; } }
+
+/* v0.8A: six tabs — keep the header on one line on wide screens by letting the project name shrink */
+@media (min-width: 1200px) {
+  .tab { padding: 6px 9px; }
+  .tabs { gap: 2px; }
+  .actions { flex: 1 1 0; min-width: 0; }
+  .project-name { flex: 1 1 40px; min-width: 0; text-align: right; }
+}

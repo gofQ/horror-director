@@ -6,7 +6,7 @@ import { useT } from '../i18n/store'
 import { emptyProject } from '../lib/factory'
 import { downloadText } from '../lib/download'
 import { formatDiagnostic } from '../lib/diagnostics'
-import { sampleProject } from '../lib/sample'
+import { showcaseProject } from '../lib/showcase'
 import type { LibError, LibResult } from '../lib/library'
 import { libErrorText } from './ImportDialog'
 import { ContextMenu, isEditableTarget, useContextMenu, type MenuItem } from './ContextMenu'
@@ -79,7 +79,7 @@ export function LibraryDialog({ onClose, onPickImport, onBackup }: Props) {
           <button className="btn primary" data-testid="library-new" onClick={() => create()} disabled={externalChange}>
             <FolderPlus size={15} /> {t('lib.new')}
           </button>
-          <button className="btn" onClick={() => create(sampleProject())} disabled={externalChange}>
+          <button className="btn" data-testid="library-add-sample" onClick={() => create(showcaseProject())} disabled={externalChange}>
             <Sparkles size={15} /> {t('lib.addSample')}
           </button>
           <button className="btn" onClick={() => onPickImport('new')} disabled={externalChange}>

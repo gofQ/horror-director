@@ -48,9 +48,33 @@ korku ritmini planlamak isteyen bağımsız geliştiriciler ve küçük ekipler.
 - **Özel sahne türleri:** proje başına, yeniden kullanılabilir sahne türleri (ad, seçilmiş renk ve simge, temel tür,
   varsayılan açıklama ve süre). Özel bir sahne, temel türü (gerçeklik, rüya, kâbus, anı, son) geçişleri, simülasyonu ve
   analizi yönlendirmeye devam eden normal bir sahnedir.
-- **Bağlam menüleri:** grafik tuvalinde, sahnelerde, EĞER düğümlerinde, yorumlarda ve bağlantılarda; ayrıca Zaman
-  çizelgesi/Sekans öğelerinde ve proje satırlarında erişilebilir sağ tık menüleri (Shift+F10 / menü tuşu ve dokunmatikte
-  uzun basma ile de). Girdi alanlarında ve metin kutularında tarayıcının kendi sağ tık menüsü korunur.
+- **Bağlam menüleri:** uygulamanın içinde sağ tık her yerde uygulamaya aittir, tarayıcının yerel menüsü hiç görünmez. Özel
+  menüler grafik tuvalini, sahneleri, EĞER düğümlerini, yorumları, bağlantıları, yönlendirme noktalarını, Zaman çizelgesi/Sekans
+  öğelerini ve proje satırlarını kapsar; diğer her bölge (üst çubuk, sekmeler, boş paneller, pencereler, Üretim çalışma alanı) genel
+  bir uygulama menüsü alır (seçili metni kopyala, geri al/yinele, sekmeye git, yedekle, projeler, dil). Metin kutuları ve metin
+  alanları, seçimi, imleci ve tarayıcının kendi geri almasını koruyan uygulama temalı **Kes / Kopyala / Yapıştır / Tümünü seç** menüsü
+  alır. Pano tarayıcı iznine bağlıdır: tarayıcı engellerse ya da yoksa öğe bunu söyler (Yapıştır devre dışı kalır ve Ctrl/Cmd+V'yi
+  belirtir) ve bir mesaj ne olduğunu açıklar; sessizce hiçbir şey yapmayan öğe yoktur. Shift+F10 / Menü tuşu, kapatmak için Escape,
+  gezinmek için ok tuşları ve dokunmatikte uzun basma da çalışır. Yalnızca uygulamanın içindeki hedefler işlenir; tarayıcı kabuğuna dokunulmaz.
+- **Üretim planlayıcı:** **Üretim** sekmesi etkin projeyi **Unreal Engine 5.x** (Blueprint öncelikli) ya da **Unity 6** (C# ve
+  bileşenler) için bir uygulama planına dönüştürür. Saf, deterministik bir planlama çekirdeği yazılmış grafın tamamını okur (tek bir
+  simüle rota değil, her dal ve her son) ve motor adaptörü motor eşlemesini ekler. Önizleme ve indirmeler
+  (`production-plan-unreal.md` / `production-plan-unity.md` ve motora özel görev CSV'si `production-tasks-<motor>.csv`) 14 bölümden
+  oluşur: özet ve varsayımlar, sahne/seviye envanteri, graf ve geçişler, bayraklar, EĞER ve Rastgele Dal, Olay/Bekleme/Sıra, çekimler,
+  ses, karakterler, korku tetikleyicileri, varlıklar ve eksik bağımlılıklar, kilometre taşları, görevler ve doğrulama listesi. Her görevin
+  kaynak kimliklerinden türeyen kararlı bir kimliği, aşaması, kaynak sahne/düğüm/geçiş/tetikleyici kimlikleri, motor kavramı, uygulama
+  yönergesi, bağımlılıkları, Bitti Tanımı ve eksik bilgileri vardır. Anlamlar korunur: Sahne → mantık → Sahne sıçramaları, Sıra düzeni
+  Sonra 0 → Dönüş 0 → Sonra 1 → Dönüş 1 → Tamamlandı, Bekleme sahneler *arası* ek süre olarak, Olay planlama kilometre taşı olarak
+  (mevcut bir geri çağrı değil), Rastgele olasılıklar tasarım niyeti olarak, yapılandırılmış koşullar serbest metin varsayımlardan ayrı
+  ve geçiş yönü notlarından oyuncunun inancı ile gerçeklik farkı. Ulaşılamayan sahneler ve eksik yazım listelenir, eksik ayrıntılar
+  **TBD** olarak işaretlenir. Sınıf, varlık ve dosya adları *önerilerdir*; kod üretilmez ve **hiçbir Unreal ya da Unity çalışma zamanı
+  entegrasyonu yapılmaz**. Planlayıcı salt okunurdur: projeyi, kütüphaneyi, otomatik kaydı ya da geri alma geçmişini asla değiştirmez.
+- **Kapsamlı örnek:** **Projeler → Örnek ekle** yeni bir proje oluşturur, "The Hollow Village (Showcase)" (mevcut çalışmanın üzerine
+  asla yazmaz): beş sahne türünün hepsi, özel bir sahne türü, birkaç durumlu üç karakter, tetikleyiciler, çekimler, uzamsal ses, geçiş
+  yönü notları, sınırlı bir döngü, yapılandırılmış AND/OR/NOT koşullu bir EĞER, Bayrak Ata düğümleri, Olay, Bekleme, Rastgele Dal,
+  iki Dönüşlü eksiksiz bir sıralı Sıra, yönlendirme noktaları ve grafik yorumları içeren bir yanlış uyanma hikâyesi. Grafikteki
+  kapatılabilir **Örneği keşfet** rehberi her özelliğin nerede olduğunu gösterir ve proje verisi olmayan editör etkileşimlerini
+  (geri al/yinele, kopyala/yapıştır, çoklu seçim, bağlam menüleri) anlatır.
 - **Yönlendirme noktaları:** bir bağlantıya sağ tıklayın → **Yönlendirme Noktası Ekle** (ya da bağlantı denetçisindeki
   düğmeleri kullanın), teli şekillendirmek için noktaları sürükleyin, bir noktaya sağ tıklayın → **Noktayı Kaldır**. Bir
   bağlantıda birden çok nokta (en çok 16) olabilir; sahne, EĞER ve Bayrak Ata bağlantılarının hepsinde çalışır. Noktalar yalnızca
@@ -119,8 +143,8 @@ npm run preview    # üretim derlemesini sun
    **bayrak** oluşturun, bir **Bayrak Ata** düğümü ekleyin (**Bayrak Ata ekle**, seçici ya da pinden sürükleme), bayrağını ve
    DOĞRU/YANLIŞ değerini seçin, EĞER düğümünün denetçisinde ona **yapılandırılmış koşul** verin. **Olay ekle**, **Bekleme ekle** ve **Rastgele Dal ekle** (menü, seçici, palet ya da pinden sürükleme) akış kontrolü düğümlerini oluşturur; kategori, süre, etiket ve olasılığı denetçide düzenleyin. Yeniden kullanılabilir
    **Sahne türleri**ni proje denetçisinde (hiçbir şey seçili değilken) tanımlayın. Bir öğeyi seçip `Del` ile silin
-   (bağlantıları tek bir geri alma adımında onunla gider). Başlangıç sahnesini sahne denetçisinden belirleyin. **Örnek**, rüya katmanları, bir döngü ve iki final
-   içeren "The Hollow Apartment" demo projesini yükler (İngilizce yazılmıştır).
+   (bağlantıları tek bir geri alma adımında onunla gider). Başlangıç sahnesini sahne denetçisinden belirleyin. **Projeler → Örnek ekle**, her özelliği gösteren eksiksiz bir demo olan
+   "The Hollow Village (Showcase)" projesini yeni bir proje olarak oluşturur (kendi çalışmanıza dokunulmaz; örnek İngilizce yazılmıştır).
 2. **Korku anlarını planlayın.** **Zaman çizelgesi**nde, belirli bir zaman ve yoğunlukta tetikleyici eklemek için izi
    çift tıklayın; zamanını değiştirmek için işaretçileri sürükleyin.
    Sahnenin çekimlerini, ses ipuçlarını ve tetikleyicilerini birlikte görmek için Zaman çizelgesini **Sekans**a geçirin:
@@ -200,7 +224,9 @@ npm run preview    # üretim derlemesini sun
    susturmaz). Uyarılar sahne bittikten sonra biten ipuçlarını ve ipucundan uzun fade'leri işaretler; hiçbir şey otomatik
    değiştirilmez. Uzamsal fikirler (oyuncunun arkasında fısıltı, soldan sağa giden ses, aniden kaybolan ambiyans, kaynağı
    belirsiz uzak ses, sessizliğin ardından stinger) yapılandırılmış alanlar ve notlarla anlatılır. Geri al/yinele her değişikliği kapsar.
-10. **Yedekle** düğmesini düzenli kullanın — tarayıcı depolaması temizlenebilir.
+10. **Motor işini planlayın** (**Üretim**): Unreal Engine 5.x ya da Unity 6'yı seçin, önizlemeyi okuyun, listelenen boşlukları
+    ve TBD işaretlerini kontrol edin, Markdown planını ve görev CSV'sini indirin. Projenizde hiçbir şey değişmez.
+11. **Yedekle** düğmesini düzenli kullanın — tarayıcı depolaması temizlenebilir.
 
 Simülasyon, ritim ve karşılaştırma durumu projeden ayrıdır: proje verisini, otomatik kaydı, kütüphaneyi ya da geri al
 geçmişini değiştirmez, dışa aktarılmaz ve proje değiştirdiğinizde sıfırlanır.
@@ -272,6 +298,12 @@ derlemesine karşı Chromium'da çalışır; ekran görüntüsü karşılaştır
   sahneler yine yazılmış sürelerinin tamamını harcar.
 - Sekans görünümü türetilmiş bir özettir: çalma, dalga biçimi ya da simülasyon yoktur, öğeleri kendisi düzenleyemez, seçim, yakınlık
   ve imleci yalnızca oturum boyunca tutar ve koşullu tetikleyicileri değerlendirmek yerine koşullu olarak işaretler.
+- Üretim planları projeden türetilmiş planlama rehberidir: çalıştırılabilir motor kodu içermez, hiçbir motor varlığının ya da sisteminin
+  var olduğunu iddia etmez; Unreal ya da Unity çalışma zamanı entegrasyonu veya içe aktarıcı yoktur. Sınıf/varlık adları önerilerdir;
+  plan metni yerelleştirilir ama içindeki proje içeriği çevrilmez. Eski "The Hollow Apartment" örneği hâlâ boş kütüphaneyi besler;
+  kapsamlı örnek Projeler'den eklenir.
+- Uygulamaya ait bağlam menüsü tarayıcı kabuğuna ulaşamaz ve pano tarayıcı iznine bağlıdır (tarayıcı okuma erişimi vermiyorsa Yapıştır
+  kullanılamaz; Ctrl/Cmd+V kullanın). Dokunmatikte uzun basma gerçek bir cihazda denenmedi.
 - Ses ipuçları planlama notlarıdır: çalma, dalga biçimi, 3B uzamsallaştırma, yapay zekâ üretimi ya da motor/Unreal çalışma
   zamanı komutu ve varlık kütüphanesi yoktur. İpuçları tetikleyicilerden bağımsızdır ve ritim istatistiklerini etkilemez.
 - Geçiş yönlendirmeleri planlama notlarıdır: üretilmiş görsel, animasyon ya da 3D önizleme yoktur ve Unreal'de çalıştırılmaz.

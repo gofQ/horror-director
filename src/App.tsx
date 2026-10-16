@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Download, FolderOpen, Route, Eye, Workflow, Activity, Users, ShieldCheck, Undo2, Redo2, Save } from 'lucide-react'
+import { Download, FolderOpen, Route, Eye, Workflow, Activity, Users, ShieldCheck, Factory, Undo2, Redo2, Save } from 'lucide-react'
 import { useStore, type View } from './store/useStore'
 import { addAndOpen, flushNow } from './store/library'
 import { LibraryDialog } from './components/LibraryDialog'
@@ -15,6 +15,9 @@ import { TimelineView } from './components/TimelineView'
 import { CharactersView } from './components/CharactersView'
 import { AnalysisView } from './components/AnalysisView'
 import { SimulatorView } from './components/SimulatorView'
+import { ProductionView } from './components/ProductionView'
+import { SampleGuide } from './components/SampleGuide'
+import { GlobalContextMenu } from './components/GlobalContextMenu'
 import './store/simulator'
 import { exportFileName, parseProject, serializeProject } from './lib/io'
 import type { Project } from './lib/schema'
@@ -26,6 +29,7 @@ const TABS = [
   { id: 'characters', Icon: Users },
   { id: 'analysis', Icon: ShieldCheck },
   { id: 'simulator', Icon: Route },
+  { id: 'production', Icon: Factory },
 ] as const satisfies readonly { id: View; Icon: typeof Workflow }[]
 
 const LANG_NAMES: Record<Lang, string> = { tr: 'Türkçe', en: 'English' }
@@ -267,10 +271,13 @@ export function App() {
         </div>
       )}
 
+      <GlobalContextMenu onBackup={doExport} onProjects={() => setLibraryOpen(true)} notify={flash} />
+
       <main className="main">
         {view === 'graph' && (
           <div className="graph-layout">
             <GraphView />
+            <SampleGuide />
             <div className={`inspector-slot${selection ? ' has-selection' : ''}`}>
               <Inspector onClose={() => select(null)} />
             </div>
@@ -280,6 +287,7 @@ export function App() {
         {view === 'characters' && <CharactersView />}
         {view === 'analysis' && <AnalysisView />}
         {view === 'simulator' && <SimulatorView />}
+        {view === 'production' && <ProductionView />}
       </main>
     </div>
   )

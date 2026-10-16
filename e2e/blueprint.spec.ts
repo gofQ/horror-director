@@ -134,19 +134,21 @@ test.describe('canvas context menu and node creation', () => {
     await expect(branches(page)).toHaveCount(1)
   })
 
-  test('native right-click stays on inputs and text areas (no custom menu)', async ({ page }) => {
+  test('right-click on inputs is app-owned: native menu prevented, themed text menu shown', async ({ page }) => {
     await page.getByText('Apartment Hallway').first().click()
     const input = page.getByLabel('Title').first()
     await expect(input).toBeVisible()
     const prevented = await page.evaluate(() => {
       const el = document.querySelector('.inspector input') as HTMLElement
       let result: boolean | null = null
-      document.addEventListener('contextmenu', (e) => (result = e.defaultPrevented), { once: true })
+      window.addEventListener('contextmenu', (e) => (result = e.defaultPrevented), { once: true })
       el.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }))
       return result
     })
-    expect(prevented).toBe(false)
-    await expect(menu(page)).toHaveCount(0)
+    expect(prevented).toBe(true)
+    await expect(menu(page)).toHaveCount(1)
+    await expect(menu(page)).toHaveAttribute('aria-label', 'Text actions')
+    await expect(menu(page).getByTestId('ctx-item')).toHaveText([/Cut/, /Copy/, /Paste/, /Select all/])
   })
 })
 

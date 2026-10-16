@@ -1,6 +1,6 @@
 import type { AudioCue, Character, Project, Scene, SceneKind, Shot, Transition, Trigger } from './schema'
 
-const sc = (
+export const sc = (
   id: string,
   title: string,
   kind: SceneKind,
@@ -24,7 +24,7 @@ const sc = (
   ...extra,
 })
 
-const sh = (
+export const sh = (
   id: string,
   title: string,
   start: number,
@@ -36,7 +36,7 @@ const sh = (
   visualNotes = '',
 ): Shot => ({ id, title, start, duration, framing, movement, technique, soundNotes, visualNotes })
 
-const au = (
+export const au = (
   id: string,
   title: string,
   start: number,
@@ -50,7 +50,7 @@ const au = (
   level: 5, fadeIn: 0, fadeOut: 0, loop: false, asset: '', notes: '', prompt: '', ...extra,
 })
 
-const tr = (
+export const tr = (
   id: string,
   source: string,
   target: string,
@@ -59,7 +59,7 @@ const tr = (
   condition = '',
 ): Transition => ({ id, source, target, label, style, condition, duration: 1 })
 
-const tg = (
+export const tg = (
   id: string,
   name: string,
   kind: Trigger['kind'],

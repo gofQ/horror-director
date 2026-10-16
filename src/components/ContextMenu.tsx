@@ -109,16 +109,21 @@ export function ContextMenu({ state, onClose }: { state: MenuState; onClose: () 
     }
     document.addEventListener('pointerdown', outside, true)
     const bare = () => away()
+    // Opening/focusing the menu can make a panel scroll programmatically; only a later (user) scroll closes it.
+    const openedAt = performance.now()
+    const onScroll = (e: Event) => {
+      if (performance.now() - openedAt > 250) away(e)
+    }
     window.addEventListener('resize', bare)
     window.addEventListener('blur', bare)
     window.addEventListener('wheel', away, { passive: true })
-    window.addEventListener('scroll', away, true)
+    window.addEventListener('scroll', onScroll, true)
     return () => {
       document.removeEventListener('pointerdown', outside, true)
       window.removeEventListener('resize', bare)
       window.removeEventListener('blur', bare)
       window.removeEventListener('wheel', away)
-      window.removeEventListener('scroll', away, true)
+      window.removeEventListener('scroll', onScroll, true)
       const el = returnFocus.current
       if (el instanceof HTMLElement && document.contains(el)) el.focus({ preventScroll: true })
     }
