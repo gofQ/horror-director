@@ -26,7 +26,7 @@ test.describe('production workspace', () => {
     await expect(preview).toContainText('Production plan — Unreal Engine 5.x')
     await expect(preview.locator('h3')).toHaveCount(14)
     await expect(preview).toContainText('GameInstance')
-    await expect(preview).toContainText('T-3-sequence-seq_break')
+    await expect(preview).toContainText('T-sequence-seq_break')
     await expect(preview).toContainText('Then 0 subflow, Return 0, Then 1 subflow, Return 1, then Completed')
     await expect(preview).not.toContainText('ScriptableObject')
 
@@ -53,9 +53,9 @@ test.describe('production workspace', () => {
     const csv = await download(page, 'plan-download-csv')
     expect(csv.name).toBe('production-tasks-unity.csv')
     const lines = csv.text.split('\r\n').filter(Boolean)
-    expect(lines[0]).toMatch(/^Task ID,Phase,Kind,Title,/)
+    expect(lines[0]).toMatch(/^Task ID,Order,Phase,Kind,Title,/)
     expect(lines.length).toBeGreaterThan(20)
-    expect(lines.some((l) => l.startsWith('T-3-sequence-seq_break,'))).toBe(true)
+    expect(lines.some((l) => l.startsWith('T-sequence-seq_break,'))).toBe(true)
 
     const md2 = await download(page, 'plan-download-md')
     expect(md2.name).toBe('production-plan-unity.md')
