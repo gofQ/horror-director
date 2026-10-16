@@ -35,7 +35,7 @@ import { exprFlags, exprWithoutFlag, flagIsUsed, flagNameTaken } from '../lib/fl
 import { copyGraph, pasteGraph, type ClipboardData } from '../lib/graphClipboard'
 import { insertAt, removeAt, translate as translatePoints } from '../lib/waypoints'
 
-export type View = 'graph' | 'timeline' | 'characters' | 'analysis' | 'simulator'
+export type View = 'graph' | 'timeline' | 'characters' | 'analysis' | 'simulator' | 'production'
 export type Selection = { type: 'scene' | 'edge' | 'node' | 'comment'; id: string } | null
 
 /** What `addNodeFromPin` creates at the drop position. */
