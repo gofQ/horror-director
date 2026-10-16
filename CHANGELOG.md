@@ -13,7 +13,7 @@ Every future feature or fix milestone must add an entry here (see `CLAUDE.md`).
 
 ## Turkish showcase sample (Boş Köy)
 
-Pull request: PR_LINK_PLACEHOLDER
+Pull request: [#22](https://github.com/gofQ/horror-director/pull/22)
 
 ### Added
 - **A complete Turkish showcase sample, "Boş Köy (Vitrin Örneği)".** **Projects → Add sample** now offers two explicit choices, independent of the interface language: **English Sample Project — The Hollow Village** and **Türkçe Örnek Proje — Boş Köy**. Each creates a new library project and never touches existing work. Every human-readable authored field is natural Turkish: project, scenes, custom scene type, characters and states, triggers, shots, audio cues and ambience, transition labels and conditions, psychological direction notes, graph nodes (Event, Delay, Random labels, IF free-text assumption, Sequence and Returns), flag names and descriptions, loop exit condition and graph comments. Technical data is identical in both: stable ids, enums, ports, structured expressions, flag ids, timings, probabilities, positions, reroute points and the `/Game/Maps/...` paths, so the Turkish sample produces the same valid Unreal and Unity plans and task ids.
