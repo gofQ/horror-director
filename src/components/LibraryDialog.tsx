@@ -79,9 +79,15 @@ export function LibraryDialog({ onClose, onPickImport, onBackup }: Props) {
           <button className="btn primary" data-testid="library-new" onClick={() => create()} disabled={externalChange}>
             <FolderPlus size={15} /> {t('lib.new')}
           </button>
-          <button className="btn" data-testid="library-add-sample" onClick={() => create(showcaseProject())} disabled={externalChange}>
-            <Sparkles size={15} /> {t('lib.addSample')}
-          </button>
+          <div className="library-sample-group" role="group" aria-label={t('lib.addSample')}>
+            <span className="muted small">{t('lib.addSample')}:</span>
+            <button className="btn" data-testid="library-add-sample-tr" lang="tr" onClick={() => create(showcaseProject('tr'))} disabled={externalChange}>
+              <Sparkles size={15} /> {t('lib.sample.tr')}
+            </button>
+            <button className="btn" data-testid="library-add-sample" lang="en" onClick={() => create(showcaseProject('en'))} disabled={externalChange}>
+              <Sparkles size={15} /> {t('lib.sample.en')}
+            </button>
+          </div>
           <button className="btn" onClick={() => onPickImport('new')} disabled={externalChange}>
             <FileUp size={15} /> {t('lib.importNew')}
           </button>

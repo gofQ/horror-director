@@ -231,6 +231,8 @@ export const tr: Record<MessageKey, string> = {
   'lib.intro': 'Projeler yalnızca bu tarayıcıda saklanır. Dosya kopyası için Yedekle’yi kullanın.',
   'lib.new': 'Yeni proje',
   'lib.addSample': 'Örnek ekle',
+  'lib.sample.tr': 'Türkçe Örnek Proje — Boş Köy',
+  'lib.sample.en': 'English Sample Project — The Hollow Village',
   'lib.importNew': 'Yeni proje olarak içe aktar',
   'lib.replaceActive': 'Etkin projeyi değiştir…',
   'lib.active': 'Etkin',

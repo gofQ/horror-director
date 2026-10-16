@@ -240,6 +240,8 @@ export const en = {
   'lib.intro': 'Projects are stored in this browser only. Use Backup to keep a file copy.',
   'lib.new': 'New project',
   'lib.addSample': 'Add sample',
+  'lib.sample.tr': 'Türkçe Örnek Proje — Boş Köy',
+  'lib.sample.en': 'English Sample Project — The Hollow Village',
   'lib.importNew': 'Import as new project',
   'lib.replaceActive': 'Replace active project…',
   'lib.active': 'Active',
