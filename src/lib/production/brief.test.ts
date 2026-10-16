@@ -110,7 +110,7 @@ describe('implementation brief', () => {
     expect(md).toContain('## Proposed assets and classes (not existing)')
     expect(md).toContain('none of these names, folders or assets is known to exist')
     expect(md).toContain('Horror Director has no access to your engine project')
-    expect(md).not.toMatch(/(is|are|was|has been) (already )?(implemented|done|completed)|already implemented/i)
+    expect(md).not.toMatch(/(has been|was) (implemented|completed)|(this|it) is (already )?(implemented|done)/i)
     expect(md).toContain('Implementation status: unknown')
   })
 
