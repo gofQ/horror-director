@@ -2,11 +2,13 @@
 import { planEn } from './plan.en'
 import { v08En } from './v08.en'
 import { briefEn } from './brief.en'
+import { progressEn } from './progress.en'
 
 export const en = {
   ...planEn,
   ...v08En,
   ...briefEn,
+  ...progressEn,
   // navigation & chrome
   'nav.aria': 'Views',
   'tab.graph': 'Scene Graph',

@@ -1,13 +1,14 @@
 import { tbdText, type PT } from './render'
 import { ADAPTERS } from './engines'
 import type { Brief } from './brief'
+import { reportTemplateText, type ReportContext } from './report'
 
 /**
  * Self-contained prompt for a coding agent (Claude Code, Codex, …) running INSIDE the target Unreal/Unity project.
  * It carries only the selected task (its brief); nothing about other scenes or the project history. Horror Director
  * has no access to the engine project, and every name in the brief is a proposal, which the prompt says explicitly.
  */
-export function buildAgentPrompt(brief: Brief, t: PT): string {
+export function buildAgentPrompt(brief: Brief, t: PT, report?: Omit<ReportContext, 'engine' | 'taskId'>): string {
   const engine = t(`plan.engine.${brief.engine}`)
   const needs = brief.readiness.missing
   const out = [
@@ -24,6 +25,21 @@ export function buildAgentPrompt(brief: Brief, t: PT): string {
     '',
     brief.markdown.trimEnd(),
     '',
+    ...(report
+      ? [
+          '---',
+          '',
+          `## ${t('progress.prompt.title')}`,
+          '',
+          t('progress.prompt.intro'),
+          ...[1, 2, 3, 4, 5].map((i) => `${i}. ${t(`progress.prompt.rule.${i}`)}`),
+          '',
+          '```json',
+          reportTemplateText({ ...report, engine: brief.engine, taskId: brief.taskId }),
+          '```',
+          '',
+        ]
+      : []),
   ]
   return out.join('\n')
 }

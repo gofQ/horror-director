@@ -17,6 +17,7 @@ import {
 import { browserBackend, createSafeStorage, preserveUnreadable, useSaveStatus, type Backend } from '../lib/persist'
 import type { Project } from '../lib/schema'
 import { uid } from '../lib/id'
+import { copyProgress, orphanProgress } from '../lib/progressStorage'
 
 /**
  * Runtime side of the project library: autosave of the active project, and the operations that
@@ -36,6 +37,9 @@ const safe = createSafeStorage(
 )
 
 let suppress = false
+
+/** The active storage backend (null when storage is blocked). Used by the separate production-progress store. */
+export const getBackend = (): Backend | null => backend
 
 /** Re-initializes the library from a backend (used at startup by tests and for reload-like flows). */
 export function bootLibrary(b: Backend | null): void {
@@ -259,6 +263,8 @@ export function duplicateProject(id: string, copyName: string): LibResult<{ id: 
     }
     return fail(ierr)
   }
+  // production progress follows the duplicate (best effort: the copy exists either way)
+  copyProgress(backend!, id, nid, source.name, Date.now())
   setLibrary(index)
   return { ok: true, id: nid }
 }
@@ -314,6 +320,8 @@ export function deleteProject(id: string, fresh: () => Project): LibResult {
     return fail(ierr)
   }
   if (damagedRaw) preserveUnreadable(damagedRaw, backend!, Date.now())
+  // production progress is moved to the orphan namespace, never deleted with the project
+  orphanProgress(backend!, id, s.library.projects.find((m) => m.id === id)?.name ?? id, Date.now())
   safe.discard(recordKey(id))
   try {
     backend!.removeItem(recordKey(id))
