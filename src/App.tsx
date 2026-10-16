@@ -17,6 +17,7 @@ import { AnalysisView } from './components/AnalysisView'
 import { SimulatorView } from './components/SimulatorView'
 import { ProductionView } from './components/ProductionView'
 import { SampleGuide } from './components/SampleGuide'
+import { GlobalContextMenu } from './components/GlobalContextMenu'
 import './store/simulator'
 import { exportFileName, parseProject, serializeProject } from './lib/io'
 import type { Project } from './lib/schema'
@@ -269,6 +270,8 @@ export function App() {
           {msg.text}
         </div>
       )}
+
+      <GlobalContextMenu onBackup={doExport} onProjects={() => setLibraryOpen(true)} notify={flash} />
 
       <main className="main">
         {view === 'graph' && (

@@ -103,3 +103,31 @@ export function selectAllInField(el: HTMLInputElement | HTMLTextAreaElement): vo
   el.focus()
   el.select()
 }
+
+/** Delete the selected range (the second half of Cut) keeping the browser's native undo stack when possible. */
+export function deleteFromField(el: HTMLInputElement | HTMLTextAreaElement, start: number, end: number): void {
+  el.focus()
+  try {
+    el.setSelectionRange(start, end)
+  } catch {
+    /* no selection API */
+  }
+  if (typeof document !== 'undefined' && document.execCommand?.('delete')) return
+  const r = spliceSelection(el.value, start, end, '')
+  el.value = r.value
+  try {
+    el.setSelectionRange(r.caret, r.caret)
+  } catch {
+    /* ignore */
+  }
+  el.dispatchEvent(new Event('input', { bubbles: true }))
+}
+
+/** Legacy copy path for browsers or contexts without the async Clipboard API (must run inside a user gesture). */
+export function execCopy(): boolean {
+  try {
+    return typeof document !== 'undefined' && !!document.execCommand?.('copy')
+  } catch {
+    return false
+  }
+}
