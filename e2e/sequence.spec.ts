@@ -33,7 +33,7 @@ test.describe('cinematic sequence overview', () => {
     await expect(seqView(page)).toBeHidden()
     await expect(page.getByText('Event list')).toBeVisible()
     await expect(page.getByRole('button', { name: 'Add trigger' })).toBeVisible()
-    await expect(page.locator('nav button, [aria-label="Views"] button')).toHaveCount(5) // no extra top-level tab
+    await expect(page.locator('nav button, [aria-label="Views"] button')).toHaveCount(6) // the Production workspace is the only extra top-level tab
   })
 
   test('shows camera, audio and event tracks with ticks, scene end and a time-ordered list', async ({ page }) => {
