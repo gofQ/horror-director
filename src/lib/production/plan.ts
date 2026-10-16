@@ -18,36 +18,53 @@ export interface SourceRef {
 }
 
 export type TaskKind =
-  | 'foundation' | 'state' | 'level' | 'transition' | 'branch' | 'random' | 'event' | 'delay'
-  | 'sequence' | 'cinematic' | 'audio' | 'character' | 'trigger' | 'assets' | 'verify'
+  | 'foundation' | 'state' | 'level' | 'assetAudio' | 'assetCharacter' | 'transition' | 'branch' | 'random' | 'event' | 'delay'
+  | 'sequence' | 'cinematic' | 'audio' | 'character' | 'trigger' | 'verifyEnding' | 'verify'
 
-/** Development phases in order. */
+/**
+ * Development phases (categories) in dependency-friendly order: every task depends only on tasks of an equal or
+ * lower phase. The actual schedule is the topological `order` of the tasks, not the phase number.
+ */
 export const PHASES: readonly { n: number; kinds: readonly TaskKind[] }[] = [
   { n: 0, kinds: ['foundation'] },
   { n: 1, kinds: ['state'] },
   { n: 2, kinds: ['level'] },
-  { n: 3, kinds: ['transition', 'branch', 'random', 'event', 'delay', 'sequence'] },
-  { n: 4, kinds: ['cinematic'] },
-  { n: 5, kinds: ['audio'] },
-  { n: 6, kinds: ['character'] },
-  { n: 7, kinds: ['trigger'] },
-  { n: 8, kinds: ['assets'] },
-  { n: 9, kinds: ['verify'] },
+  { n: 3, kinds: ['assetAudio', 'assetCharacter'] },
+  { n: 4, kinds: ['transition', 'branch', 'random', 'event', 'delay', 'sequence'] },
+  { n: 5, kinds: ['cinematic'] },
+  { n: 6, kinds: ['audio'] },
+  { n: 7, kinds: ['character'] },
+  { n: 8, kinds: ['trigger'] },
+  { n: 9, kinds: ['verifyEnding', 'verify'] },
 ]
-const phaseOf = (k: TaskKind): number => PHASES.find((p) => p.kinds.includes(k))!.n
+export const phaseOf = (k: TaskKind): number => PHASES.find((p) => p.kinds.includes(k))!.n
 
-/** Missing information that the plan marks `TBD`. */
-export type TbdCode = 'levelPath' | 'audioAsset' | 'ifCondition' | 'stageContent' | 'ownerApproval' | 'engineVersion'
+/**
+ * Missing information. BLOCKING codes make a task "needs information" (an essential authored input is absent);
+ * CONFIRM codes are listed in plans and briefs but never block (a proposal exists, a human must confirm it).
+ * `levelPath` is the Unreal-only "no authored reference" note and `scenePath` the Unity-only "path is a proposal" note.
+ */
+export type TbdCode =
+  | 'audioAsset' | 'ifCondition' | 'stageContent' | 'characterBehavior' | 'openOutput' | 'unreachableScene'
+  | 'levelPath' | 'scenePath' | 'characterAssets' | 'ownerApproval' | 'engineVersion'
+export const BLOCKING_TBD: readonly TbdCode[] = ['audioAsset', 'ifCondition', 'stageContent', 'characterBehavior', 'openOutput', 'unreachableScene']
 
 export interface PlanTask {
-  /** `T-<phase>-<kind>-<sourceId>`: derived from source ids only, so it is stable across rebuilds. */
+  /** `T-<kind>-<sourceId>`: derived from the task's responsibility and source identity only (never the schedule), so it is stable. */
   id: string
+  /** Category (see `PHASES`); NOT part of the id. */
   phase: number
+  /** Position in the deterministic dependency-valid schedule (0-based). */
+  order: number
+  /** Longest dependency chain below this task (0 = no dependencies). */
+  wave: number
   kind: TaskKind
   /** Title (or id) of the main source; user content, never translated. */
   subject: string
   sources: SourceRef[]
   dependsOn: string[]
+  /** Tasks that list this one as a dependency (derived). */
+  dependents: string[]
   params: Record<string, string | number>
   tbd: TbdCode[]
 }
@@ -58,7 +75,8 @@ export interface PlanScene {
   kind: Scene['kind']
   customType: string | null
   duration: number
-  levelPath: string
+  /** The authored `unrealLevel` text: an Unreal-side reference only, existence unverified, never a Unity path. */
+  authoredUnrealRef: string
   reachable: boolean
   ending: boolean
   loop: Scene['loop']
@@ -122,11 +140,22 @@ export interface PlanNode {
   downstream: string[]
 }
 
+export interface PlanStageNode {
+  id: string
+  type: LogicNode['type']
+  title: string
+  seconds: number | null
+  category: string | null
+  flag: string | null
+  value: boolean | null
+}
 export interface PlanStage {
   stage: number
-  chain: { id: string; type: LogicNode['type']; title: string }[]
+  chain: PlanStageNode[]
   returnId: string | null
   complete: boolean
+  /** Sum of the Delay seconds inside this stage (each counted once). */
+  delaySeconds: number
 }
 export interface PlanSequence {
   id: string
@@ -153,8 +182,8 @@ export interface PlanCharacter {
   description: string
   states: { id: string; name: string; behavior: string; aggression: number; scenes: string[] }[]
 }
-export interface PlanAssetItem { kind: 'level' | 'audio'; sceneId: string; id: string; title: string; value: string }
-export type GapCode = 'noStart' | 'unreachable' | 'noEnding' | 'levelPathTbd' | 'audioAssetTbd'
+export interface PlanAssetItem { kind: 'audio'; sceneId: string; id: string; title: string; value: string }
+export type GapCode = 'noStart' | 'unreachable' | 'noEnding' | 'audioAssetTbd'
 export interface PlanGap {
   code: GapCode
   severity: 'warning' | 'info'
@@ -201,7 +230,7 @@ export function buildPlan(project: Project): Plan {
     kind: s.kind,
     customType: s.typeId ? (typeName.get(s.typeId) ?? null) : null,
     duration: s.duration,
-    levelPath: s.unrealLevel.trim(),
+    authoredUnrealRef: s.unrealLevel.trim(),
     reachable: analysis.reachable.has(s.id),
     ending: s.kind === 'ending',
     loop: s.loop,
@@ -308,12 +337,20 @@ export function buildPlan(project: Project): Plan {
             returnId = node.id
             break
           }
-          chain.push({ id: node.id, type: node.type, title: node.title || node.id })
+          chain.push({
+            id: node.id,
+            type: node.type,
+            title: node.title || node.id,
+            seconds: node.type === 'delay' ? (node.seconds ?? 0) : null,
+            category: node.type === 'event' ? (node.eventCategory ?? 'story') : null,
+            flag: node.type === 'setFlag' ? (p.flags.find((f) => f.id === node.flagId)?.name ?? null) : null,
+            value: node.type === 'setFlag' ? (node.value ?? true) : null,
+          })
           at = outgoingOf(node.id)[0]?.target
         }
         const ret = returnId ? p.logicNodes.find((x) => x.id === returnId) : null
         const complete = !!ret && ret.sequenceId === n.id && ret.stage === stage
-        return { stage, chain, returnId, complete }
+        return { stage, chain, returnId, complete, delaySeconds: chain.reduce((a, c) => a + (c.seconds ?? 0), 0) }
       })
       const comp = outgoingOf(n.id).find((t) => t.sourcePort === 'completed')
       return { id: n.id, title: n.title, stages, completed: comp ? { id: comp.target, title: titleOf(comp.target) } : null }
@@ -356,26 +393,21 @@ export function buildPlan(project: Project): Plan {
     })),
   }))
 
-  const assets: PlanAssetItem[] = [
-    ...scenes.map((s) => ({ kind: 'level' as const, sceneId: s.id, id: s.id, title: s.title, value: s.levelPath })),
-    ...cues.map((c) => ({ kind: 'audio' as const, sceneId: c.sceneId, id: c.id, title: c.title, value: c.asset })),
-  ]
+  const assets: PlanAssetItem[] = cues.map((c) => ({ kind: 'audio' as const, sceneId: c.sceneId, id: c.id, title: c.title, value: c.asset }))
 
   // Planner-only gaps (analysis issues are carried over unchanged in `issues`).
   const gaps: PlanGap[] = []
   if (!p.startSceneId || !sceneById.has(p.startSceneId)) gaps.push({ code: 'noStart', severity: 'warning', ids: [], params: {} })
   for (const s of scenes) if (!s.reachable && p.startSceneId && sceneById.has(p.startSceneId)) gaps.push({ code: 'unreachable', severity: 'warning', ids: [s.id], params: { title: s.title } })
   if (!scenes.some((s) => s.ending)) gaps.push({ code: 'noEnding', severity: 'warning', ids: [], params: {} })
-  for (const a of assets) {
-    if (a.kind === 'level' && !a.value) gaps.push({ code: 'levelPathTbd', severity: 'info', ids: [a.sceneId], params: { title: a.title } })
-    if (a.kind === 'audio' && !a.value) gaps.push({ code: 'audioAssetTbd', severity: 'info', ids: [a.sceneId, a.id], params: { title: a.title } })
-  }
+  for (const a of assets) if (!a.value) gaps.push({ code: 'audioAssetTbd', severity: 'info', ids: [a.sceneId, a.id], params: { title: a.title } })
 
   // ---- tasks ----
-  const tasks: PlanTask[] = []
-  const add = (kind: TaskKind, sourceId: string, subject: string, sources: SourceRef[], deps: string[], params: Record<string, string | number> = {}, tbd: TbdCode[] = []) => {
-    const id = `T-${phaseOf(kind)}-${kind}-${sourceId}`
-    tasks.push({ id, phase: phaseOf(kind), kind, subject, sources, dependsOn: uniq(deps).sort(), params, tbd })
+  type Draft = Omit<PlanTask, 'order' | 'wave' | 'dependents'>
+  const drafts: Draft[] = []
+  const add = (kind: TaskKind, sourceId: string, subject: string, sources: SourceRef[], deps: (string | null)[], params: Record<string, string | number> = {}, tbd: TbdCode[] = []): string => {
+    const id = `T-${kind}-${sourceId}`
+    drafts.push({ id, phase: phaseOf(kind), kind, subject, sources, dependsOn: uniq(deps.filter((d): d is string => !!d)).sort(), params, tbd })
     return id
   }
   const foundation = add('foundation', 'project', p.name, [{ kind: 'project', id: 'project' }], [], { scenes: scenes.length, nodes: nodes.length }, ['engineVersion'])
@@ -384,39 +416,81 @@ export function buildPlan(project: Project): Plan {
     ? add('state', 'flags', p.name, [...flags.map((f) => ({ kind: 'flag' as const, id: f.id })), ...nodes.filter((n) => n.type === 'setFlag').map((n) => ({ kind: 'node' as const, id: n.id }))], [foundation], { flags: flags.length, setters: nodes.filter((n) => n.type === 'setFlag').length })
     : null
   const levelOf = new Map<string, string>()
-  for (const s of scenes)
-    levelOf.set(s.id, add('level', s.id, s.title, [{ kind: 'scene', id: s.id }], [foundation], { kind: s.kind, duration: s.duration, reachable: s.reachable ? 1 : 0, ending: s.ending ? 1 : 0, loopMax: s.loop.enabled ? s.loop.maxIterations : -1 }, s.levelPath ? [] : ['levelPath']))
-  const lv = (ids: string[]) => ids.map((i) => levelOf.get(i)).filter((x): x is string => !!x)
-  for (const l of links) {
-    if (l.via.length) continue // routed through logic nodes: covered by their own tasks, links listed in the plan
-    add('transition', l.key.replace('>', '-'), `${l.fromTitle} → ${l.toTitle}`, [{ kind: 'transition', id: l.linkIds[0] }, { kind: 'scene', id: l.from }, { kind: 'scene', id: l.to }], lv([l.from, l.to]), { style: l.styles[0] ?? 'cut', seconds: l.gapSeconds, technique: l.direction?.technique ?? 'none' })
+  for (const s of scenes) {
+    const tbd: TbdCode[] = ['scenePath']
+    if (!s.authoredUnrealRef) tbd.push('levelPath')
+    if (!s.reachable && p.startSceneId && sceneById.has(p.startSceneId)) tbd.push('unreachableScene')
+    levelOf.set(s.id, add('level', s.id, s.title, [{ kind: 'scene', id: s.id }], [foundation], { kind: s.kind, duration: s.duration, reachable: s.reachable ? 1 : 0, ending: s.ending ? 1 : 0, loopMax: s.loop.enabled ? s.loop.maxIterations : -1 }, tbd))
   }
+  const lv = (ids: string[]): string[] => ids.map((i) => levelOf.get(i)).filter((x): x is string => !!x)
+  const flowIds: string[] = []
+  for (const l of links) {
+    if (l.via.length) continue // routed through logic nodes: covered by their own tasks, the hop stays listed in the plan
+    flowIds.push(add('transition', `${l.from}-${l.linkIds[l.linkIds.length - 1]}`, `${l.fromTitle} → ${l.toTitle}`, [{ kind: 'transition', id: l.linkIds[0] }, { kind: 'scene', id: l.from }, { kind: 'scene', id: l.to }], lv([l.from, l.to]), { style: l.styles[0] ?? 'cut', seconds: l.gapSeconds, technique: l.direction?.technique ?? 'none' }))
+  }
+  const portsOpen = (n: PlanNode, need: string[]) => need.some((port) => !n.ports.some((o) => o.port === port))
   for (const n of nodes) {
     if (n.stage) continue // authored inside a Sequence stage: planned by the Sequence task
-    const around = lv([...n.upstream, ...n.downstream])
-    const deps = [foundation, ...(around.length ? around : []), ...(state && (n.type === 'branch' || n.type === 'setFlag') ? [state] : [])]
+    const deps = [foundation, ...lv([...n.upstream, ...n.downstream]), n.type === 'branch' ? state : null]
     const src: SourceRef[] = [{ kind: 'node', id: n.id }]
-    if (n.type === 'branch') add('branch', n.id, n.title, src, deps, { structured: n.expression ? 1 : 0 }, n.expression || n.condition ? [] : ['ifCondition'])
-    else if (n.type === 'random') add('random', n.id, n.title, src, deps, { a: n.probabilityA ?? 50, b: 100 - (n.probabilityA ?? 50) })
-    else if (n.type === 'event') add('event', n.id, n.title, src, deps, { category: n.eventCategory ?? 'story' })
-    else if (n.type === 'delay') add('delay', n.id, n.title, src, deps, { seconds: n.seconds ?? 0 })
+    if (n.type === 'branch') flowIds.push(add('branch', n.id, n.title, src, deps, { structured: n.expression ? 1 : 0 }, [...(n.expression || n.condition ? [] : ['ifCondition' as const]), ...(portsOpen(n, ['true', 'false']) ? ['openOutput' as const] : [])]))
+    else if (n.type === 'random') flowIds.push(add('random', n.id, n.title, src, deps, { a: n.probabilityA ?? 50, b: 100 - (n.probabilityA ?? 50) }, portsOpen(n, ['a', 'b']) ? ['openOutput'] : []))
+    else if (n.type === 'event') flowIds.push(add('event', n.id, n.title, src, deps, { category: n.eventCategory ?? 'story' }, n.ports.length ? [] : ['openOutput']))
+    else if (n.type === 'delay') flowIds.push(add('delay', n.id, n.title, src, deps, { seconds: n.seconds ?? 0 }, n.ports.length ? [] : ['openOutput']))
   }
   for (const sq of sequences) {
     const n = nodes.find((x) => x.id === sq.id)!
     const stageIds = sq.stages.flatMap((s) => [...s.chain.map((c) => c.id), ...(s.returnId ? [s.returnId] : [])])
     const needsState = sq.stages.some((s) => s.chain.some((c) => c.type === 'setFlag'))
-    add('sequence', sq.id, sq.title, [{ kind: 'node', id: sq.id }, ...stageIds.map((id) => ({ kind: 'node' as const, id }))], [foundation, ...lv([...n.upstream, ...n.downstream]), ...(needsState && state ? [state] : [])], { stages: 2, complete: sq.stages.every((s) => s.complete) ? 1 : 0 }, sq.stages.every((s) => s.complete) ? [] : ['stageContent'])
+    const complete = sq.stages.every((s) => s.complete)
+    flowIds.push(add('sequence', sq.id, sq.title, [{ kind: 'node', id: sq.id }, ...stageIds.map((id) => ({ kind: 'node' as const, id }))], [foundation, ...lv([...n.upstream, ...n.downstream]), needsState ? state : null], { stages: 2, complete: complete ? 1 : 0, delay0: sq.stages[0].delaySeconds, delay1: sq.stages[1].delaySeconds }, [...(complete ? [] : ['stageContent' as const]), ...(sq.completed ? [] : ['openOutput' as const])]))
   }
   for (const s of scenes) if (s.counts.shots) add('cinematic', s.id, s.title, [{ kind: 'scene', id: s.id }], lv([s.id]), { shots: s.counts.shots })
-  for (const s of scenes) if (s.counts.audio) add('audio', s.id, s.title, [{ kind: 'scene', id: s.id }], lv([s.id]), { cues: s.counts.audio }, cues.some((c) => c.sceneId === s.id && !c.asset) ? ['audioAsset'] : [])
-  for (const c of characters) add('character', c.id, c.name, [{ kind: 'character', id: c.id }], [foundation], { states: c.states.length, role: c.role })
-  for (const s of scenes) if (s.counts.triggers) add('trigger', s.id, s.title, [{ kind: 'scene', id: s.id }, ...triggers.filter((t) => t.sceneId === s.id).map((t) => ({ kind: 'trigger' as const, id: t.id }))], lv([s.id]), { triggers: s.counts.triggers })
-  const preAssets = tasks.filter((t) => t.kind === 'cinematic' || t.kind === 'audio' || t.kind === 'character').map((t) => t.id)
-  add('assets', 'project', p.name, [{ kind: 'project', id: 'project' }], preAssets.length ? preAssets : [foundation], { missing: gaps.filter((g) => g.code === 'levelPathTbd' || g.code === 'audioAssetTbd').length })
-  const all = tasks.map((t) => t.id)
-  add('verify', 'project', p.name, [{ kind: 'project', id: 'project' }], all, { endings: scenes.filter((s) => s.ending).length }, ['ownerApproval'])
+  const assetAudioOf = new Map<string, string>()
+  for (const s of scenes)
+    if (s.counts.audio) assetAudioOf.set(s.id, add('assetAudio', s.id, s.title, [{ kind: 'scene', id: s.id }], [foundation], { cues: s.counts.audio, missing: cues.filter((c) => c.sceneId === s.id && !c.asset).length }, cues.some((c) => c.sceneId === s.id && !c.asset) ? ['audioAsset'] : []))
+  for (const s of scenes) if (s.counts.audio) add('audio', s.id, s.title, [{ kind: 'scene', id: s.id }], [...lv([s.id]), assetAudioOf.get(s.id)!], { cues: s.counts.audio })
+  const assetCharOf = new Map<string, string>()
+  for (const c of characters) assetCharOf.set(c.id, add('assetCharacter', c.id, c.name, [{ kind: 'character', id: c.id }], [foundation], { states: c.states.length }, ['characterAssets']))
+  const charTask = new Map<string, string>()
+  for (const c of characters)
+    charTask.set(c.id, add('character', c.id, c.name, [{ kind: 'character', id: c.id }], [foundation, assetCharOf.get(c.id)!, ...lv(c.states.flatMap((st) => st.scenes))], { states: c.states.length, role: c.role }, c.states.some((st) => !st.behavior.trim()) ? ['characterBehavior'] : []))
+  for (const s of scenes)
+    if (s.counts.triggers) {
+      const ts = triggers.filter((t) => t.sceneId === s.id)
+      const aiScene = ts.some((t) => t.kind === 'ai')
+      add('trigger', s.id, s.title, [{ kind: 'scene', id: s.id }, ...ts.map((t) => ({ kind: 'trigger' as const, id: t.id }))], [...lv([s.id]), ...(aiScene ? s.characterStates.map((x) => charTask.get(x.characterId) ?? null) : [])], { triggers: s.counts.triggers })
+    }
+  const beforeVerify = drafts.map((d) => d.id)
+  const endingTasks: string[] = []
+  for (const s of scenes) if (s.ending) endingTasks.push(add('verifyEnding', s.id, s.title, [{ kind: 'scene', id: s.id }], [levelOf.get(s.id)!, ...flowIds], { reachable: s.reachable ? 1 : 0 }))
+  add('verify', 'project', p.name, [{ kind: 'project', id: 'project' }], [...beforeVerify, ...endingTasks], { endings: scenes.filter((s) => s.ending).length }, ['ownerApproval'])
 
-  tasks.sort((a, b) => a.phase - b.phase || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+  // Deterministic schedule: Kahn's algorithm, ties broken by phase then id; `wave` = longest dependency chain.
+  const byTask = new Map(drafts.map((d) => [d.id, d]))
+  const remaining = new Map(drafts.map((d) => [d.id, d.dependsOn.length]))
+  const dependentsOf = new Map<string, string[]>(drafts.map((d) => [d.id, []]))
+  for (const d of drafts) for (const dep of d.dependsOn) dependentsOf.get(dep)!.push(d.id)
+  const cmp = (a: string, b: string) => byTask.get(a)!.phase - byTask.get(b)!.phase || (a < b ? -1 : a > b ? 1 : 0)
+  const ready = drafts.filter((d) => d.dependsOn.length === 0).map((d) => d.id).sort(cmp)
+  const orderOf = new Map<string, number>()
+  const waveOf = new Map<string, number>()
+  while (ready.length) {
+    const id = ready.shift()!
+    orderOf.set(id, orderOf.size)
+    waveOf.set(id, byTask.get(id)!.dependsOn.reduce((m, d) => Math.max(m, (waveOf.get(d) ?? 0) + 1), 0))
+    for (const next of dependentsOf.get(id)!) {
+      const left = remaining.get(next)! - 1
+      remaining.set(next, left)
+      if (left === 0) {
+        ready.push(next)
+        ready.sort(cmp)
+      }
+    }
+  }
+  const tasks: PlanTask[] = drafts
+    .map((d) => ({ ...d, order: orderOf.get(d.id) ?? drafts.length, wave: waveOf.get(d.id) ?? 0, dependents: dependentsOf.get(d.id)!.slice().sort((a, b) => orderOf.get(a)! - orderOf.get(b)!) }))
+    .sort((a, b) => a.order - b.order)
 
   return {
     overview: {

@@ -1,10 +1,12 @@
 /** English dictionary — the source of truth for message keys and `{placeholder}` names. */
 import { planEn } from './plan.en'
 import { v08En } from './v08.en'
+import { briefEn } from './brief.en'
 
 export const en = {
   ...planEn,
   ...v08En,
+  ...briefEn,
   // navigation & chrome
   'nav.aria': 'Views',
   'tab.graph': 'Scene Graph',

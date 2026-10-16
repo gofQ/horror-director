@@ -11,6 +11,8 @@ export interface EngineAdapter {
   prefix: 'u' | 'y'
   fileBase: string
   proposals(task: Pick<PlanTask, 'kind' | 'sources'>): string[]
+  /** Engine nouns substituted into the shared brief templates (proper nouns, not translated). */
+  vocab: Record<'container' | 'director' | 'stateHolder' | 'dataAsset' | 'loader' | 'sequencer' | 'audio' | 'ai' | 'test' | 'trigger' | 'logic', string>
 }
 
 /** `s_cottage` → `SCottage`: a safe identifier fragment derived from a source id. */
@@ -21,12 +23,16 @@ export const pascal = (id: string): string =>
     .map((w) => w[0].toUpperCase() + w.slice(1))
     .join('') || 'Item'
 
+/** A *proposed* scene/level path for a scene id; never an existing asset. */
+export const proposedScenePath = (engine: Engine, id: string): string => (engine === 'unreal' ? `/Game/Maps/L_${pascal(id)}` : `Assets/Scenes/${pascal(id)}.unity`)
+
 const subjectId = (t: Pick<PlanTask, 'sources'>) => t.sources[0]?.id ?? 'item'
 
 const unreal: EngineAdapter = {
   id: 'unreal',
   prefix: 'u',
   fileBase: 'production-plan-unreal',
+  vocab: { container: 'Level', director: 'narrative director Blueprint', stateHolder: 'GameInstance subsystem', dataAsset: 'Data Table or Data Asset', loader: 'Open Level (or level streaming)', sequencer: 'Level Sequence (Sequencer)', audio: 'Audio Component with a MetaSound or Sound Cue', ai: 'State Tree or Behavior Tree on an AI Controller', test: 'Functional Test (Automation)', trigger: 'Actor Component or trigger volume', logic: 'Blueprint function or macro' },
   proposals(t) {
     const n = pascal(subjectId(t))
     const m: Partial<Record<TaskKind, string[]>> = {
@@ -43,7 +49,9 @@ const unreal: EngineAdapter = {
       audio: [`MS_${n} (MetaSound Source)`, `AC_${n} (Audio Component)`],
       character: [`ST_${n} (State Tree)`, `BP_${n}Controller (AI Controller)`],
       trigger: [`BP_HorrorTrigger_${n} (Actor Component)`],
-      assets: ['Content/Horror/ (folder structure)'],
+      assetAudio: [`Content/Horror/Audio/${n}/ (folder, proposed)`],
+      assetCharacter: [`Content/Horror/Characters/${n}/ (folder, proposed)`],
+      verifyEnding: [`FT_Ending_${n} (Functional Test)`],
       verify: ['Functional Test map (Automation)'],
     }
     return m[t.kind] ?? []
@@ -54,6 +62,7 @@ const unity: EngineAdapter = {
   id: 'unity',
   prefix: 'y',
   fileBase: 'production-plan-unity',
+  vocab: { container: 'Scene', director: 'narrative director MonoBehaviour', stateHolder: 'narrative state class (or ScriptableObject)', dataAsset: 'ScriptableObject', loader: 'SceneManager', sequencer: 'Timeline with Cinemachine cameras', audio: 'AudioSource routed through an AudioMixer group', ai: 'state-machine controller (plus a NavMeshAgent if it moves)', test: 'PlayMode test (Test Framework)', trigger: 'MonoBehaviour or trigger collider', logic: 'C# method' },
   proposals(t) {
     const n = pascal(subjectId(t))
     const m: Partial<Record<TaskKind, string[]>> = {
@@ -70,7 +79,9 @@ const unity: EngineAdapter = {
       audio: [`AudioCueSet_${n} (ScriptableObject)`, 'AudioMixer_Main (AudioMixer)'],
       character: [`${n}Controller (MonoBehaviour state machine)`, `${n}Agent (NavMeshAgent)`],
       trigger: [`HorrorTrigger_${n} (MonoBehaviour)`],
-      assets: ['Assets/Horror/ (folder structure)'],
+      assetAudio: [`Assets/Horror/Audio/${n}/ (folder, proposed)`],
+      assetCharacter: [`Assets/Horror/Characters/${n}/ (folder, proposed)`],
+      verifyEnding: [`Ending${n}Tests (PlayMode test)`],
       verify: ['PlayMode tests (Test Framework)'],
     }
     return m[t.kind] ?? []
