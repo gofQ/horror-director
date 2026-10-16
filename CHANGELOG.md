@@ -3,13 +3,33 @@
 Version history of Horror Director, newest first. This file is the canonical user-facing history; the READMEs describe
 the current product only and `progress.md` tracks engineering status.
 
-The labels below (MVP/v0.1 through v0.8A) are **development milestones**, not published releases: the project has no
+The labels below (MVP/v0.1 through v0.8B) are **development milestones**, not published releases: the project has no
 tagged releases and `package.json` stays at `0.1.0`. Each milestone after the MVP was developed on its own branch and
 merged through a pull request into the integration branch (`claude/optimistic-tesla-r2v8g6`). The JSON schema was
 `schemaVersion: 1` until v0.6A introduced `schemaVersion: 2` (scene shots) and v0.6B `schemaVersion: 3`
 (transition direction) v0.6C `schemaVersion: 4` (scene audio cues) v0.7A `schemaVersion: 5` (IF nodes, comments, custom scene types, branch-port links) v0.7B `schemaVersion: 6` (narrative flags, Set Flag nodes, structured IF conditions) v0.7C `schemaVersion: 7` (reroute points) v0.7D `schemaVersion: 8` (Event, Delay and Random Branch nodes) and v0.7E `schemaVersion: 9` (ordered Sequence and Sequence Return nodes); files of every earlier version, and bare project files, are still imported.
 
 Every future feature or fix milestone must add an entry here (see `CLAUDE.md`).
+
+## v0.8B — Production Execution Handoff
+
+Pull request: [#19](https://github.com/gofQ/horror-director/pull/19)
+
+### Added
+- **Task explorer** in the Production workspace: a searchable list of all production tasks in dependency order with filters for phase, source type and readiness, and a details panel with readiness, missing requirements, items to confirm, source links that open the scene, node or transition in the graph, and dependencies and dependents you can click through. Selection and filters are session-only.
+- **Readiness** (`src/lib/production/readiness.ts`): **Ready**, **Needs information** or **Blocked by dependencies**, derived only from authored data (an IF without condition, a stage without its Return, an unconnected output, a cue without an asset reference, a state without behavior and an unreachable scene need information; a task whose dependency is not ready is blocked). Items a human only has to confirm (an Unreal reference or Unity path proposal, engine version, sign-off) never block. Implementation status is always **unknown**: the app has no access to an engine project.
+- **Implementation brief** for any task (`brief.ts`, pure and deterministic): project and engine, task id and sources, goal and scope, the authored facts with exact values (shots and direction notes, cue timing/spatial direction/fades/silence/assets, graph pins, flags and structured IF text, Random probabilities, Event and Delay data, Sequence stage order, character states with behavior and aggression, trigger timing/condition/once/intensity), required inputs, proposed assets and classes, the engine approach, ordered steps, dependencies and what a task unblocks, expected behavior, edge cases, acceptance tests, limitations and missing information, and explicit exclusions. Authored facts, proposals and unresolved requirements are kept apart. **Download Implementation Brief (.md)** saves it.
+- **Coding agent prompt** (`prompt.ts`) for Claude Code or Codex running inside the target engine project: inspect the project first, verify the engine version and what really exists, implement only this task, preserve the authored behavior, run engine-side checks, report changed files, assumptions, unresolved items and verification; missing essential inputs are listed, never fabricated. **Copy Coding Agent Prompt** copies it (a preview is available when the browser blocks the clipboard).
+
+### Changed
+- **Task ids no longer contain the phase** (`T-<kind>-<source id>`), so they stay stable when the schedule changes. This is a one-time rename from the v0.8A ids (`T-3-…`). The plan and CSV now list tasks in a deterministic dependency-valid order with readiness, blockers, missing information and items to confirm; the CSV gains `order`, `readiness`, `blockedBy`, `blocking` and `confirm` columns.
+- **Asset prerequisites now precede their consumers:** the single late Assets task is replaced by per-scene audio asset tasks and per-character asset tasks that audio and character tasks depend on. Per-ending verification tasks follow all flow tasks, and the project verification follows everything. Phases were renumbered (assets are phase 3).
+
+### Fixed
+- **Unreal paths no longer appear as Unity scene paths.** The authored `unrealLevel` text is shown only in Unreal output, labelled an authored reference whose existence is unverified. Unity output shows a proposed `Assets/Scenes/<Name>.unity` marked as a proposal. No asset, path, script or system is presented as existing.
+
+### Not included
+- No Unreal or Unity runtime integration, no code generation, no persistent task progress tracking and no schema change (JSON schema stays 9).
 
 ## v0.8A — Engine Production Planner, Complete Sample & Global Context Menu
 

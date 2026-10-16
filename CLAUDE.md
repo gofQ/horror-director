@@ -24,4 +24,5 @@ PW_CHROMIUM_PATH=/opt/pw-browsers/chromium npm run test:e2e   # Cloud sessions; 
 - Simulator, pacing and comparison are read-only and session-only: they must never write to project data, autosave, undo history or exports.
 - Keep changes scoped to the milestone; no unrelated refactors.
 - Right-click inside the app is app-owned: a new region needs no code (the global fallback in `GlobalContextMenu.tsx` covers it); a specialised menu must call `preventDefault()` so the fallback skips it.
+- Production task ids must depend only on a task's responsibility and source identity, never on phase, order or engine; readiness comes from authored data and implementation status is always unknown.
 - The production planner (`src/lib/production/`) is pure and read-only; engine wording lives in `plan.*` i18n keys and names are always labelled as proposals.

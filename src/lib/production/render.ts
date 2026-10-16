@@ -2,8 +2,9 @@ import { exprToText, type ExprWords } from '../flags'
 import { formatDiagnostic } from '../diagnostics'
 import { formatClock } from '../simulate'
 import type { TFunction } from '../../i18n'
-import { ADAPTERS } from './engines'
-import { PHASES, type Engine, type Plan, type PlanNode, type PlanTask } from './plan'
+import { ADAPTERS, proposedScenePath } from './engines'
+import { assessPlan, tbdFor, type TaskAssessment } from './readiness'
+import { PHASES, type Engine, type Plan, type PlanNode, type PlanScene, type PlanTask } from './plan'
 
 /** Localized text lookup for the renderer (any `plan.*` / existing key; the unit tests render every key in both languages). */
 export type PT = (key: string, params?: Record<string, string | number>) => string
@@ -22,11 +23,19 @@ const words = (t: PT): ExprWords => ({ and: t('expr.and'), or: t('expr.or'), not
 
 const HAS_NOTE = new Set(['transition', 'branch', 'random', 'event', 'delay', 'sequence', 'level'])
 
-function taskText(task: PlanTask, engine: Engine, t: PT) {
+/** The scene/level reference for one engine: Unreal shows the authored reference (unverified), Unity only a proposal. */
+export function scenePathText(engine: Engine, s: Pick<PlanScene, 'id' | 'authoredUnrealRef'>, t: PT): string {
+  if (engine === 'unity') return t('plan.path.proposalUnity', { path: proposedScenePath('unity', s.id) })
+  return s.authoredUnrealRef ? t('plan.path.authoredUnreal', { path: s.authoredUnrealRef }) : t('plan.path.proposalUnreal', { path: proposedScenePath('unreal', s.id) })
+}
+
+export const tbdText = (codes: readonly string[], t: PT): string[] => codes.map((c) => `TBD — ${t(`plan.tbd.${c}`)}`)
+
+function taskText(task: PlanTask, engine: Engine, t: PT, as?: TaskAssessment) {
   const a = ADAPTERS[engine]
   const params = { subject: task.subject, id: task.id, ...task.params }
   const kindLabel = t(`plan.kind.${task.kind}`)
-  const title = ['foundation', 'state', 'assets', 'verify'].includes(task.kind) ? kindLabel : `${kindLabel}: ${task.subject}`
+  const title = ['foundation', 'state', 'verify'].includes(task.kind) ? kindLabel : `${kindLabel}: ${task.subject}`
   const notes = HAS_NOTE.has(task.kind) ? [t(`plan.note.${task.kind}`, params)] : []
   return {
     title,
@@ -34,7 +43,8 @@ function taskText(task: PlanTask, engine: Engine, t: PT) {
     how: t(`plan.${a.prefix}.${task.kind}.how`, params),
     done: t(`plan.${a.prefix}.${task.kind}.done`, params),
     proposals: a.proposals(task),
-    tbd: task.tbd.map((c) => `TBD — ${t(`plan.tbd.${c}`)}`),
+    tbd: tbdText(as?.missing ?? tbdFor(task, engine), t),
+    confirm: as ? tbdText(as.confirm, t) : [],
     notes,
   }
 }
@@ -73,7 +83,7 @@ export function renderMarkdown(plan: Plan, engine: Engine, t: PT): string {
     [t('plan.col.id'), t('plan.col.scene'), t('plan.col.kind'), t('plan.col.duration'), a.id === 'unreal' ? t('plan.col.levelUnreal') : t('plan.col.levelUnity'), t('plan.col.reachable'), t('plan.col.notes')],
     plan.scenes.map((s) => [
       s.id, s.title, s.customType ? `${t(`kind.${s.kind}`)} / ${s.customType}` : t(`kind.${s.kind}`), formatClock(s.duration),
-      s.levelPath || `TBD — ${t('plan.tbd.levelPath')}`, s.reachable ? t('plan.yes') : t('plan.no'),
+      scenePathText(engine, s, t), s.reachable ? t('plan.yes') : t('plan.no'),
       [s.ending ? t('plan.scene.ending') : '', s.loop.enabled ? t('plan.scene.loop', { max: n(s.loop.maxIterations), exit: s.loop.exitCondition || 'TBD' }) : '', s.ambience].filter(Boolean).join('; '),
     ]),
   ))
@@ -163,7 +173,7 @@ export function renderMarkdown(plan: Plan, engine: Engine, t: PT): string {
   if (!plan.characters.length) P(t('plan.s9.none'))
   for (const ch of plan.characters) {
     P(`### ${ch.name} (${ch.id}) — ${t(`role.${ch.role}`)}`, ch.description)
-    P(table([t('plan.col.state'), t('plan.col.behavior'), t('plan.col.aggression'), t('plan.col.usedIn')], ch.states.map((s) => [s.name, s.behavior || `TBD — ${t('plan.tbd.behavior')}`, s.aggression, s.scenes.map(sceneName).join(', ') || '—'])))
+    P(table([t('plan.col.state'), t('plan.col.behavior'), t('plan.col.aggression'), t('plan.col.usedIn')], ch.states.map((s) => [s.name, s.behavior || `TBD — ${t('plan.tbd.characterBehavior')}`, s.aggression, s.scenes.map(sceneName).join(', ') || '—'])))
   }
 
   // 10
@@ -172,7 +182,11 @@ export function renderMarkdown(plan: Plan, engine: Engine, t: PT): string {
 
   // 11
   P(h(11))
-  P(table([t('plan.col.asset'), t('plan.col.scene'), t('plan.col.id'), t('plan.col.status')], plan.assets.map((x) => [t(`plan.asset.${x.kind}`), sceneName(x.sceneId), x.id, x.value || `TBD — ${t(x.kind === 'level' ? 'plan.tbd.levelPath' : 'plan.tbd.audioAsset')}`])))
+  P(table([t('plan.col.asset'), t('plan.col.scene'), t('plan.col.id'), t('plan.col.status')], [
+    ...plan.scenes.map((x) => [t('plan.asset.level'), x.title, x.id, scenePathText(engine, x, t)]),
+    ...plan.assets.map((x) => [t('plan.asset.audio'), sceneName(x.sceneId), x.id, x.value ? t('plan.path.authoredAsset', { path: x.value }) : `TBD — ${t('plan.tbd.audioAsset')}`]),
+    ...plan.characters.map((x) => [t('plan.asset.character'), x.name, x.id, `TBD — ${t('plan.tbd.characterAssets')}`]),
+  ]))
   P(`**${t('plan.gaps')}** (${plan.gaps.length + plan.issues.length})`)
   const fmt = (d: Parameters<typeof formatDiagnostic>[1]) => formatDiagnostic(t as unknown as TFunction, d)
   const lines = [
@@ -183,22 +197,28 @@ export function renderMarkdown(plan: Plan, engine: Engine, t: PT): string {
 
   // 12
   P(h(12))
+  P(t('plan.order.note'))
   P(table([t('plan.col.phase'), t('plan.col.milestone'), t('plan.col.tasks'), t('plan.col.exit')], PHASES.map((ph) => [ph.n, t(`plan.phase.${ph.n}`), plan.tasks.filter((x) => x.phase === ph.n).length, t(`plan.exit.${ph.n}`)])))
 
   // 13
   P(h(13))
+  P(t('plan.readyMeaning'), t('plan.impl.unknown'))
+  const assess = assessPlan(plan, engine)
   for (const task of plan.tasks) {
-    const x = taskText(task, engine, t)
+    const as = assess.get(task.id)!
+    const x = taskText(task, engine, t, as)
     P(`### ${task.id} — ${x.title}`)
     P(L(
-      `- **${t('plan.col.phase')}:** ${task.phase} — ${t(`plan.phase.${task.phase}`)}`,
+      `- **${t('plan.col.order')}:** ${task.order + 1} · **${t('plan.col.phase')}:** ${task.phase} — ${t(`plan.phase.${task.phase}`)}`,
+      `- **${t('plan.col.readiness')}:** ${t(`plan.ready.${as.readiness}`)}${as.blockedBy.length ? ` (${t('plan.col.blockedBy')}: ${as.blockedBy.join(', ')})` : ''}`,
       `- **${t('plan.col.sources')}:** ${srcs(task)}`,
       `- **${t('plan.col.concept')}:** ${x.concept}`,
       x.proposals.length ? `- **${t('plan.col.proposed')}:** ${x.proposals.join('; ')}` : '',
       `- **${t('plan.col.instructions')}:** ${x.how}`,
       `- **${t('plan.col.dependsOn')}:** ${dep(task)}`,
       `- **${t('plan.col.done')}:** ${x.done}`,
-      x.tbd.length || x.notes.length ? `- **${t('plan.col.missing')}:** ${[...x.tbd, ...x.notes].join(' | ')}` : '',
+      x.tbd.length ? `- **${t('plan.col.blocking')}:** ${x.tbd.join(' | ')}` : '',
+      x.confirm.length || x.notes.length ? `- **${t('plan.col.confirm')}:** ${[...x.confirm, ...x.notes].join(' | ')}` : '',
     ))
   }
 
@@ -227,10 +247,12 @@ export function csvField(v: string | number): string {
 }
 
 export function renderTaskCsv(plan: Plan, engine: Engine, t: PT): string {
-  const head = ['id', 'phase', 'kind', 'title', 'sources', 'concept', 'proposed', 'instructions', 'dependsOn', 'done', 'missing'].map((k) => t(`plan.csv.${k}`))
+  const head = ['id', 'order', 'phase', 'kind', 'title', 'readiness', 'blockedBy', 'sources', 'concept', 'proposed', 'instructions', 'dependsOn', 'done', 'blocking', 'confirm'].map((k) => t(`plan.csv.${k}`))
+  const assess = assessPlan(plan, engine)
   const rows = plan.tasks.map((task) => {
-    const x = taskText(task, engine, t)
-    return [task.id, task.phase, task.kind, x.title, srcs(task), x.concept, x.proposals.join('; '), x.how, task.dependsOn.join(' '), x.done, [...x.tbd, ...x.notes].join(' | ')]
+    const as = assess.get(task.id)!
+    const x = taskText(task, engine, t, as)
+    return [task.id, task.order + 1, task.phase, task.kind, x.title, as.readiness, as.blockedBy.join(' '), srcs(task), x.concept, x.proposals.join('; '), x.how, task.dependsOn.join(' '), x.done, x.tbd.join(' | '), [...x.confirm, ...x.notes].join(' | ')]
   })
   return [head, ...rows].map((r) => r.map(csvField).join(',')).join('\r\n') + '\r\n'
 }

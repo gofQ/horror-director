@@ -69,6 +69,7 @@ documentation: [README.tr.md](README.tr.md).
   from transition direction notes. Unreachable scenes and incomplete authoring are listed, missing details are marked **TBD**.
   Class, asset and file names are *proposals*; no code is generated and **no Unreal or Unity runtime integration is
   performed**. The planner is read-only: it never changes the project, library, autosave or undo history.
+- **Task hand-off:** the Production tab also lists every task in dependency order (assets before the audio and character tasks that need them, shared systems before consumers, verification last) in a searchable task explorer with filters for phase, source type and readiness. Readiness is **Ready**, **Needs information** (an essential authored input is missing, for example an IF without a condition, an incomplete Sequence stage, an unconnected output, a cue without an asset reference or an unreachable scene) or **Blocked by dependencies**; it is derived from authored data only and never means that anything is implemented: implementation status is always unknown because the app is not connected to an engine. A task's details show its missing requirements and the items to confirm, its source IDs (click to open the scene, node or transition in the graph), and its dependencies and dependents. For the selected task you can **download an implementation brief** (Markdown) with the exact authored data — shots and direction notes, cue timing, spatial direction, fades, silence and asset references, graph pins, flags, structured IF text, Random probabilities, Event and Delay data, Sequence stage order, character states, trigger timing and intensity — plus proposed classes and assets, ordered steps, edge cases, acceptance tests, missing information and exclusions, and **copy a coding agent prompt** for Claude Code or Codex running in your Unreal or Unity project (inspect first, verify what exists, implement only this task, preserve the authored behavior, run engine checks, report). Task IDs depend only on a task's responsibility and source, not on the schedule. The Unreal `/Game/...` text you author per scene is shown only in Unreal plans, as an unverified reference; Unity plans show a proposed scene path. Explorer selection and filters are session-only and never change the project.
 - **Showcase sample:** **Projects → Add sample** creates a new project, "The Hollow Village (Showcase)" (never overwriting
   existing work): a false-awakening story with all five scene kinds, a custom scene type, three characters with several states, triggers, shots, spatial
   audio, transition direction notes, a bounded loop, an IF with a structured AND/OR/NOT condition, Set Flag nodes, Event, Delay,
@@ -219,7 +220,8 @@ npm run preview    # serve the production build
    (a whisper behind the player, a sound moving left to right, ambience that suddenly disappears, a distant voice with
    ambiguous origin, a stinger after silence) are expressed through the structured fields and notes. Undo/Redo covers every change.
 10. **Plan the engine work** in **Production:** pick Unreal Engine 5.x or Unity 6, read the preview, check the listed gaps
-    and TBD markers, and download the Markdown plan and the task CSV. Nothing is changed in your project.
+    and TBD markers, and download the Markdown plan and the task CSV. In the task explorer search and filter tasks, open a
+    task's sources in the graph, download its implementation brief or copy the coding agent prompt. Nothing is changed in your project.
 11. Use **Backup** regularly — browser storage can be cleared.
 
 Simulation, pacing and comparison state is separate from the project: it never changes project data, autosave, the
@@ -336,6 +338,7 @@ Chromium and uses test ids and DOM geometry rather than screenshot comparisons.
   AND/OR/NOT nodes, parallel execution, nested Sequences, Sequences with more than two stages, or runtime execution. Set Flag, Event and Delay nodes have one input and one
   output, a Sequence Return has no output, and connections touching any logic node cannot carry a transition design. A Delay is extra time between scene visits,
   not an in-scene timeline editor; scenes still consume their full authored duration.
+- Task readiness reflects authored information only (Ready is not Implemented); briefs and prompts are guidance, not generated engine code, and every path, class and asset name in them is a proposal. Task IDs changed once between the first production planner and this one; explorer state is session-only.
 - Production plans are planning guidance derived from the project: they contain no executable engine code, do not claim that any
   engine asset or system exists, and no Unreal or Unity runtime integration or importer exists. Class/asset names are proposals;
   the plan text is localized but the project content inside it is not translated. The legacy "The Hollow Apartment" sample still

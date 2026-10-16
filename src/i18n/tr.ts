@@ -1,11 +1,13 @@
 import type { MessageKey } from './en'
 import { planTr } from './plan.tr'
 import { v08Tr } from './v08.tr'
+import { briefTr } from './brief.tr'
 
 /** Turkish dictionary. Typed as `Record<MessageKey, string>`: a missing or extra key fails `tsc`. */
 export const tr: Record<MessageKey, string> = {
   ...planTr,
   ...v08Tr,
+  ...briefTr,
   'nav.aria': 'Görünümler',
   'tab.graph': 'Sahne Grafı',
   'tab.timeline': 'Zaman Çizelgesi',

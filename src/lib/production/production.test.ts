@@ -57,7 +57,7 @@ describe('buildPlan', () => {
     ])
     expect(s.completed?.id).toBe('if_free')
     // stage nodes are planned inside the Sequence task, not as separate tasks
-    expect(plan.tasks.some((t) => t.id === 'T-3-event-evt_crack')).toBe(false)
+    expect(plan.tasks.some((t) => t.id === 'T-event-evt_crack')).toBe(false)
     expect(plan.tasks.find((t) => t.kind === 'sequence')?.sources.map((x) => x.id)).toContain('ret_1')
   })
 
@@ -67,7 +67,7 @@ describe('buildPlan', () => {
     expect(structured.expression).not.toBeNull()
     expect(free.expression).toBeNull()
     expect(free.condition).toMatch(/not evaluated/)
-    expect(plan.tasks.find((t) => t.id === 'T-3-branch-if_free')?.tbd).toEqual([])
+    expect(plan.tasks.find((t) => t.id === 'T-branch-if_free')?.tbd).toEqual([])
   })
 
   it('carries belief versus reality from transition direction notes', () => {
@@ -80,10 +80,14 @@ describe('buildPlan', () => {
     const ids = plan.tasks.map((t) => t.id)
     expect(new Set(ids).size).toBe(ids.length)
     for (const t of plan.tasks) {
-      expect(t.id).toMatch(/^T-\d-[a-z]+-/)
+      expect(t.id).toMatch(/^T-[A-Za-z]+-/)
       expect(t.sources.length).toBeGreaterThan(0)
       for (const d of t.dependsOn) expect(ids).toContain(d)
-      for (const d of t.dependsOn) expect(plan.tasks.find((x) => x.id === d)!.phase).toBeLessThanOrEqual(t.phase)
+      for (const d of t.dependsOn) {
+        const dep = plan.tasks.find((x) => x.id === d)!
+        expect(dep.phase).toBeLessThanOrEqual(t.phase)
+        expect(dep.order).toBeLessThan(t.order)
+      }
     }
     const known = new Set(show.scenes.map((s) => s.id).concat(show.logicNodes.map((n) => n.id), show.transitions.map((t) => t.id), show.flags.map((f) => f.id), show.characters.map((c) => c.id), plan.triggers.map((t) => t.id), ['project']))
     for (const t of plan.tasks) for (const s of t.sources) expect(known.has(s.id)).toBe(true)
@@ -109,7 +113,7 @@ describe('buildPlan', () => {
     const q = buildPlan(p)
     expect(q.gaps.some((g) => g.code === 'unreachable' && g.ids[0] === 's_orphan')).toBe(true)
     expect(q.scenes.some((s) => s.id === 's_orphan')).toBe(true)
-    expect(q.tasks.some((t) => t.id === 'T-2-level-s_orphan' && t.tbd.includes('levelPath'))).toBe(true)
+    expect(q.tasks.some((t) => t.id === 'T-level-s_orphan' && t.tbd.includes('levelPath') && t.tbd.includes('unreachableScene'))).toBe(true)
     expect(q.sequences[0].stages[1].complete).toBe(false)
     expect(q.tasks.find((t) => t.kind === 'sequence')?.tbd).toContain('stageContent')
     expect(q.issues.length).toBeGreaterThan(0)
@@ -175,7 +179,7 @@ describe('rendering', () => {
     const csv = renderTaskCsv(plan, 'unity', tEn)
     const rows = parseCsv(csv)
     expect(rows).toHaveLength(plan.tasks.length + 1)
-    expect(rows[0][0]).toBe('Task ID')
+    expect(rows[0].slice(0, 3)).toEqual(['Task ID', 'Order', 'Phase'])
     expect(new Set(rows.map((r) => r.length)).size).toBe(1)
     expect(rows.slice(1).map((r) => r[0])).toEqual(plan.tasks.map((t) => t.id))
     expect(csv.endsWith('\r\n')).toBe(true)
@@ -190,7 +194,7 @@ describe('rendering', () => {
     const p = structuredClone(show)
     p.scenes[0].title = 'Evil, "title"\n=HYPERLINK("x")'
     const rows = parseCsv(renderTaskCsv(buildPlan(p), 'unreal', tEn))
-    expect(rows.find((r) => r[0] === 'T-2-level-s_cottage')![3]).toContain('Evil, "title"')
+    expect(rows.find((r) => r[0] === 'T-level-s_cottage')![4]).toContain('Evil, "title"')
     const md = renderMarkdown(buildPlan({ ...p, scenes: p.scenes.map((s, i) => (i ? s : { ...s, title: 'a|b' })) }), 'unity', tEn)
     expect(md).toContain('a\\|b')
   })

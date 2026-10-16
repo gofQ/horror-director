@@ -8,6 +8,7 @@ import { writeClipboard } from '../lib/clipboardActions'
 import { buildPlan, ENGINES, type Engine } from '../lib/production/plan'
 import { asPT, csvFileName, planFileName, renderMarkdown, renderTaskCsv } from '../lib/production/render'
 import { MarkdownPreview } from './MarkdownPreview'
+import { TaskExplorer } from './TaskExplorer'
 
 /** Engine chosen in this browser session (not project data, never persisted). */
 let lastEngine: Engine = 'unreal'
@@ -113,6 +114,8 @@ export function ProductionView() {
           </ul>
         </div>
       )}
+
+      <TaskExplorer plan={plan} engine={engine} onStatus={setStatus} />
 
       <div className="card">
         <div className="section-title">{t('prod.preview')}</div>
