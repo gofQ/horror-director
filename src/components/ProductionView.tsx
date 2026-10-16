@@ -9,13 +9,16 @@ import { buildPlan, ENGINES, type Engine } from '../lib/production/plan'
 import { asPT, csvFileName, planFileName, renderMarkdown, renderTaskCsv } from '../lib/production/render'
 import { MarkdownPreview } from './MarkdownPreview'
 import { TaskExplorer } from './TaskExplorer'
+import { ProgressDashboard } from './ProgressDashboard'
+import { assessPlan } from '../lib/production/readiness'
 
 /** Engine chosen in this browser session (not project data, never persisted). */
 let lastEngine: Engine = 'unreal'
 
 /**
- * Production workspace: derives an Unreal / Unity production plan from the active project. Strictly read-only: it
- * never calls a store setter, so the project, autosave, library and undo history are untouched.
+ * Production workspace: derives an Unreal / Unity production plan from the active project. Read-only with respect to the
+ * project: it never calls a project store setter, so the project, autosave, library and undo history are untouched
+ * (production progress is a separate, explicit-action-only store).
  */
 export function ProductionView() {
   const { t } = useT()
@@ -25,6 +28,7 @@ export function ProductionView() {
   const [status, setStatus] = useState('')
   const plan = useMemo(() => buildPlan(project), [project])
   const pt = useMemo(() => asPT(t), [t])
+  const assess = useMemo(() => assessPlan(plan, engine), [plan, engine])
   const markdown = useMemo(() => renderMarkdown(plan, engine, pt), [plan, engine, pt])
   const tbd = useMemo(() => (markdown.match(/TBD/g) ?? []).length, [markdown])
 
@@ -114,6 +118,8 @@ export function ProductionView() {
           </ul>
         </div>
       )}
+
+      <ProgressDashboard plan={plan} engine={engine} assess={assess} onStatus={setStatus} />
 
       <TaskExplorer plan={plan} engine={engine} onStatus={setStatus} />
 

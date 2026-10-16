@@ -3,13 +3,31 @@
 Version history of Horror Director, newest first. This file is the canonical user-facing history; the READMEs describe
 the current product only and `progress.md` tracks engineering status.
 
-The labels below (MVP/v0.1 through v0.8B) are **development milestones**, not published releases: the project has no
+The labels below (MVP/v0.1 through v0.8C) are **development milestones**, not published releases: the project has no
 tagged releases and `package.json` stays at `0.1.0`. Each milestone after the MVP was developed on its own branch and
 merged through a pull request into the integration branch (`claude/optimistic-tesla-r2v8g6`). The JSON schema was
 `schemaVersion: 1` until v0.6A introduced `schemaVersion: 2` (scene shots) and v0.6B `schemaVersion: 3`
 (transition direction) v0.6C `schemaVersion: 4` (scene audio cues) v0.7A `schemaVersion: 5` (IF nodes, comments, custom scene types, branch-port links) v0.7B `schemaVersion: 6` (narrative flags, Set Flag nodes, structured IF conditions) v0.7C `schemaVersion: 7` (reroute points) v0.7D `schemaVersion: 8` (Event, Delay and Random Branch nodes) and v0.7E `schemaVersion: 9` (ordered Sequence and Sequence Return nodes); files of every earlier version, and bare project files, are still imported.
 
 Every future feature or fix milestone must add an entry here (see `CLAUDE.md`).
+
+## v0.8C — Production Tracking & Feedback Loop
+
+Pull request: [#20](https://github.com/gofQ/horror-director/pull/20)
+
+### Added
+- **Implementation progress** per production task (Not started, In progress, Submitted for review, Verified / approved, Blocked), with notes, a concise history, a status filter and a progress dashboard (totals per status, stale tasks, tasks ready to begin). It is kept strictly apart from **authoring readiness** (derived from authored data) and **source freshness** (current or stale): a Ready task is never treated as done, and only an explicit, confirmed user action can mark a task Verified.
+- **Source change detection:** a pure, deterministic task-source fingerprint (`fingerprint.ts`) built from the authored data a task depends on (scene properties, transitions and direction, structured IF text, Random probabilities, Event/Delay values, Sequence stages, shots, audio cues, character states, triggers, flags). Node positions, wire waypoints, language, task order and unrelated scenes are not part of it. Submitting or approving captures the fingerprint; later relevant edits show a prominent **STALE** badge with the changed inputs (clickable to the source), keep the saved status and all evidence, require an explicit acknowledgement before re-approval, and flag downstream tasks that may need rechecking. Tasks that disappear after graph edits are kept as orphaned records with export and confirmed removal.
+- **Separate, versioned progress storage** (`horror-director:progress:v1:<library project id>`) scoped by library project, engine and task id: strict validation, verified writes, quota/inaccessible-storage handling (work stays in memory, retry and backup offered), damaged or unsupported records preserved untouched (tracking pauses), multiple-tab revision checks (a conflicting write is never overwritten). Duplicating a project copies its progress; deleting a project moves its progress to an orphan area that is listed and only removed explicitly.
+- **Completion report** for external coding agents: the agent prompt now ends with a versioned JSON template (`horror-director.completion-report` v1) with project, engine, task, source fingerprint, the agent’s claimed outcome, changed files, checks, limitations, questions and notes. Agent claims are kept apart from independently verified facts. A paste/file import (and a manual entry form) validates strictly, rejects unsupported versions, malformed fields and mismatched project/engine/task, flags outdated fingerprints, shows an inert preview and never trusts file paths or executes anything. Saving a report never approves a task.
+- **Review panel** for submitted tasks: authored requirements, agent-reported changes and checks (labelled as agent claims), freshness and review notes, with Approve / Request changes / Return to in progress / Reopen. Approval needs an explicit confirmation.
+- **Exports:** a production progress report (Markdown) and a restorable JSON progress backup (active project or all projects). Restore previews new, identical and conflicting records per target project, keeps existing records unless chosen, and needs a confirmation. Existing plan, CSV and brief downloads, task ids and the authored project export are unchanged.
+
+### Changed
+- The Production workspace gains a progress dashboard above the task explorer; task rows show the progress and STALE badges. The coding agent prompt gains the completion-report section.
+
+### Fixed
+- Nothing in existing data changed: schema version 9, v1–v8 and bare imports, library records and project exports are untouched.
 
 ## v0.8B — Production Execution Handoff
 

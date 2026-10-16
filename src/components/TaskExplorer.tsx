@@ -10,11 +10,16 @@ import { buildBrief } from '../lib/production/brief'
 import { buildAgentPrompt } from '../lib/production/prompt'
 import { asPT } from '../lib/production/render'
 import { MarkdownPreview } from './MarkdownPreview'
+import { fingerprints } from '../lib/production/fingerprint'
+import { dependencyProgress, entryKey, staleness, STATUSES, summarize } from '../lib/production/progress'
+import { useProgress } from '../store/progress'
+import { TaskTracking } from './TaskTracking'
+import { ProgressBadge, StaleBadge, selectTask, useExplorer, type StatusFilter } from './progressUi'
 
 const SOURCE_KINDS: readonly SourceKind[] = ['project', 'scene', 'node', 'transition', 'trigger', 'character', 'flag']
 
 /** Explorer filters and selection live only for this browser session (module state): never project data, never persisted. */
-const session = { query: '', phase: 'all', source: 'all', readiness: 'all', selected: null as string | null }
+const session = { query: '', phase: 'all', source: 'all', readiness: 'all' }
 
 /**
  * Searchable, filterable task list with a details panel and the hand-off actions. Strictly read-only: the only store calls
@@ -30,7 +35,12 @@ export function TaskExplorer({ plan, engine, onStatus }: { plan: Plan; engine: E
   const [phase, setPhase] = useState(session.phase)
   const [source, setSource] = useState(session.source)
   const [readiness, setReadiness] = useState(session.readiness)
-  const [selected, setSelected] = useState<string | null>(session.selected)
+  const selected = useExplorer((x) => x.selected)
+  const statusFilter = useExplorer((x) => x.status)
+  const projectId = useStore((x) => x.library.activeId) ?? ''
+  const entries = useProgress((x) => x.entries)
+  const fps = useMemo(() => fingerprints(plan), [plan])
+  const sum = useMemo(() => summarize(plan, engine, entries, assessPlan(plan, engine)), [plan, engine, entries])
   const assess = useMemo(() => assessPlan(plan, engine), [plan, engine])
 
   const remember = <K extends keyof typeof session>(k: K, v: (typeof session)[K]) => {
@@ -44,19 +54,21 @@ export function TaskExplorer({ plan, engine, onStatus }: { plan: Plan; engine: E
         if (phase !== 'all' && String(task.phase) !== phase) return false
         if (source !== 'all' && !task.sources.some((s) => s.kind === source)) return false
         if (readiness !== 'all' && assess.get(task.id)?.readiness !== readiness) return false
+        const rec = entries[entryKey(engine, task.id)]
+        if (statusFilter === 'stale' ? !sum.stale.includes(task.id) : statusFilter === 'recheck' ? !sum.recheck.includes(task.id) : statusFilter === 'ready' ? !sum.ready.includes(task.id) : statusFilter !== 'all' && (rec?.status ?? 'notStarted') !== statusFilter) return false
         if (!q) return true
         const hay = `${task.id} ${task.subject} ${task.kind} ${t(`plan.kind.${task.kind}`)} ${task.sources.map((s) => s.id).join(' ')}`.toLowerCase()
         return hay.includes(q)
       }),
-    [plan.tasks, phase, source, readiness, q, assess, t],
+    [plan.tasks, phase, source, readiness, q, assess, t, entries, engine, statusFilter, sum],
   )
   const current = selected ? plan.tasks.find((x) => x.id === selected) : undefined
   const brief = useMemo(() => (current ? buildBrief(plan, current.id, engine, pt) : null), [plan, current, engine, pt])
-  const prompt = useMemo(() => (brief ? buildAgentPrompt(brief, pt) : ''), [brief, pt])
+  const curFp = current ? fps.get(current.id) : undefined
+  const prompt = useMemo(() => (brief && curFp ? buildAgentPrompt(brief, pt, { projectId, fingerprint: curFp.fp }) : ''), [brief, pt, projectId, curFp])
 
   const pick = (id: string) => {
-    setSelected(id)
-    remember('selected', id)
+    selectTask(id)
   }
   const title = (id: string) => {
     const x = plan.tasks.find((y) => y.id === id)
@@ -125,6 +137,18 @@ export function TaskExplorer({ plan, engine, onStatus }: { plan: Plan; engine: E
           </select>
         </label>
         <label className="task-field">
+          <span>{t('progress.filter.status')}</span>
+          <select className="input" data-testid="task-filter-status" value={statusFilter} onChange={(e) => useExplorer.setState({ status: e.target.value as StatusFilter })}>
+            <option value="all">{t('prod.task.all')}</option>
+            {STATUSES.map((x) => (
+              <option key={x} value={x}>{pt(`progress.status.${x}`)}</option>
+            ))}
+            <option value="stale">{t('progress.stale.badge')}</option>
+            <option value="recheck">{t('progress.recheck.badge')}</option>
+            <option value="ready">{t('progress.dash.ready')}</option>
+          </select>
+        </label>
+        <label className="task-field">
           <span>{t('prod.task.readiness')}</span>
           <select className="input" data-testid="task-filter-readiness" value={readiness} onChange={(e) => { setReadiness(e.target.value); remember('readiness', e.target.value) }}>
             <option value="all">{t('prod.task.all')}</option>
@@ -141,15 +165,19 @@ export function TaskExplorer({ plan, engine, onStatus }: { plan: Plan; engine: E
           {shown.length === 0 && <li className="muted" data-testid="task-empty">{t('prod.task.empty')}</li>}
           {shown.map((task) => {
             const r = assess.get(task.id)!.readiness
+            const rec = entries[entryKey(engine, task.id)]
+            const isStale = staleness(rec, fps.get(task.id)).stale
             return (
               <li key={task.id}>
-                <button type="button" className={`task-row${selected === task.id ? ' active' : ''}`} data-testid="task-row" data-task-id={task.id} data-readiness={r} aria-pressed={selected === task.id} onClick={() => pick(task.id)}>
+                <button type="button" className={`task-row${selected === task.id ? ' active' : ''}`} data-testid="task-row" data-task-id={task.id} data-readiness={r} data-progress={rec?.status ?? 'notStarted'} data-stale={isStale ? 'true' : 'false'} aria-pressed={selected === task.id} onClick={() => pick(task.id)}>
                   <span className="task-order">{task.order + 1}</span>
                   <span className="task-main">
                     <strong>{subjectOf(task)}</strong>
                     <code>{task.id}</code>
                   </span>
                   {badge(r)}
+                  <ProgressBadge status={rec?.status ?? 'notStarted'} t={pt} />
+                  {isStale && <StaleBadge t={pt} />}
                 </button>
               </li>
             )
@@ -184,6 +212,22 @@ export function TaskExplorer({ plan, engine, onStatus }: { plan: Plan; engine: E
                   <ClipboardCopy size={14} /> {t('prod.task.copyPrompt')}
                 </button>
               </div>
+
+              {curFp && (
+                <TaskTracking
+                  engine={engine}
+                  projectId={projectId}
+                  task={current}
+                  rec={entries[entryKey(engine, current.id)]}
+                  fp={curFp}
+                  brief={brief}
+                  depProgress={dependencyProgress(plan, engine, entries, current.id, fps)}
+                  recheck={sum.recheck.includes(current.id)}
+                  onOpen={open}
+                  onPick={pick}
+                  onStatus={onStatus}
+                />
+              )}
 
               <h4>{t('prod.task.missing')}</h4>
               <ul className="task-chips" data-testid="task-missing">
