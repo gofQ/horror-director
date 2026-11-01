@@ -78,7 +78,7 @@ Checked and found correct, so not changed:
 6. **Delete key.**
    - **Where:** `GraphView.tsx`.
    - **Change:** `deleteKeyCode={null}`. Delete and Backspace are now handled by the existing guarded shortcut handler, which already ignores menus, dialogs and other panels, through `rf.deleteElements`. This is the same path React Flow uses, so the store and undo behaviour are unchanged.
-   - **Accepted when** (`e2e/audit-fixes.spec.ts`): Backspace or Delete in a node's context menu and inside the Shot planner deletes nothing. Delete on the canvas still deletes, and Undo restores the node.
+   - **Accepted when** (`e2e/audit-fixes.spec.ts`): Backspace or Delete in a node's context menu and inside the Shot planner deletes nothing. Delete on the canvas still deletes, and Undo restores the node. Delete also still works right after a top-bar button (Undo/Redo, tabs) took focus, as it did before the audit (found by the first CI run, see §9).
 7. **Clipboard fallback.**
    - **Change:** `setNativeValue` writes through the prototype `value` setter, and `insertIntoField` / `deleteFromField` use it.
    - **Accepted when:** a unit test with a React-like tracker shows the write goes through the prototype setter and an `input` event follows.
@@ -166,3 +166,24 @@ The remaining large shared chunk (`diagnostics-*`, 266 kB) is mostly the two i18
   - the GitHub Actions workflow itself;
   - Firefox and WebKit;
   - real-browser quota behaviour (it is simulated with the in-memory backend's `failWhen`).
+
+## 9. First CI run and follow-up fixes
+
+The workflow's first run on GitHub Actions (Ubuntu, Playwright's own Chromium) passed typecheck, lint, unit tests and build, and failed 7 of 222 e2e tests. Causes and fixes:
+
+| Failing tests | Cause | Fix |
+|---|---|---|
+| `navbar.spec` 1280px single row (height 93px); 3 drag-to-create tests in `blueprint.spec`; drag-to-create Set Flag in `narrative-state.spec` | The runner has no Inter font. The fallback (DejaVu Sans) is wider, so the navbar wrapped to two rows, the canvas got shorter and the drag targets fell outside it. The same layout affected real users without Inter. | Inter is bundled (`@fontsource-variable/inter`, imported in `src/main.tsx`; `'Inter Variable'` first in the body font stack). |
+| `productivity.spec` batch Delete after Redo | Audit regression: the new guarded Delete handler only accepted focus on `<body>` or the canvas, so Delete after clicking Redo in the top bar did nothing. | The shortcut guard also accepts focus inside `.topbar`; menus, dialogs, inputs and side panels are still excluded. New e2e case in `audit-fixes.spec`. |
+| `productivity.spec` copy/paste edge count (1 instead of 2) | Racy assertion: the edge count was read once, before React Flow rendered the edges of the freshly measured pasted nodes. | Polling `toHaveCount(2)` assertion; behaviour unchanged. |
+
+**Reproduction in the Cloud container:** with a fontconfig file that rejects Inter (`FONTCONFIG_FILE=…`, falls back to DejaVu Sans like the runner), the 5 font-related tests failed on the previous head and pass after the fix. The Delete and edge-count failures depend on the runner's newer Chromium and did not reproduce locally; they were fixed from the CI logs.
+
+**Verified after the fix (Cloud container):**
+- typecheck clean;
+- lint 0 errors / 0 warnings;
+- unit tests: 58 files, 865 tests passing;
+- build passes; the font adds 7 woff2 files (Latin 48 kB, Latin Extended 85 kB, others loaded only for their scripts);
+- e2e: 223 / 223 passing, both with Inter installed and with Inter rejected.
+
+The CI result for the new head is reported in the pull request.

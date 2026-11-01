@@ -33,6 +33,18 @@ test.describe('audit fixes', () => {
     await expect.poll(() => sceneCount(page)).toBe(before)
   })
 
+  test('Delete still deletes the canvas selection after a top-bar button was clicked (e.g. Undo / Redo)', async ({ page }) => {
+    await openApp(page)
+    const before = await sceneCount(page)
+    await page.locator('.react-flow__node').first().click({ position: { x: 20, y: 15 } })
+    await page.locator('.tabs button').first().click() // the active Graph tab: focus moves to the top bar, the view stays
+    await expect(page.locator('.tabs button').first()).toBeFocused()
+    await page.keyboard.press('Delete')
+    await expect.poll(() => sceneCount(page)).toBe(before - 1)
+    await page.getByTestId('undo-btn').click()
+    await expect.poll(() => sceneCount(page)).toBe(before)
+  })
+
   test('Delete inside a dialog (Shot planner) does not delete the scene behind it', async ({ page }) => {
     await openApp(page)
     await addShowcase(page)

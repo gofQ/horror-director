@@ -831,12 +831,13 @@ function Canvas() {
   }
   /**
    * Graph shortcuts. Registered on the document (the pane itself is not focusable, so focus often rests on <body>)
-   * but only acting when focus is on the canvas or nowhere: never inside inputs, menus, dialogs or other panels.
+   * but only acting when focus is on the canvas, nowhere, or the app top bar (e.g. right after clicking Undo/Redo):
+   * never inside inputs, menus, dialogs or the side panels.
    */
   const shortcut = (e: KeyboardEvent) => {
     const el = e.target as Element | null
     if (!el || isEditableTarget(el) || el.closest('.ctx-menu, .modal, [role="dialog"]')) return
-    if (el !== document.body && !wrapRef.current?.contains(el)) return
+    if (el !== document.body && !wrapRef.current?.contains(el) && !el.closest('.topbar')) return
     if (document.querySelector('.modal-backdrop')) return
     const mod = e.ctrlKey || e.metaKey
     if (mod && !e.altKey && !e.shiftKey) {
