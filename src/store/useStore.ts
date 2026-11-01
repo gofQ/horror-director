@@ -30,7 +30,7 @@ import { computeLayout } from '../lib/layout'
 import { nextCueStart } from '../lib/audio'
 import { nextStart, shotReferences, sortedByTime } from '../lib/shots'
 import { transitionDirectionSchema } from '../lib/schema'
-import { canConnect, linkDuration } from '../lib/graphRules'
+import { canConnect, insertBranchBlock, linkDuration } from '../lib/graphRules'
 import { exprFlags, exprWithoutFlag, flagIsUsed, flagNameTaken } from '../lib/flags'
 import { copyGraph, pasteGraph, type ClipboardData } from '../lib/graphClipboard'
 import { insertAt, removeAt, translate as translatePoints } from '../lib/waypoints'
@@ -695,7 +695,7 @@ export const useStore = create<State>()(
         insertBranchOnTransition: (transitionId) => {
           const p = get().project
           const tr = p.transitions.find((t) => t.id === transitionId)
-          if (!tr || tr.direction) return null
+          if (!tr || insertBranchBlock(p, transitionId)) return null
           const at = (id: string) => p.scenes.find((x) => x.id === id)?.position ?? p.logicNodes.find((x) => x.id === id)?.position
           const a = at(tr.source)
           const b = at(tr.target)

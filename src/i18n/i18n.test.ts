@@ -339,3 +339,11 @@ describe('JSON compatibility', () => {
     expect(exportFileName({ ...turkish(), name: 'İğdır / çocuk?' })).toBe('İğdır_çocuk.horror.json')
   })
 })
+
+describe('missing keys never crash rendering (audit fix)', () => {
+  it('falls back to English, then to the key itself', () => {
+    const t = makeT('tr') as unknown as (k: string, p?: Record<string, string | number>) => string
+    expect(t('this.key.does.not.exist')).toBe('this.key.does.not.exist')
+    expect(t('tab.graph')).toBe(tr['tab.graph'])
+  })
+})

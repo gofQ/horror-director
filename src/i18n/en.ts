@@ -10,6 +10,7 @@ export const en = {
   ...briefEn,
   ...progressEn,
   // navigation & chrome
+  'app.loading': 'Loading…',
   'nav.aria': 'Views',
   'tab.graph': 'Scene Graph',
   'tab.timeline': 'Timeline',
@@ -846,6 +847,7 @@ export const en = {
   'ctx.editConnection': 'Select / Edit connection',
   'ctx.insertBranch': 'Insert IF node',
   'ctx.insertBlocked': 'Has a transition design',
+  'ctx.insertBlockedStage': 'Not inside a Sequence stage',
   'ctx.deleteConnection': 'Delete connection',
   'ctx.canvasMenu': 'Graph menu',
   'ctx.nodeMenu': 'Node menu',

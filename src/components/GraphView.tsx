@@ -35,7 +35,7 @@ import { reachableIds } from '../lib/graph'
 import { moveAt, nearestSegmentIndex } from '../lib/waypoints'
 import { edgeGeometry } from '../lib/edgePath'
 import { NODE_H, NODE_W } from '../lib/layout'
-import { canConnect, type ConnectReason } from '../lib/graphRules'
+import { canConnect, insertBranchBlock, type ConnectReason } from '../lib/graphRules'
 import { TYPE_ICON_COMPONENTS } from '../lib/sceneTypes'
 import { ContextMenu, isEditableTarget, longPressHandlers, useContextMenu, type MenuItem } from './ContextMenu'
 import { useExprText } from './useExprText'
@@ -778,6 +778,7 @@ function Canvas() {
   const edgeMenu = (id: string, x: number, y: number): MenuItem[] => {
     const s = store()
     const tr = s.project.transitions.find((x) => x.id === id)
+    const insertBlock = insertBranchBlock(s.project, id)
     return [
       { id: 'edit', label: t('ctx.editConnection'), icon: <Pencil size={13} />, onSelect: () => s.select({ type: 'edge', id }) },
       { id: 'add-point', label: t('reroute.add'), icon: <Plus size={13} />, onSelect: () => addRerouteAt(id, x, y) },
@@ -786,8 +787,8 @@ function Canvas() {
         id: 'insert',
         label: t('ctx.insertBranch'),
         icon: <GitBranch size={13} />,
-        disabled: !!tr?.direction,
-        hint: tr?.direction ? t('ctx.insertBlocked') : undefined,
+        disabled: !!insertBlock,
+        hint: insertBlock === 'direction' ? t('ctx.insertBlocked') : insertBlock === 'stage' ? t('ctx.insertBlockedStage') : undefined,
         onSelect: () => void s.insertBranchOnTransition(id),
       },
       { id: 'delete', label: t('ctx.deleteConnection'), icon: <Trash2 size={13} />, danger: true, separatorBefore: true, onSelect: () => s.deleteTransition(id) },
@@ -858,7 +859,16 @@ function Canvas() {
       return
     }
     if (!mod && !e.altKey && !e.shiftKey && !menu) {
-      if (e.key === 'f' || e.key === 'F') {
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        // React Flow's own delete key listens on the whole document (it would also fire inside context menus, dialogs
+        // and side panels), so deletion runs here, behind the same focus guard, through React Flow's own path.
+        const nodes = rf.getNodes().filter((n) => n.selected && n.deletable !== false)
+        const edges = rf.getEdges().filter((x) => x.selected && x.deletable !== false)
+        if (nodes.length || edges.length) {
+          e.preventDefault()
+          void rf.deleteElements({ nodes, edges })
+        }
+      } else if (e.key === 'f' || e.key === 'F') {
         e.preventDefault()
         fitSelection()
       } else if (e.key === 'Escape' && store().selectedNodeIds.length > 0) store().selectNodes([])
@@ -874,6 +884,7 @@ function Canvas() {
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (isEditableTarget(e.target)) return
     if (!((e.shiftKey && e.key === 'F10') || e.key === 'ContextMenu')) return
+    if ((e.target as Element).closest('.ctx-menu')) return // the menu's own keys bubble here through the React portal
     e.preventDefault()
     const el = (e.target as Element).closest('.react-flow__node, .react-flow__edge') ?? (document.activeElement as Element | null)
     const box = (el && el.closest('.react-flow__node, .react-flow__edge'))?.getBoundingClientRect() ?? wrapRef.current?.getBoundingClientRect()
@@ -1022,7 +1033,7 @@ function Canvas() {
         fitView
         fitViewOptions={{ padding: 0.2 }}
         minZoom={0.2}
-        deleteKeyCode={['Delete', 'Backspace']}
+        deleteKeyCode={null}
         colorMode="dark"
         proOptions={{ hideAttribution: false }}
       >

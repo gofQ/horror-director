@@ -79,6 +79,18 @@ export function isTextField(el: Element | null): el is HTMLInputElement | HTMLTe
   return false
 }
 
+/**
+ * Sets a form field's value through the native prototype setter. React tracks the last value it rendered; assigning
+ * `el.value` directly updates that tracker too, so the following `input` event looks like "no change" and the
+ * controlled component's onChange never fires (the next render then reverts the text).
+ */
+export function setNativeValue(el: HTMLInputElement | HTMLTextAreaElement, value: string): void {
+  const proto = Object.getPrototypeOf(el) as object | null
+  const setter = proto ? Object.getOwnPropertyDescriptor(proto, 'value')?.set : undefined
+  if (setter) setter.call(el, value)
+  else el.value = value
+}
+
 /** Replace the selection like a user would (keeps the browser's native undo stack when `insertText` works). */
 export function insertIntoField(el: HTMLInputElement | HTMLTextAreaElement, start: number, end: number, text: string): void {
   el.focus()
@@ -90,7 +102,7 @@ export function insertIntoField(el: HTMLInputElement | HTMLTextAreaElement, star
   if (typeof document !== 'undefined' && document.execCommand?.('insertText', false, text)) return
   const hasApi = el.selectionStart !== null
   const r = spliceSelection(el.value, hasApi ? start : 0, hasApi ? end : el.value.length, text)
-  el.value = r.value
+  setNativeValue(el, r.value)
   try {
     el.setSelectionRange(r.caret, r.caret)
   } catch {
@@ -114,7 +126,7 @@ export function deleteFromField(el: HTMLInputElement | HTMLTextAreaElement, star
   }
   if (typeof document !== 'undefined' && document.execCommand?.('delete')) return
   const r = spliceSelection(el.value, start, end, '')
-  el.value = r.value
+  setNativeValue(el, r.value)
   try {
     el.setSelectionRange(r.caret, r.caret)
   } catch {

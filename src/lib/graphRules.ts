@@ -97,12 +97,40 @@ function stageRule(p: GraphData, c: Connect, a: NodeKind, b: NodeKind): ConnectR
       if (r.sequenceId !== here.seqId || r.stage !== here.stage) return 'seqReturnMismatch'
       return hasInput ? 'inputTaken' : null
     }
-    if (b === 'event' || b === 'delay' || b === 'setFlag') return hasInput ? 'seqStageShortcut' : null
+    if (b === 'event' || b === 'delay' || b === 'setFlag') return hasInput ? 'seqStageShortcut' : stageChainRule(p, c.target, here)
     return 'seqStageForbidden'
   }
   if (b === 'seqReturn') return 'seqReturnOutside'
   if ((b === 'event' || b === 'delay' || b === 'setFlag') && stageOf(graph, c.target)) return 'seqStageShortcut'
   return null
+}
+
+/**
+ * Pulling an already-wired Event / Delay / Set Flag into a stage adopts everything it leads to: that chain must itself
+ * be a valid stage body (only single-input Event / Delay / Set Flag nodes, ending open or in the matching Return).
+ */
+function stageChainRule(p: GraphData, start: string, here: { seqId: string; stage: number }): ConnectReason | null {
+  const seen = new Set<string>([start])
+  let at = start
+  for (;;) {
+    const outs = p.transitions.filter((t) => t.source === at)
+    if (outs.length === 0) return null
+    if (outs.length > 1) return 'seqStageForbidden'
+    const next = outs[0].target
+    if (seen.has(next)) return 'seqStageForbidden'
+    seen.add(next)
+    const node = p.logicNodes.find((n) => n.id === next)
+    if (!node) return 'seqStageForbidden' // a scene inside a stage
+    const inputs = p.transitions.filter((t) => t.target === next).length
+    if (node.type === 'seqReturn') {
+      if (!node.sequenceId) return 'seqReturnUnowned'
+      if (node.sequenceId !== here.seqId || node.stage !== here.stage) return 'seqReturnMismatch'
+      return inputs > 1 ? 'seqStageShortcut' : null
+    }
+    if (node.type !== 'event' && node.type !== 'delay' && node.type !== 'setFlag') return 'seqStageForbidden'
+    if (inputs > 1) return 'seqStageShortcut'
+    at = next
+  }
 }
 
 export function canConnect(p: GraphData, c: Connect): ConnectResult {
@@ -137,3 +165,20 @@ export function canConnect(p: GraphData, c: Connect): ConnectResult {
 
 /** Default duration of a new link: transitions into a logic node keep the usual 1 s, logic node outputs take no time. */
 export const linkDuration = (p: GraphData, source: string): number => (isLogicKind(nodeKind(p, source)) ? 0 : 1)
+
+/**
+ * Can an IF be inserted on this connection? Not on a link with a transition design (it would be lost), and never inside
+ * an ordered Sequence stage (a stage may only hold Event / Delay / Set Flag nodes, and a Return must stay its last node).
+ */
+export function insertBranchBlock(p: GraphData, transitionId: string): 'missing' | 'direction' | 'stage' | null {
+  const tr = p.transitions.find((t) => t.id === transitionId)
+  if (!tr) return 'missing'
+  if (tr.direction) return 'direction'
+  const graph = { logicNodes: p.logicNodes, transitions: p.transitions }
+  const src = p.logicNodes.find((n) => n.id === tr.source)
+  const dst = p.logicNodes.find((n) => n.id === tr.target)
+  if (src?.type === 'sequence' && stageOfPort(tr.sourcePort) >= 0) return 'stage'
+  if (dst?.type === 'seqReturn') return 'stage'
+  if (stageOf(graph, tr.source) || stageOf(graph, tr.target)) return 'stage'
+  return null
+}

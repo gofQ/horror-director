@@ -259,3 +259,34 @@ describe('corrupt library data', () => {
     expect(l.indexDirty).toBe(true)
   })
 })
+
+describe('missing index (audit fix)', () => {
+  it('rebuilds the index from existing records instead of re-running the legacy migration over them', () => {
+    const b = memoryBackend({ [STORAGE_KEY]: legacyRaw(turkish()) })
+    const first = loadLibrary(b, deps())
+    expect(first.notices.map((x) => x.kind)).toContain('migrated')
+    // the user edits the migrated project, then the index key disappears (cleanup tool, manual clear)
+    const edited = { ...turkish(), description: 'edited after migration' }
+    b.data.set(recordKey(LEGACY_ID), JSON.stringify({ v: 9, project: edited }))
+    b.data.delete(LIBRARY_KEY)
+    const again = loadLibrary(b, deps())
+    expect(again.notices.map((x) => x.kind)).toContain('indexRebuilt')
+    expect(again.notices.map((x) => x.kind)).not.toContain('migrated')
+    expect(again.project.description).toBe('edited after migration')
+    expect(JSON.parse(b.data.get(recordKey(LEGACY_ID))!).project.description).toBe('edited after migration')
+  })
+})
+
+describe('fitName (audit fix)', () => {
+  it('keeps derived names within MAX_NAME by shortening the base with an ellipsis', async () => {
+    const { fitName, validateName, MAX_NAME } = await import('./library')
+    const long = 'x'.repeat(119)
+    const copy = fitName((n) => `Copy of ${n}`, long)
+    expect([...copy].length).toBeLessThanOrEqual(MAX_NAME)
+    expect(copy.startsWith('Copy of x')).toBe(true)
+    expect(copy.endsWith('…')).toBe(true)
+    expect(validateName(copy).ok).toBe(true)
+    expect(fitName((n) => `${n} (kopya)`, 'Kısa ad')).toBe('Kısa ad (kopya)')
+    expect([...fitName((n) => `${n} (kopya)`, 'ğ'.repeat(120))].length).toBeLessThanOrEqual(MAX_NAME)
+  })
+})

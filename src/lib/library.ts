@@ -163,6 +163,17 @@ export function readRecord(b: Backend, id: string, integrity = true): RecordRead
   return { ok: false, reason: 'invalid', raw }
 }
 
+/**
+ * Builds a derived name (e.g. "Copy of {name}") that always fits `MAX_NAME`: the base name is shortened with an
+ * ellipsis instead of letting validation reject the result (which used to fall back silently to the original name).
+ */
+export function fitName(make: (base: string) => string, base: string): string {
+  const chars = [...base.trim()]
+  let name = make(chars.join(''))
+  for (let keep = chars.length; [...name].length > MAX_NAME && keep > 0; keep--) name = make(`${chars.slice(0, keep - 1).join('').trimEnd()}…`)
+  return [...name].slice(0, MAX_NAME).join('')
+}
+
 export function validateName(input: string): { ok: true; name: string } | { ok: false; error: LibError } {
   const name = input.trim()
   if (!name) return { ok: false, error: { code: 'emptyName' } }
@@ -277,6 +288,15 @@ function migrateLegacy(b: Backend, project: Project, deps: LoadDeps, notices: Lo
   return { index, project, damaged: {}, notices: [...notices, { kind: 'migrated' }], indexDirty: false, bootError: null }
 }
 
+/** Only the `legacy` record exists and it equals the legacy data: a migration that crashed before its index write (resume it). */
+function isUnfinishedMigration(b: Backend, index: LibraryIndex): boolean {
+  if (index.projects.length !== 1 || index.projects[0].id !== LEGACY_ID) return false
+  const raw = safeGet(b, STORAGE_KEY)
+  const legacy = raw === null ? null : parseLegacy(raw)
+  const rec = readRecord(b, LEGACY_ID, false)
+  return !!legacy && rec.ok && JSON.stringify(rec.project) === JSON.stringify(legacy)
+}
+
 export function loadLibrary(b: Backend | null, deps: LoadDeps): LoadedLibrary {
   if (!b) return memoryLibrary(deps.sample(), deps)
   const notices: LoadNotice[] = []
@@ -285,7 +305,17 @@ export function loadLibrary(b: Backend | null, deps: LoadDeps): LoadedLibrary {
   let rebuilt = false
 
   const rawIndex = safeGet(b, LIBRARY_KEY)
-  if (rawIndex !== null) {
+  if (rawIndex === null) {
+    // A missing index with records present (cleared key, cleanup tool): rebuild it from the records instead of
+    // falling through to the legacy migration, which would overwrite a newer `legacy` record with stale v0.1–v0.3 data.
+    const r = rebuildIndex(b, deps.now())
+    if (r && !isUnfinishedMigration(b, r.index)) {
+      index = r.index
+      damaged = r.damaged
+      rebuilt = true
+      notices.push({ kind: 'indexRebuilt', n: r.index.projects.length })
+    }
+  } else {
     index = parseIndex(rawIndex)
     if (!index) {
       // Never overwrite an unreadable index before its raw text is preserved.

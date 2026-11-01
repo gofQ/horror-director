@@ -40,8 +40,8 @@ export function TaskExplorer({ plan, engine, onStatus }: { plan: Plan; engine: E
   const projectId = useStore((x) => x.library.activeId) ?? ''
   const entries = useProgress((x) => x.entries)
   const fps = useMemo(() => fingerprints(plan), [plan])
-  const sum = useMemo(() => summarize(plan, engine, entries, assessPlan(plan, engine)), [plan, engine, entries])
   const assess = useMemo(() => assessPlan(plan, engine), [plan, engine])
+  const sum = useMemo(() => summarize(plan, engine, entries, assess), [plan, engine, entries, assess])
 
   const remember = <K extends keyof typeof session>(k: K, v: (typeof session)[K]) => {
     session[k] = v

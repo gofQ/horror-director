@@ -39,7 +39,9 @@ export function makeT(lang: Lang): TFunction {
   const locale = LOCALE[lang]
   const dict = dictionaries[lang]
   return ((key: MessageKey, params?: Record<string, string | number>) =>
-    dict[key].replace(/\{(\w+)\}/g, (whole, name: string) => {
+    // A key missing from a dictionary (e.g. a dynamic key built at runtime) falls back to English, then to the key
+    // itself, instead of throwing inside render.
+    (dict[key] ?? (en as Record<string, string>)[key] ?? String(key)).replace(/\{(\w+)\}/g, (whole, name: string) => {
       const v = params?.[name]
       if (v === undefined) return whole
       return typeof v === 'number' ? new Intl.NumberFormat(locale).format(v) : v
