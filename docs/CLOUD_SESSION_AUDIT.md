@@ -167,7 +167,7 @@ The remaining large shared chunk (`diagnostics-*`, 266 kB) is mostly the two i18
   - Firefox and WebKit;
   - real-browser quota behaviour (it is simulated with the in-memory backend's `failWhen`).
 
-## 9. First CI run and follow-up fixes (follow-up PR [#PR](https://github.com/gofQ/horror-director/pull/PR))
+## 9. First CI run and follow-up fixes (follow-up PR [#25](https://github.com/gofQ/horror-director/pull/25))
 
 The workflow's first run on GitHub Actions (Ubuntu, Playwright's own Chromium) passed typecheck, lint, unit tests and build, and failed 7 of 222 e2e tests. Causes and fixes:
 

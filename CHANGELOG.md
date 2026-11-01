@@ -13,7 +13,7 @@ Every future feature or fix milestone must add an entry here (see `CLAUDE.md`).
 
 ## Fix — CI parity: bundled Inter, Delete after a top-bar click
 
-Pull request: [#PR](https://github.com/gofQ/horror-director/pull/PR) · Report: [`docs/CLOUD_SESSION_AUDIT.md`](docs/CLOUD_SESSION_AUDIT.md) §9
+Pull request: [#25](https://github.com/gofQ/horror-director/pull/25) · Report: [`docs/CLOUD_SESSION_AUDIT.md`](docs/CLOUD_SESSION_AUDIT.md) §9
 
 The first GitHub Actions run of the audit's workflow failed 7 of 222 e2e tests: the runner has no Inter font installed (two-row navbar at 1280px and a shifted canvas), a Delete-key regression from the audit, and one racy assertion.
 
