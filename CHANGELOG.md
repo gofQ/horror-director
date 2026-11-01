@@ -13,7 +13,7 @@ Every future feature or fix milestone must add an entry here (see `CLAUDE.md`).
 
 ## Cloud session audit — fixes, code splitting, lint and CI
 
-Pull request: PR_LINK_PLACEHOLDER · Report: [`docs/CLOUD_SESSION_AUDIT.md`](docs/CLOUD_SESSION_AUDIT.md)
+Pull request: [#23](https://github.com/gofQ/horror-director/pull/23) · Report: [`docs/CLOUD_SESSION_AUDIT.md`](docs/CLOUD_SESSION_AUDIT.md)
 
 ### Fixed
 - **Library boot can no longer lose a project under a full quota.** When a first-run or legacy-migration record write failed, the library index was still queued and could be stored alone; the next boot then listed a project with no data and the legacy v0.1–v0.3 data became unreachable. The active record is now queued before the index, so the index is only stored after its record.
