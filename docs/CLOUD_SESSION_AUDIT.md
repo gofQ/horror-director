@@ -78,7 +78,7 @@ Checked and found correct, so not changed:
 6. **Delete key.**
    - **Where:** `GraphView.tsx`.
    - **Change:** `deleteKeyCode={null}`. Delete and Backspace are now handled by the existing guarded shortcut handler, which already ignores menus, dialogs and other panels, through `rf.deleteElements`. This is the same path React Flow uses, so the store and undo behaviour are unchanged.
-   - **Accepted when** (`e2e/audit-fixes.spec.ts`): Backspace or Delete in a node's context menu and inside the Shot planner deletes nothing. Delete on the canvas still deletes, and Undo restores the node. Delete also still works right after a top-bar button (Undo/Redo, tabs) took focus, as it did before the audit (found by the first CI run, see §9).
+   - **Accepted when** (`e2e/audit-fixes.spec.ts`): Backspace or Delete in a node's context menu and inside the Shot planner deletes nothing. Delete on the canvas still deletes, and Undo restores the node. Delete also still works right after a top-bar button (Undo/Redo, tabs) took focus, as it did before the audit (found by the first CI run and fixed in the follow-up PR, see §9).
 7. **Clipboard fallback.**
    - **Change:** `setNativeValue` writes through the prototype `value` setter, and `insertIntoField` / `deleteFromField` use it.
    - **Accepted when:** a unit test with a React-like tracker shows the write goes through the prototype setter and an `input` event follows.
@@ -167,7 +167,7 @@ The remaining large shared chunk (`diagnostics-*`, 266 kB) is mostly the two i18
   - Firefox and WebKit;
   - real-browser quota behaviour (it is simulated with the in-memory backend's `failWhen`).
 
-## 9. First CI run and follow-up fixes
+## 9. First CI run and follow-up fixes (follow-up PR [#PR](https://github.com/gofQ/horror-director/pull/PR))
 
 The workflow's first run on GitHub Actions (Ubuntu, Playwright's own Chromium) passed typecheck, lint, unit tests and build, and failed 7 of 222 e2e tests. Causes and fixes:
 
@@ -186,4 +186,4 @@ The workflow's first run on GitHub Actions (Ubuntu, Playwright's own Chromium) p
 - build passes; the font adds 7 woff2 files (Latin 48 kB, Latin Extended 85 kB, others loaded only for their scripts);
 - e2e: 223 / 223 passing, both with Inter installed and with Inter rejected.
 
-The CI result for the new head is reported in the pull request.
+PR #23 was merged before this fix landed; the fix ships in the follow-up PR, whose CI run is green.
