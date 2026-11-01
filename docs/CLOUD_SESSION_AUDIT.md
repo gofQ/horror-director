@@ -167,7 +167,7 @@ The remaining large shared chunk (`diagnostics-*`, 266 kB) is mostly the two i18
   - Firefox and WebKit;
   - real-browser quota behaviour (it is simulated with the in-memory backend's `failWhen`).
 
-## 9. First CI run and follow-up fixes (follow-up PR [#25](https://github.com/gofQ/horror-director/pull/25))
+## 9. First CI run and follow-up fixes (follow-up PR [#24](https://github.com/gofQ/horror-director/pull/24))
 
 The workflow's first run on GitHub Actions (Ubuntu, Playwright's own Chromium) passed typecheck, lint, unit tests and build, and failed 7 of 222 e2e tests. Causes and fixes:
 
@@ -186,4 +186,4 @@ The workflow's first run on GitHub Actions (Ubuntu, Playwright's own Chromium) p
 - build passes; the font adds 7 woff2 files (Latin 48 kB, Latin Extended 85 kB, others loaded only for their scripts);
 - e2e: 223 / 223 passing, both with Inter installed and with Inter rejected.
 
-PR #23 was merged before this fix landed; the fix ships in the follow-up PR, whose CI run is green.
+PR #23 was merged before this fix landed; the fix landed in the follow-up PR #24, whose CI run is green.
