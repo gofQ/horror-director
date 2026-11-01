@@ -47,14 +47,15 @@ export interface PasteResult {
  * `at` is the flow position the group's top-left corner lands on; `suffix` is appended to scene titles
  * (used by Duplicate). The target project is only read (type, flag and character references are re-checked).
  */
-export function pasteGraph(p: Pick<Project, 'sceneTypes' | 'flags'>, data: ClipboardData, at: { x: number; y: number }, suffix = ''): PasteResult {
+export function pasteGraph(p: Pick<Project, 'sceneTypes' | 'flags' | 'characters'>, data: ClipboardData, at: { x: number; y: number }, suffix = ''): PasteResult {
   const origin = topLeft(data)
   const dx = Math.round(at.x - origin.x)
   const dy = Math.round(at.y - origin.y)
   const shift = (q: { x: number; y: number }) => ({ x: q.x + dx, y: q.y + dy })
   const idMap = new Map<string, string>()
   const shotMap = new Map<string, string>()
-  const types = new Set(p.sceneTypes.map((t) => t.id))
+  const types = new Map(p.sceneTypes.map((t) => [t.id, t.baseKind]))
+  const chars = new Map(p.characters.map((c) => [c.id, new Set(c.states.map((x) => x.id))]))
   const flags = new Set(p.flags.map((f) => f.id))
 
   const scenes = data.scenes.map((src): Scene => {
@@ -73,7 +74,10 @@ export function pasteGraph(p: Pick<Project, 'sceneTypes' | 'flags'>, data: Clipb
       }),
       audioCues: src.audioCues.map((c) => ({ ...c, id: uid('cue') })),
     }
-    if (copy.typeId !== undefined && !types.has(copy.typeId)) delete copy.typeId
+    // a scene type that no longer exists, or whose base kind changed since the copy, would fail validation
+    if (copy.typeId !== undefined && types.get(copy.typeId) !== copy.kind) delete copy.typeId
+    // character states whose character or state was deleted since the copy are dropped
+    copy.characterStates = Object.fromEntries(Object.entries(copy.characterStates).filter(([cid, sid]) => chars.get(cid)?.has(sid)))
     return copy
   })
   const logicNodes = data.logicNodes.map((src): LogicNode => {

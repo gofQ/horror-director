@@ -421,3 +421,41 @@ describe('multi-tab detection (not resolution)', () => {
   })
 })
 
+
+describe('boot never commits an index without its record (audit fix)', () => {
+  const legacy = (): Project => ({ ...sampleProject(), name: 'Eski proje', description: 'v0.3 data' })
+  const raw = () => JSON.stringify({ state: { project: legacy(), timelineSceneId: null }, version: 0 })
+
+  it('a failed legacy migration under a full quota leaves no index behind; it completes once space is free', () => {
+    const mb = memoryBackend({ [STORAGE_KEY]: raw() })
+    mb.failWhen = (k) => k.startsWith(RECORD_PREFIX)
+    bootLibrary(mb)
+    expect(st().project.name).toBe('Eski proje') // kept in memory
+    expect(flushNow()).toBe(false)
+    expect(mb.data.has(LIBRARY_KEY)).toBe(false) // the old behaviour stored this index and lost the project on reload
+    expect(mb.data.get(STORAGE_KEY)).toBe(raw()) // legacy data untouched
+    // a reload while still full retries the migration instead of opening an empty library
+    bootLibrary(mb)
+    expect(st().project.name).toBe('Eski proje')
+    // space is freed: the queued record goes first, then the index
+    mb.failWhen = null
+    expect(flushNow()).toBe(true)
+    expect(recordKeys(mb)).toHaveLength(1)
+    bootLibrary(mb)
+    expect(st().project.name).toBe('Eski proje')
+    expect(st().damaged).toEqual({})
+  })
+
+  it('a failed first-run write does not leave a phantom project in the index', () => {
+    const mb = memoryBackend()
+    mb.failWhen = (k) => k.startsWith(RECORD_PREFIX)
+    bootLibrary(mb)
+    flushNow()
+    expect(mb.data.has(LIBRARY_KEY)).toBe(false)
+    mb.failWhen = null
+    flushNow()
+    bootLibrary(mb)
+    expect(st().damaged).toEqual({})
+    expect(recordKeys(mb)).toHaveLength(1)
+  })
+})

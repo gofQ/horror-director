@@ -118,3 +118,35 @@ describe('pasteGraph', () => {
     expect(r.transitions[0].source).toBe(r.scenes[0].id)
   })
 })
+
+describe('paste re-checks character and scene-type references (audit fix)', () => {
+  it('drops character states whose character or state no longer exists, and a type whose base kind changed', async () => {
+    const { validateProject } = await import('./validate')
+    const p = sampleProject()
+    const src = p.scenes.find((s) => Object.keys(s.characterStates).length >= 1)!
+    const [cid, sid] = Object.entries(src.characterStates)[0]
+    const withType = { ...p, sceneTypes: [{ id: 'ty', name: 'T', color: '#c4263d' as const, icon: 'Skull' as const, baseKind: src.kind, description: '' }], scenes: p.scenes.map((s) => (s.id === src.id ? { ...s, typeId: 'ty' } : s)) }
+    const data = copyGraph(withType, [src.id])!
+    // the character is deleted and the type's base kind changed before pasting
+    const target = {
+      ...withType,
+      characters: withType.characters.filter((c) => c.id !== cid),
+      sceneTypes: withType.sceneTypes.map((t) => ({ ...t, baseKind: (src.kind === 'dream' ? 'reality' : 'dream') as typeof src.kind })),
+    }
+    const r = pasteGraph(target, data, { x: 0, y: 0 })
+    expect(r.scenes[0].characterStates[cid]).toBeUndefined()
+    expect(r.scenes[0].typeId).toBeUndefined()
+    // validate the pasted scene on its own against the target's characters and types
+    const alone = { ...target, scenes: r.scenes, transitions: [], logicNodes: [], comments: [], startSceneId: r.scenes[0].id }
+    const errs = validateProject(alone).errors.map((e) => JSON.stringify(e))
+    expect(errs.filter((e) => /MissingChar|MissingState|sceneTypeKind/.test(e))).toEqual([])
+    // sanity: the same check flags the unrepaired copy
+    const raw = { ...alone, scenes: [{ ...data.scenes[0] }] }
+    expect(validateProject(raw).errors.map((e) => JSON.stringify(e)).some((e) => /MissingChar|sceneTypeKind/.test(e))).toBe(true)
+    // a deleted state (character kept) is dropped too
+    const noState = { ...withType, characters: withType.characters.map((c) => (c.id === cid ? { ...c, states: c.states.filter((x) => x.id !== sid) } : c)) }
+    expect(pasteGraph(noState, data, { x: 0, y: 0 }).scenes[0].characterStates[cid]).toBeUndefined()
+    // untouched references survive
+    expect(pasteGraph(withType, data, { x: 0, y: 0 }).scenes[0].characterStates).toEqual(src.characterStates)
+  })
+})

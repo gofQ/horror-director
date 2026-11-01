@@ -1,27 +1,30 @@
-import { useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { Download, FolderOpen, Route, Eye, Workflow, Activity, Users, ShieldCheck, Factory, Undo2, Redo2, Save } from 'lucide-react'
 import { useStore, type View } from './store/useStore'
 import { addAndOpen, flushNow } from './store/library'
-import { LibraryDialog } from './components/LibraryDialog'
 import type { LoadNotice } from './lib/library'
 import { useSaveStatus, type SaveStatus } from './lib/persist'
 import { useLang, useT } from './i18n/store'
 import { LANGS, type Lang } from './i18n'
 import { downloadText } from './lib/download'
-import { ImportDialog, type ImportState } from './components/ImportDialog'
+import type { ImportState } from './components/ImportDialog'
 import { GraphView } from './components/GraphView'
 import { Inspector } from './components/Inspector'
-import { TimelineView } from './components/TimelineView'
-import { CharactersView } from './components/CharactersView'
-import { AnalysisView } from './components/AnalysisView'
-import { SimulatorView } from './components/SimulatorView'
-import { ProductionView } from './components/ProductionView'
 import { SampleGuide } from './components/SampleGuide'
 import { GlobalContextMenu } from './components/GlobalContextMenu'
 import './store/simulator'
 import { exportFileName, parseProject, serializeProject } from './lib/io'
 import type { Project } from './lib/schema'
 import { validateProject } from './lib/validate'
+
+// Views other than the graph, and the dialogs, load on first use (code splitting keeps the initial bundle small).
+const TimelineView = lazy(() => import('./components/TimelineView').then((m) => ({ default: m.TimelineView })))
+const CharactersView = lazy(() => import('./components/CharactersView').then((m) => ({ default: m.CharactersView })))
+const AnalysisView = lazy(() => import('./components/AnalysisView').then((m) => ({ default: m.AnalysisView })))
+const SimulatorView = lazy(() => import('./components/SimulatorView').then((m) => ({ default: m.SimulatorView })))
+const ProductionView = lazy(() => import('./components/ProductionView').then((m) => ({ default: m.ProductionView })))
+const LibraryDialog = lazy(() => import('./components/LibraryDialog').then((m) => ({ default: m.LibraryDialog })))
+const ImportDialog = lazy(() => import('./components/ImportDialog').then((m) => ({ default: m.ImportDialog })))
 
 const TABS = [
   { id: 'graph', Icon: Workflow },
@@ -78,7 +81,8 @@ export function App() {
   const { t } = useT()
   const view = useStore((s) => s.view)
   const setView = useStore((s) => s.setView)
-  const project = useStore((s) => s.project)
+  // Only the name is rendered here; subscribing to the whole project re-rendered the app shell on every edit.
+  const projectName = useStore((s) => s.project.name)
   const selection = useStore((s) => s.selection)
   const select = useStore((s) => s.select)
   const loadProject = useStore((s) => s.loadProject)
@@ -96,13 +100,17 @@ export function App() {
   const fileRef = useRef<HTMLInputElement>(null)
   const [msg, setMsg] = useState<{ text: string; error: boolean } | null>(null)
 
+  const flashTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const flash = (text: string, error = false) => {
     setMsg({ text, error })
-    setTimeout(() => setMsg(null), 5000)
+    // a newer message gets its full display time: the previous message's timer must not close it early
+    clearTimeout(flashTimer.current)
+    flashTimer.current = setTimeout(() => setMsg(null), 5000)
   }
 
   const doExport = () => {
     flushNow()
+    const project = useStore.getState().project
     const check = validateProject(project)
     downloadText(exportFileName(project), serializeProject(project))
     if (check.errors.length)
@@ -193,8 +201,8 @@ export function App() {
           ))}
         </nav>
         <div className="actions">
-          <span className="project-name" title={project.name}>
-            {project.name}
+          <span className="project-name" title={projectName}>
+            {projectName}
           </span>
           <button className="btn icon" data-testid="undo-btn" onClick={undo} disabled={!canUndo} title={t('tip.undo')} aria-label={t('btn.undo')}>
             <Undo2 size={15} />
@@ -253,18 +261,20 @@ export function App() {
           </button>
         </div>
       )}
+      <Suspense fallback={null}>
       {libraryOpen && (
         <LibraryDialog onClose={() => setLibraryOpen(false)} onPickImport={pickFile} onBackup={doExport} />
       )}
       {importState && (
         <ImportDialog
           state={importState}
-          current={project}
+          current={useStore.getState().project}
           onCancel={() => setImportState(null)}
           onBackupCurrent={doExport}
           onConfirm={confirmImport}
         />
       )}
+      </Suspense>
       {msg && (
         <div className={`toast${msg.error ? ' error' : ''}`} role="status">
           {msg.text}
@@ -283,11 +293,13 @@ export function App() {
             </div>
           </div>
         )}
-        {view === 'timeline' && <TimelineView />}
-        {view === 'characters' && <CharactersView />}
-        {view === 'analysis' && <AnalysisView />}
-        {view === 'simulator' && <SimulatorView />}
-        {view === 'production' && <ProductionView />}
+        <Suspense fallback={<div className="view-pad muted" role="status" data-testid="view-loading">{t('app.loading')}</div>}>
+          {view === 'timeline' && <TimelineView />}
+          {view === 'characters' && <CharactersView />}
+          {view === 'analysis' && <AnalysisView />}
+          {view === 'simulator' && <SimulatorView />}
+          {view === 'production' && <ProductionView />}
+        </Suspense>
       </main>
     </div>
   )

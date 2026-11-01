@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import type { Engine } from './plan'
+import { ENGINES, type Engine } from './plan'
 
 /**
  * External-agent completion report. Everything under `agentClaim` is what the agent SAYS it did: Horror Director
@@ -19,7 +19,7 @@ export const reportSchema = z
     format: z.literal(REPORT_FORMAT),
     version: z.literal(REPORT_VERSION),
     projectId: z.string().min(1).max(120),
-    engine: z.enum(['unreal', 'unity']),
+    engine: z.enum(ENGINES),
     taskId: z.string().min(1).max(300),
     sourceFingerprint: z.string().min(1).max(64),
     agentClaim: z

@@ -51,7 +51,26 @@ export function bootLibrary(b: Backend | null): void {
   useStore.getState().swapActive({ project: loaded.project, library: loaded.index, damaged: loaded.damaged })
   useStore.setState({ notices: loaded.notices, externalChange: false })
   suppress = false
-  if (loaded.indexDirty) safe.setItem(LIBRARY_KEY, serializeIndex(loaded.index))
+  if (loaded.indexDirty) queueBootIndex(loaded)
+}
+
+/**
+ * Queues the boot-time index write. If the active project's record is not in storage (a migration or first-run write
+ * failed, e.g. quota), the record is queued first: the safe storage writes in order and stops at the first failure, so
+ * the index (the commit point) can never be stored while it lists a record that is missing.
+ */
+function queueBootIndex(loaded: { index: LibraryIndex; project: Project }) {
+  const id = loaded.index.activeId
+  if (id && backend) {
+    let stored: string | null = null
+    try {
+      stored = backend.getItem(recordKey(id))
+    } catch {
+      /* treat as missing */
+    }
+    if (stored === null) safe.setItem(recordKey(id), serializeRecord(loaded.project))
+  }
+  safe.setItem(LIBRARY_KEY, serializeIndex(loaded.index))
 }
 
 /* ---------- autosave of the active project ---------- */
@@ -74,7 +93,7 @@ useStore.subscribe((s, prev) => {
   if (suppress || s.project === prev.project || s.library.activeId !== prev.library.activeId) return
   scheduleSave(s.project, s.library)
 })
-if (bootResult.indexDirty) safe.setItem(LIBRARY_KEY, serializeIndex(bootResult.index))
+if (bootResult.indexDirty) queueBootIndex(bootResult)
 
 if (typeof window !== 'undefined') {
   window.addEventListener('pagehide', () => void safe.flush())

@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import type { Backend } from './persist'
 import { writeVerified, type LibError } from './library'
-import { progressSchema, entryKey, type Entries, type TaskProgress } from './production/progress'
+import { progressSchema, entryKey, splitKey, type Entries, type TaskProgress } from './production/progress'
 import type { Engine } from './production/plan'
 
 /**
@@ -228,7 +228,7 @@ export function planRestore(incoming: Entries, existing: Entries): RestoreItem[]
     .map((key) => {
       const have = existing[key]
       const kind: RestoreKind = !have ? 'new' : JSON.stringify(have) === JSON.stringify(incoming[key]) ? 'identical' : 'collision'
-      return { key, engine: key.startsWith('unreal:') ? 'unreal' : key.startsWith('unity:') ? 'unity' : null, kind, incoming: incoming[key], ...(have ? { existing: have } : {}) }
+      return { key, engine: splitKey(key)?.engine ?? null, kind, incoming: incoming[key], ...(have ? { existing: have } : {}) }
     })
 }
 /** Merge result: new entries are added; collisions follow the explicit choice (default: keep existing). Entries with unknown engines are skipped. */

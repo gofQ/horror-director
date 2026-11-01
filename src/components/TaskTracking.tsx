@@ -28,7 +28,7 @@ const actionLabel = (from: ProgressStatus, to: ProgressStatus) =>
 
 /** Implementation progress for one task: its own state, notes, history, freshness, report import and review. */
 export function TaskTracking(p: Props) {
-  const { t } = useT()
+  const { t, locale } = useT()
   const pt = useMemo(() => asPT(t), [t])
   const rec = p.rec ?? emptyProgress()
   const st = staleness(p.rec, p.fp)
@@ -105,7 +105,7 @@ export function TaskTracking(p: Props) {
         {rec.history.length === 0 && <li className="muted">{pt('prod.task.noneItems')}</li>}
         {[...rec.history].reverse().slice(0, 8).map((h, i) => (
           <li key={`${h.at}-${i}`} className="small">
-            {fmtTime(h.at)} · {pt(`progress.status.${h.from}`)} → {pt(`progress.status.${h.to}`)}
+            {fmtTime(h.at, locale)} · {pt(`progress.status.${h.from}`)} → {pt(`progress.status.${h.to}`)}
             {h.by === 'report' ? ` · ${pt('progress.history.report')}` : ''}
             {h.note ? ` · ${h.note}` : ''}
           </li>

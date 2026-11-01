@@ -11,7 +11,7 @@ export const selectTask = (id: string | null) => useExplorer.setState({ selected
 
 export const failureText = (t: PT, e: ProgressFailure | null | undefined): string => {
   if (!e) return ''
-  if (e.code === 'saveFailed') return t('lib.err.saveFailed', { reason: t('save.reason.unavailable') })
+  if (e.code === 'saveFailed') return t('lib.err.saveFailed', { reason: t(`save.reason.${(e as { reason?: string }).reason ?? 'unavailable'}`) })
   if (e.code === 'conflict' || e.code === 'damaged') return t(`progress.err.${e.code}`)
   if (['transition', 'notConfirmed', 'staleNotAcknowledged', 'notSubmitted', 'noNotes', 'tooLong'].includes(e.code)) return t(`progress.err.${e.code}`)
   return t(`lib.err.${e.code}`)
@@ -44,4 +44,4 @@ export function partToSource(key: string): SourceRef | null {
     default: return null
   }
 }
-export const fmtTime = (at: number) => new Date(at).toLocaleString()
+export const fmtTime = (at: number, locale?: string) => new Date(at).toLocaleString(locale, { dateStyle: 'medium', timeStyle: 'short' })

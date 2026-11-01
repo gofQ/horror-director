@@ -146,7 +146,15 @@ export function ContextMenu({ state, onClose }: { state: MenuState; onClose: () 
     if (state.search) searchRef.current?.focus()
     else rootRef.current?.querySelector<HTMLElement>('[role="menuitem"]:not([aria-disabled="true"])')?.focus()
   }, [state.search, stack.length])
-  useEffect(() => setActive(0), [q, stack.length])
+  // The roving index starts on the first ENABLED row, matching where focus lands (a disabled first row would
+  // otherwise make the first ArrowDown a no-op and ArrowUp skip an item).
+  const firstEnabled = rows.findIndex((r) => !r.item.disabled)
+  useEffect(() => setActive(Math.max(0, firstEnabled)), [q, stack.length]) // eslint-disable-line react-hooks/exhaustive-deps
+  // A new menu opened while this one is mounted (same instance) starts at its root level.
+  useEffect(() => {
+    setStack([])
+    setQuery('')
+  }, [state])
 
   const enabled = rows.map((r, i) => (r.item.disabled ? -1 : i)).filter((i) => i >= 0)
   const focusRow = (i: number) => {

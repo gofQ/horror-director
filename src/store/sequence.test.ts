@@ -196,3 +196,23 @@ describe('storage', () => {
     expect(b.data.get(recordKey('bad9'))).toBe(raw)
   })
 })
+
+describe('Insert IF never lands inside a Sequence stage (audit fix)', () => {
+  it('refuses stage links (Then pin, inside the chain, into a Return) and keeps the project valid', async () => {
+    const { showcaseProject } = await import('../lib/showcase')
+    const { insertBranchBlock } = await import('../lib/graphRules')
+    load(showcaseProject())
+    for (const id of ['e17', 'e18', 'e19', 'e20', 'e21', 'e22']) {
+      expect(insertBranchBlock(P(), id), id).toBe('stage')
+      const before = P()
+      expect(st().insertBranchOnTransition(id)).toBeNull()
+      expect(P()).toBe(before)
+    }
+    expect(insertBranchBlock(P(), 'e1')).toBe('direction')
+    expect(insertBranchBlock(P(), 'nope')).toBe('missing')
+    // the Completed pin leaves the Sequence: inserting there is allowed and stays valid
+    expect(insertBranchBlock(P(), 'e23')).toBeNull()
+    expect(st().insertBranchOnTransition('e23')).not.toBeNull()
+    expect(validateProject(P()).errors).toEqual([])
+  })
+})

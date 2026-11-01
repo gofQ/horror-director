@@ -7,7 +7,7 @@ import { emptyProject } from '../lib/factory'
 import { downloadText } from '../lib/download'
 import { formatDiagnostic } from '../lib/diagnostics'
 import { showcaseProject } from '../lib/showcase'
-import type { LibError, LibResult } from '../lib/library'
+import { fitName, type LibError, type LibResult } from '../lib/library'
 import { libErrorText } from './ImportDialog'
 import { ContextMenu, isEditableTarget, useContextMenu, type MenuItem } from './ContextMenu'
 
@@ -49,7 +49,7 @@ export function LibraryDialog({ onClose, onPickImport, onBackup }: Props) {
 
   const doOpen = (m: { id: string; name: string }) => finish(openProject(m.id), t('lib.status.opened', { name: m.name }), true)
   const doDuplicate = (m: { id: string }) => {
-    const copy = t('lib.copyName', { name: nameOf(m.id) })
+    const copy = fitName((name) => t('lib.copyName', { name }), nameOf(m.id))
     finish(duplicateProject(m.id, copy), t('lib.status.duplicated', { name: copy }))
   }
   /** Context menu for a project row: only the actions the row buttons already offer. */

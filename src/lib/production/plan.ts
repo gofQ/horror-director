@@ -8,8 +8,10 @@ import { crossingOf, type CrossingType, type Expr, type LogicNode, type Project,
  * nothing reads the clock, randomness, storage or the DOM. Engine adapters (`engines.ts`) and the renderers
  * (`render.ts`) only add wording on top of this data.
  */
-export type Engine = 'unreal' | 'unity'
-export const ENGINES: readonly Engine[] = ['unreal', 'unity']
+/** The single list of supported engines: every engine-keyed validator and parser derives from it (see docs/CLOUD_SESSION_AUDIT.md). */
+export const ENGINES = ['unreal', 'unity'] as const
+export type Engine = (typeof ENGINES)[number]
+export const isEngine = (v: unknown): v is Engine => (ENGINES as readonly unknown[]).includes(v)
 
 export type SourceKind = 'project' | 'scene' | 'node' | 'transition' | 'trigger' | 'character' | 'flag'
 export interface SourceRef {

@@ -91,3 +91,27 @@ describe('Sequence connection rules', () => {
     expect(why(p, { source: 'start', target: 'RND' })).toBe('ok')
   })
 })
+
+describe('pulling an existing chain into a stage (audit fix)', () => {
+  it('refuses chains that would break the stage: scenes, IF, Random, shortcuts, wrong Return', () => {
+    const base = empty()
+    const withLinks = (...ts: ReturnType<typeof link>[]) => ({ ...base, transitions: ts })
+    expect(why(withLinks(link('x', 'E', 'start')), { source: 'Q', sourcePort: 'then0', target: 'E' })).toBe('seqStageForbidden')
+    expect(why(withLinks(link('x', 'E', 'IF')), { source: 'Q', sourcePort: 'then0', target: 'E' })).toBe('seqStageForbidden')
+    expect(why(withLinks(link('x', 'E', 'D'), link('y', 'D', 'RND')), { source: 'Q', sourcePort: 'then0', target: 'E' })).toBe('seqStageForbidden')
+    expect(why(withLinks(link('x', 'E', 'D'), link('y', 'E2', 'D')), { source: 'Q', sourcePort: 'then0', target: 'E' })).toBe('seqStageShortcut')
+    expect(why(withLinks(link('x', 'E', 'R1')), { source: 'Q', sourcePort: 'then0', target: 'E' })).toBe('seqReturnMismatch')
+    expect(why(withLinks(link('x', 'E', 'RU')), { source: 'Q', sourcePort: 'then0', target: 'E' })).toBe('seqReturnUnowned')
+  })
+  it('accepts a valid open chain or one closed by the matching Return, and no accepted connection fails validation', async () => {
+    const { validateProject } = await import('./validate')
+    const base = empty()
+    const ok1 = { ...base, transitions: [link('x', 'E', 'D')] }
+    expect(why(ok1, { source: 'Q', sourcePort: 'then0', target: 'E' })).toBe('ok')
+    const ok2 = { ...base, transitions: [link('x', 'E', 'D'), link('y', 'D', 'R0')] }
+    expect(why(ok2, { source: 'Q', sourcePort: 'then0', target: 'E' })).toBe('ok')
+    const joined = { ...ok2, transitions: [...ok2.transitions, link('z', 'Q', 'E', { sourcePort: 'then0' })] }
+    const seqErrors = validateProject(joined).errors.filter((e) => /seq/i.test(JSON.stringify(e)))
+    expect(seqErrors).toEqual([])
+  })
+})

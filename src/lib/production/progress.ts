@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import type { Engine, Plan } from './plan'
+import { isEngine, type Engine, type Plan } from './plan'
 import type { Readiness, TaskAssessment } from './readiness'
 import { diffParts, fingerprints, type Fingerprint, type PartsDiff } from './fingerprint'
 import { reportSchema } from './report'
@@ -39,7 +39,7 @@ export const entryKey = (engine: Engine, taskId: string) => `${engine}:${taskId}
 export const splitKey = (key: string): { engine: Engine; taskId: string } | null => {
   const i = key.indexOf(':')
   const engine = key.slice(0, i)
-  return engine === 'unreal' || engine === 'unity' ? { engine, taskId: key.slice(i + 1) } : null
+  return i > 0 && isEngine(engine) ? { engine, taskId: key.slice(i + 1) } : null
 }
 
 export const emptyProgress = (): TaskProgress => ({ status: 'notStarted', notes: '', history: [] })
@@ -156,7 +156,10 @@ export function summarize(plan: Plan, engine: Engine, entries: Entries, assess: 
   }
   const recheck = new Set<string>()
   const visit = (id: string) => {
-    for (const d of plan.tasks.find((x) => x.id === id)?.dependents ?? []) if (!recheck.has(d)) (recheck.add(d), visit(d))
+    for (const d of plan.tasks.find((x) => x.id === id)?.dependents ?? []) if (!recheck.has(d)) {
+      recheck.add(d)
+      visit(d)
+    }
   }
   stale.forEach(visit)
   const ids = new Set(plan.tasks.map((t) => t.id))
