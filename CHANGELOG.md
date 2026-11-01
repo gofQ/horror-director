@@ -11,6 +11,26 @@ merged through a pull request into the integration branch (`claude/optimistic-te
 
 Every future feature or fix milestone must add an entry here (see `CLAUDE.md`).
 
+## Cloud session audit — fixes, code splitting, lint and CI
+
+Pull request: PR_LINK_PLACEHOLDER · Report: [`docs/CLOUD_SESSION_AUDIT.md`](docs/CLOUD_SESSION_AUDIT.md)
+
+### Fixed
+- **Library boot can no longer lose a project under a full quota.** When a first-run or legacy-migration record write failed, the library index was still queued and could be stored alone; the next boot then listed a project with no data and the legacy v0.1–v0.3 data became unreachable. The active record is now queued before the index, so the index is only stored after its record.
+- **A missing library index is rebuilt from the stored projects** instead of re-running the legacy migration over a newer `legacy` record (an interrupted migration is still resumed).
+- **Sequence stages stay valid while editing:** connecting a Then pin to an Event/Delay/Set Flag that already leads to a scene, IF, Random, a shortcut or the wrong Return is refused; **Insert IF** is refused (and disabled in the menu, "Not inside a Sequence stage") on stage links; **paste** drops character states whose character or state was deleted and a scene type whose base kind changed. Previously each of these produced a project that failed validation on the next load.
+- **Delete / Backspace no longer delete graph nodes while focus is in a context menu, a dialog (Shot planner, Transition designer) or a side panel**; on the canvas they still delete as one undoable step.
+- Context-menu keyboard focus starts on the first enabled item (the global menu's disabled "Copy text" made the first ArrowDown a no-op); the Menu key inside an open graph menu no longer reopens a stale menu; the text-menu Paste/Cut fallback now updates React-controlled inputs; a new toast is no longer closed early by the previous one; "Copy of …" for long names is shortened instead of silently keeping the original name; task history dates follow the UI language; a missing translation key falls back instead of crashing.
+
+### Changed
+- **Code splitting:** Timeline, Characters, Analysis, Simulator and Production views and the Library/Import dialogs load on first use; React, React Flow and zod are separate vendor chunks. Initial JavaScript 1,198 kB → 1,045 kB raw (≈346 → ≈308 kB gzip); no chunk exceeds the 500 kB warning (largest 266 kB).
+- The app shell no longer re-renders on every edit; the task explorer computes readiness once.
+- One `ENGINES` list now drives the completion-report schema, progress keys and restore (no behaviour change).
+
+### Added
+- `npm run lint` (oxlint 1.90: correctness rules, React hooks rules; 0 errors / 0 warnings) and a GitHub Actions workflow (`.github/workflows/ci.yml`: typecheck, lint, unit tests, build, Playwright) — the workflow was not executed in this session.
+- Tests for every fix (unit + `e2e/audit-fixes.spec.ts`).
+
 ## Turkish showcase sample (Boş Köy)
 
 Pull request: [#22](https://github.com/gofQ/horror-director/pull/22)

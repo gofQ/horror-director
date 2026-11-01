@@ -283,8 +283,7 @@ describe('persistence', () => {
 
 describe('older stored data', () => {
   const stripNew = (p: Project) => {
-    const { logicNodes, comments, sceneTypes, ...rest } = p
-    void logicNodes, void comments, void sceneTypes
+    const { logicNodes: _l, comments: _c, sceneTypes: _s, ...rest } = p
     return rest
   }
   it.each([1, 2, 3, 4])('reads a v:%i record without logic data and rewrites nothing until the first edit', (v) => {

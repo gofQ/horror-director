@@ -808,8 +808,8 @@ export const useStore = create<State>()(
         },
         updateTransition: (id, patch) => {
           // endpoints and the output pin are fixed at runtime too (not only by the type)
-          const { source, target, sourcePort, waypoints, ...safe } = patch as typeof patch & { source?: string; target?: string; sourcePort?: string; waypoints?: unknown }
-          void source, void target, void sourcePort, void waypoints
+          // eslint-style rest-sibling omission: the named fields are dropped on purpose
+          const { source: _source, target: _target, sourcePort: _sourcePort, waypoints: _waypoints, ...safe } = patch as typeof patch & { source?: string; target?: string; sourcePort?: string; waypoints?: unknown }
           set(
             (s) => ({
               project: {

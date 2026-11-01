@@ -156,7 +156,10 @@ export function summarize(plan: Plan, engine: Engine, entries: Entries, assess: 
   }
   const recheck = new Set<string>()
   const visit = (id: string) => {
-    for (const d of plan.tasks.find((x) => x.id === id)?.dependents ?? []) if (!recheck.has(d)) (recheck.add(d), visit(d))
+    for (const d of plan.tasks.find((x) => x.id === id)?.dependents ?? []) if (!recheck.has(d)) {
+      recheck.add(d)
+      visit(d)
+    }
   }
   stale.forEach(visit)
   const ids = new Set(plan.tasks.map((t) => t.id))

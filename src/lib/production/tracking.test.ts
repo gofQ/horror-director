@@ -292,7 +292,7 @@ describe('completion report', () => {
     if (r.ok) {
       expect(r.warnings).toContain('verifiedIgnored')
       expect(r.report.independentlyVerified).toEqual([])
-      expect(r.report.agentClaim.notes).not.toMatch(/[\u0000‮]/)
+      expect(r.report.agentClaim.notes.includes('\u0000') || r.report.agentClaim.notes.includes('\u202e')).toBe(false)
       expect(r.report.agentClaim.notes).toContain('<img') // kept as plain text; the UI renders it as text only
     }
   })
