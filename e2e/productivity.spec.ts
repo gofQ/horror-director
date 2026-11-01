@@ -260,7 +260,7 @@ test.describe('copy, paste and duplicate', () => {
     await page.keyboard.press('Control+v')
     await expect(nodes(page)).toHaveCount(6)
     await expect(count(page)).toContainText('2 selected')
-    expect(await page.locator('.react-flow__edge').count()).toBe(2) // A→B plus the copy of A→B
+    await expect(page.locator('.react-flow__edge')).toHaveCount(2) // A→B plus the copy of A→B (edges render after the nodes are measured)
     const pasted = (await nodeIds(page)).filter((i) => !ids.includes(i))
     expect(pasted).toHaveLength(2)
     const pos = await positions(page)
